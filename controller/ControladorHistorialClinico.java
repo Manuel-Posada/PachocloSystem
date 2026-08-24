@@ -8,7 +8,12 @@ import model.RegistroClinico;
 import model.TipoRegistro;
 
 public class ControladorHistorialClinico {
-    private IPacienteRepository repositorio;
+    private final IPacienteRepository repositorio;
+
+    public ControladorHistorialClinico(IPacienteRepository repositorio) {
+        this.repositorio = repositorio;
+    }
+
     public boolean agregarRegistroPaciente(String idPaciente, TipoRegistro tipo, String contenido, TrabajadorHospital autor) {
         Paciente paciente = repositorio.buscarPorId(idPaciente);
         if (paciente == null) return false;
