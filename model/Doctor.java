@@ -1,4 +1,4 @@
-package PachocloSystem.model;
+package model;
 
 public class Doctor extends TrabajadorHospital {
     private String especialidad;
