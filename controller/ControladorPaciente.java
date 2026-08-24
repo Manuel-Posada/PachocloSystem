@@ -1,8 +1,6 @@
 package controller;
 
 import model.Paciente;
-import model.RegistroClinico;
-import model.TipoRegistro;
 import model.IPacienteRepository;
 
 import java.util.List;
