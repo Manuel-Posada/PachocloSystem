@@ -1,4 +1,4 @@
-package PachocloSystem.model;
+package model;
 
 public abstract class TrabajadorHospital {
 
