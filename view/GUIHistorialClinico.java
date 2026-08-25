@@ -2,27 +2,27 @@ package view;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.List;
 
 import controller.ControladorHistorialClinico;
+import controller.ControladorUsuarios;
+import model.TipoRegistro;
+import model.TrabajadorHospital;
+import model.RegistroClinico;
 
-/**
- * Esqueleto navegable de la pantalla de Historial Clínico.
- * TODO: reemplazar el contenido de mostrarOpciones() por los
- * formularios reales (agregar registro, ver historial),
- * apoyándose en ControladorHistorialClinico.
- */
 public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico {
 
     private IGUIPrincipal guiPrincipal;
     private final ControladorHistorialClinico controlador;
+    private final ControladorUsuarios controladorUsuarios;
 
-    public GUIHistorialClinico(ControladorHistorialClinico controlador) {
+    public GUIHistorialClinico(ControladorHistorialClinico controlador, ControladorUsuarios controladorUsuarios) {
         this.controlador = controlador;
+        this.controladorUsuarios = controladorUsuarios;
         configurarVentana();
         mostrarOpciones();
     }
 
-    /** Setter injection: se asigna después de construir GUIPrincipal, evitando dependencia circular en el constructor. */
     public void setGuiPrincipal(IGUIPrincipal guiPrincipal) {
         this.guiPrincipal = guiPrincipal;
     }
@@ -64,12 +64,63 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
 
     @Override
     public void agregarRegistroClinico() {
-        JOptionPane.showMessageDialog(this, "TODO: formulario para agregar un registro clínico");
+        String idPaciente = JOptionPane.showInputDialog(this, "ID del paciente:");
+        if (idPaciente == null || idPaciente.isBlank()) return;
+
+        TipoRegistro tipo = (TipoRegistro) JOptionPane.showInputDialog(
+                this, "Tipo de registro:", "Registro Clínico",
+                JOptionPane.QUESTION_MESSAGE, null,
+                TipoRegistro.values(), TipoRegistro.values()[0]);
+        if (tipo == null) return;
+
+        JTextArea areaContenido = new JTextArea(6, 30);
+        int opcion = JOptionPane.showConfirmDialog(this, new JScrollPane(areaContenido),
+                "Contenido del registro", JOptionPane.OK_CANCEL_OPTION);
+        if (opcion != JOptionPane.OK_OPTION) return;
+        String contenido = areaContenido.getText().trim();
+        if (contenido.isBlank()) {
+            JOptionPane.showMessageDialog(this, "El contenido no puede estar vacío.");
+            return;
+        }
+
+        String idAutor = JOptionPane.showInputDialog(this, "ID del trabajador que registra (autor):");
+        if (idAutor == null || idAutor.isBlank()) return;
+
+        TrabajadorHospital autor = controladorUsuarios.buscarUsuarioPorId(idAutor);
+        if (autor == null) {
+            JOptionPane.showMessageDialog(this, "No se encontró un usuario con ese ID.");
+            return;
+        }
+
+        boolean ok = controlador.agregarRegistroPaciente(idPaciente, tipo, contenido, autor);
+        JOptionPane.showMessageDialog(this, ok
+                ? "Registro agregado correctamente."
+                : "No se pudo agregar el registro: paciente no encontrado.");
     }
 
     @Override
     public void verHistorialClinico() {
-        JOptionPane.showMessageDialog(this, "TODO: listado del historial clínico del paciente");
+        String idPaciente = JOptionPane.showInputDialog(this, "ID del paciente:");
+        if (idPaciente == null || idPaciente.isBlank()) return;
+
+        List<RegistroClinico> historial = controlador.obtenerHistorialPaciente(idPaciente);
+        if (historial == null) {
+            JOptionPane.showMessageDialog(this, "No se encontró el paciente.");
+            return;
+        }
+        if (historial.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "El paciente no tiene registros clínicos.");
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (RegistroClinico r : historial) {
+            sb.append(r).append("\n");
+        }
+
+        JTextArea areaHistorial = new JTextArea(sb.toString(), 15, 40);
+        areaHistorial.setEditable(false);
+        JOptionPane.showMessageDialog(this, new JScrollPane(areaHistorial), "Historial Clínico", JOptionPane.PLAIN_MESSAGE);
     }
 
     @Override

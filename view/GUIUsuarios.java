@@ -4,13 +4,11 @@ import javax.swing.*;
 import java.awt.*;
 
 import controller.ControladorUsuarios;
+import model.TrabajadorHospital;
+import model.Doctor;
+import model.Enfermero;
+import model.NivelExperiencia;
 
-/**
- * Esqueleto navegable de la pantalla de Usuarios.
- * TODO: reemplazar el contenido de mostrarOpciones() por los
- * formularios reales (registrar, editar, eliminar, listar),
- * apoyándose en ControladorUsuarios.
- */
 public class GUIUsuarios extends JFrame implements IGUIUsuarios {
 
     private IGUIPrincipal guiPrincipal;
@@ -22,7 +20,6 @@ public class GUIUsuarios extends JFrame implements IGUIUsuarios {
         mostrarOpciones();
     }
 
-    /** Setter injection: se asigna después de construir GUIPrincipal, evitando dependencia circular en el constructor. */
     public void setGuiPrincipal(IGUIPrincipal guiPrincipal) {
         this.guiPrincipal = guiPrincipal;
     }
@@ -70,18 +67,78 @@ public class GUIUsuarios extends JFrame implements IGUIUsuarios {
 
     @Override
     public void registrarUsuario() {
-        // TODO: reemplazar por un formulario real; esto es solo para validar el flujo end-to-end
         String id = JOptionPane.showInputDialog(this, "ID del usuario:");
-        if (id == null) return;
-        String nombre = JOptionPane.showInputDialog(this, "Nombre:");
-        if (nombre == null) return;
-        JOptionPane.showMessageDialog(this, "TODO: falta capturar el rolEspecifico (TrabajadorHospital)");
-        // boolean ok = controlador.registrarUsuario(id, nombre, rolEspecifico);
+        if (id == null || id.isBlank()) return;
+
+        String nombre = JOptionPane.showInputDialog(this, "Nombre completo:");
+        if (nombre == null || nombre.isBlank()) return;
+
+        String[] roles = {"Doctor", "Enfermero"};
+        String rol = (String) JOptionPane.showInputDialog(
+                this, "Seleccione el rol:", "Rol del trabajador",
+                JOptionPane.QUESTION_MESSAGE, null, roles, roles[0]);
+        if (rol == null) return;
+
+        TrabajadorHospital rolEspecifico = capturarDatosDeRol(id, nombre, rol);
+        if (rolEspecifico == null) return; // el usuario canceló la captura de datos del rol
+
+        boolean ok = controlador.registrarUsuario(id, nombre, rolEspecifico);
+        JOptionPane.showMessageDialog(this, ok
+                ? "Usuario registrado correctamente."
+                : "No se pudo registrar: datos inválidos o el ID ya existe.");
+    }
+
+    /** Pide los datos propios del rol elegido y construye la subclase de TrabajadorHospital correspondiente. */
+    private TrabajadorHospital capturarDatosDeRol(String id, String nombre, String rol) {
+        if ("Doctor".equals(rol)) {
+            String especialidad = JOptionPane.showInputDialog(this, "Especialidad:");
+            if (especialidad == null || especialidad.isBlank()) return null;
+            return new Doctor(id, nombre, especialidad);
+        } else {
+            NivelExperiencia nivel = (NivelExperiencia) JOptionPane.showInputDialog(
+                    this, "Nivel de experiencia:", "Enfermero",
+                    JOptionPane.QUESTION_MESSAGE, null,
+                    NivelExperiencia.values(), NivelExperiencia.values()[0]);
+            if (nivel == null) return null;
+            return new Enfermero(id, nombre, nivel);
+        }
     }
 
     @Override
     public void editarUsuario() {
-        JOptionPane.showMessageDialog(this, "TODO: formulario de edición de usuario");
+        String id = JOptionPane.showInputDialog(this, "ID del usuario a editar:");
+        if (id == null || id.isBlank()) return;
+
+        TrabajadorHospital existente = controlador.buscarUsuarioPorId(id);
+        if (existente == null) {
+            JOptionPane.showMessageDialog(this, "No se encontró el usuario.");
+            return;
+        }
+
+        String nuevoNombre = JOptionPane.showInputDialog(this, "Nuevo nombre:", existente.getNombreCompleto());
+        if (nuevoNombre == null || nuevoNombre.isBlank()) return;
+
+        TrabajadorHospital actualizado;
+        if (existente instanceof Doctor) {
+            Doctor doctor = (Doctor) existente;
+            String especialidad = JOptionPane.showInputDialog(this, "Nueva especialidad:", doctor.getEspecialidad());
+            if (especialidad == null || especialidad.isBlank()) return;
+            actualizado = new Doctor(id, nuevoNombre, especialidad);
+        } else if (existente instanceof Enfermero) {
+            Enfermero enfermero = (Enfermero) existente;
+            NivelExperiencia nivel = (NivelExperiencia) JOptionPane.showInputDialog(
+                    this, "Nuevo nivel de experiencia:", "Enfermero",
+                    JOptionPane.QUESTION_MESSAGE, null,
+                    NivelExperiencia.values(), enfermero.getNivelExperiencia());
+            if (nivel == null) return;
+            actualizado = new Enfermero(id, nuevoNombre, nivel);
+        } else {
+            JOptionPane.showMessageDialog(this, "Tipo de trabajador no soportado.");
+            return;
+        }
+
+        boolean ok = controlador.editarUsuario(id, nuevoNombre, actualizado);
+        JOptionPane.showMessageDialog(this, ok ? "Usuario actualizado." : "No se pudo actualizar el usuario.");
     }
 
     @Override

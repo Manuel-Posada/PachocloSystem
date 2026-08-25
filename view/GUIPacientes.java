@@ -5,12 +5,6 @@ import java.awt.*;
 
 import controller.ControladorPaciente;
 
-/**
- * Esqueleto navegable de la pantalla de Pacientes.
- * TODO: reemplazar el contenido de mostrarOpciones() por los
- * formularios reales (registrar, editar, eliminar, listar, buscar),
- * apoyándose en ControladorPaciente.
- */
 public class GUIPacientes extends JFrame implements IGUIPacientes {
 
     private IGUIPrincipal guiPrincipal;
@@ -22,7 +16,6 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         mostrarOpciones();
     }
 
-    /** Setter injection: se asigna después de construir GUIPrincipal, evitando dependencia circular en el constructor. */
     public void setGuiPrincipal(IGUIPrincipal guiPrincipal) {
         this.guiPrincipal = guiPrincipal;
     }
@@ -73,12 +66,57 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
 
     @Override
     public void registrarPaciente() {
-        JOptionPane.showMessageDialog(this, "TODO: formulario de registro de paciente");
+        String id = JOptionPane.showInputDialog(this, "ID del paciente:");
+        if (id == null || id.isBlank()) return;
+
+        String nombre = JOptionPane.showInputDialog(this, "Nombre completo:");
+        if (nombre == null || nombre.isBlank()) return;
+
+        String edadTexto = JOptionPane.showInputDialog(this, "Edad:");
+        if (edadTexto == null) return;
+        int edad;
+        try {
+            edad = Integer.parseInt(edadTexto.trim());
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Edad inválida.");
+            return;
+        }
+
+        String habitacionTexto = JOptionPane.showInputDialog(this, "Número de habitación:");
+        if (habitacionTexto == null) return;
+        int habitacion;
+        try {
+            habitacion = Integer.parseInt(habitacionTexto.trim());
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Número de habitación inválido.");
+            return;
+        }
+
+        boolean ok = controlador.registrarPaciente(id, nombre, edad, habitacion);
+        JOptionPane.showMessageDialog(this, ok
+                ? "Paciente registrado correctamente."
+                : "No se pudo registrar el paciente (verifique que el ID no exista).");
     }
 
     @Override
     public void editarPaciente() {
-        JOptionPane.showMessageDialog(this, "TODO: formulario de edición de habitación");
+        String id = JOptionPane.showInputDialog(this, "ID del paciente a editar:");
+        if (id == null || id.isBlank()) return;
+
+        String habitacionTexto = JOptionPane.showInputDialog(this, "Nueva habitación:");
+        if (habitacionTexto == null) return;
+        int nuevaHabitacion;
+        try {
+            nuevaHabitacion = Integer.parseInt(habitacionTexto.trim());
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Número de habitación inválido.");
+            return;
+        }
+
+        boolean ok = controlador.editarPaciente(id, nuevaHabitacion);
+        JOptionPane.showMessageDialog(this, ok
+                ? "Paciente actualizado correctamente."
+                : "No se encontró el paciente.");
     }
 
     @Override

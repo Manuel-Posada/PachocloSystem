@@ -37,7 +37,10 @@ class Main {
             // --- Vistas (cada una recibe su controlador) ---
             GUIUsuarios guiUsuarios = new GUIUsuarios(ctrlUsuarios);
             GUIPacientes guiPacientes = new GUIPacientes(ctrlPaciente);
-            GUIHistorialClinico guiHistorial = new GUIHistorialClinico(ctrlHistorial);
+            // GUIHistorialClinico necesita también ctrlUsuarios para buscar
+            // al trabajador que figura como "autor" del registro clínico
+            // (todavía no hay sesión/login, así que se pide el ID manualmente).
+            GUIHistorialClinico guiHistorial = new GUIHistorialClinico(ctrlHistorial, ctrlUsuarios);
 
             GUIPrincipal guiPrincipal = new GUIPrincipal(guiUsuarios, guiPacientes, guiHistorial);
 
