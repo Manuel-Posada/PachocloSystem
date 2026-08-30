@@ -1,21 +1,21 @@
 package controller;
 
-import model.IUsuarioRepository;
+import model.ITrabajadoresRepository;
 import model.TrabajadorHospital;
 
 import java.util.List;
 
 
-public class ControladorUsuarios {
+public class ControladorTrabajadores {
 
-    private IUsuarioRepository repositorio;
+    private ITrabajadoresRepository repositorio;
 
-    public ControladorUsuarios(IUsuarioRepository repositorio) {
+    public ControladorTrabajadores(ITrabajadoresRepository repositorio) {
         this.repositorio = repositorio;
     }
 
 
-    public boolean registrarUsuario(String id, String nombre, TrabajadorHospital rolEspecifico) {
+    public boolean registrarTrabajador(String id, String nombre, TrabajadorHospital rolEspecifico) {
         if (rolEspecifico == null || id == null || nombre == null) {
             return false;
         }
@@ -25,10 +25,10 @@ public class ControladorUsuarios {
         if (repositorio.buscarPorId(id) != null) {
             return false;
         }
-        return repositorio.guardarUsuario(rolEspecifico);
+        return repositorio.guardarTrabajador(rolEspecifico);
     }
 
-    public boolean editarUsuario(String id, String nombre, TrabajadorHospital rolEspecifico) {
+    public boolean editarTrabajador(String id, String nombre, TrabajadorHospital rolEspecifico) {
         if (rolEspecifico == null || id == null) {
             return false;
         }
@@ -36,22 +36,22 @@ public class ControladorUsuarios {
         if (existente == null) {
             return false;
         }
-        repositorio.eliminarUsuario(id);
-        return repositorio.guardarUsuario(rolEspecifico);
+        repositorio.eliminarTrabajador(id);
+        return repositorio.guardarTrabajador(rolEspecifico);
     }
 
-    public boolean eliminarUsuario(String id) {
+    public boolean eliminarTrabajador(String id) {
         if (id == null) {
             return false;
         }
-        return repositorio.eliminarUsuario(id);
+        return repositorio.eliminarTrabajador(id);
     }
 
-    public List<TrabajadorHospital> listarUsuarios() {
+    public List<TrabajadorHospital> listarTrabajadores() {
         return repositorio.obtenerTodos();
     }
 
-    public TrabajadorHospital buscarUsuarioPorId(String id) {
+    public TrabajadorHospital buscarTrabajadorPorId(String id) {
         if (id == null) {
             return null;
         }

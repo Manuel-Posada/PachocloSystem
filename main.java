@@ -2,15 +2,15 @@ import javax.swing.SwingUtilities;
 
 import controller.ControladorHistorialClinico;
 import controller.ControladorPaciente;
-import controller.ControladorUsuarios;
+import controller.ControladorTrabajadores;
 import model.IPacienteRepository;
-import model.IUsuarioRepository;
+import model.ITrabajadoresRepository;
 import model.PacienteRepositoryImpl;
-import model.UsuarioRepositoryImpl;
+import model.TrabajadorRepositoryImpl;
 import view.GUIHistorialClinico;
 import view.GUIPacientes;
 import view.GUIPrincipal;
-import view.GUIUsuarios;
+import view.guiTrabajadores;
 
 /**
  * Punto de entrada. Ensambla repositorios -> controladores -> vistas,
@@ -27,25 +27,25 @@ class Main {
 
             // --- Repositorios (instancia normal, una sola vez) ---
             IPacienteRepository repoPacientes = new PacienteRepositoryImpl();
-            IUsuarioRepository repoUsuarios = new UsuarioRepositoryImpl();
+            ITrabajadoresRepository repoTrabajadors = new TrabajadorRepositoryImpl();
 
             // --- Controladores ---
-            ControladorUsuarios ctrlUsuarios = new ControladorUsuarios(repoUsuarios);
+            ControladorTrabajadores ctrlTrabajadores = new ControladorTrabajadores(repoTrabajadors);
             ControladorPaciente ctrlPaciente = new ControladorPaciente(repoPacientes);
             ControladorHistorialClinico ctrlHistorial = new ControladorHistorialClinico(repoPacientes);
 
             // --- Vistas (cada una recibe su controlador) ---
-            GUIUsuarios guiUsuarios = new GUIUsuarios(ctrlUsuarios);
+            guiTrabajadores guiTrabajadores = new guiTrabajadores(ctrlTrabajadores);
             GUIPacientes guiPacientes = new GUIPacientes(ctrlPaciente);
-            // GUIHistorialClinico necesita también ctrlUsuarios para buscar
+            // GUIHistorialClinico necesita también ctrlTrabajadores para buscar
             // al trabajador que figura como "autor" del registro clínico
             // (todavía no hay sesión/login, así que se pide el ID manualmente).
-            GUIHistorialClinico guiHistorial = new GUIHistorialClinico(ctrlHistorial, ctrlUsuarios);
+            GUIHistorialClinico guiHistorial = new GUIHistorialClinico(ctrlHistorial, ctrlTrabajadores);
 
-            GUIPrincipal guiPrincipal = new GUIPrincipal(guiUsuarios, guiPacientes, guiHistorial);
+            GUIPrincipal guiPrincipal = new GUIPrincipal(guiTrabajadores, guiPacientes, guiHistorial);
 
             // --- Referencia inversa (hijas -> principal) resuelta con setter injection ---
-            guiUsuarios.setGuiPrincipal(guiPrincipal);
+            guiTrabajadores.setGuiPrincipal(guiPrincipal);
             guiPacientes.setGuiPrincipal(guiPrincipal);
             guiHistorial.setGuiPrincipal(guiPrincipal);
 

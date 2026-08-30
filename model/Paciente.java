@@ -35,8 +35,6 @@ public class Paciente {
         this.registros.add(registro);
     }
 
-    // Getters básicos (no están en el UML, pero los necesitarás para
-    // que el repositorio pueda guardar/consultar por id, nombre, etc.)
     public String getIdPaciente() {
         return idPaciente;
     }
@@ -51,5 +49,12 @@ public class Paciente {
 
     public int getHabitacion() {
         return habitacion;
+    }
+
+    // En Paciente.java
+    @Override
+    public String toString() {
+        return "ID: " + idPaciente + " | Nombre: " + nombre + " | Edad: " + edad
+                + " | Habitación: " + habitacion + " | Registros: " + registros.size();
     }
 }

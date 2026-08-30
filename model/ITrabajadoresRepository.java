@@ -3,13 +3,13 @@ package model;
 import java.util.List;
  
 
-public interface IUsuarioRepository {
+public interface ITrabajadoresRepository {
  
-    boolean guardarUsuario(TrabajadorHospital u);
+    boolean guardarTrabajador(TrabajadorHospital u);
  
     TrabajadorHospital buscarPorId(String id);
  
-    boolean eliminarUsuario(String id);
+    boolean eliminarTrabajador(String id);
  
     List<TrabajadorHospital> obtenerTodos();
 }

@@ -5,7 +5,7 @@ import java.awt.*;
 import java.util.List;
 
 import controller.ControladorHistorialClinico;
-import controller.ControladorUsuarios;
+import controller.ControladorTrabajadores;
 import model.TipoRegistro;
 import model.TrabajadorHospital;
 import model.RegistroClinico;
@@ -14,11 +14,11 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
 
     private IGUIPrincipal guiPrincipal;
     private final ControladorHistorialClinico controlador;
-    private final ControladorUsuarios controladorUsuarios;
+    private final ControladorTrabajadores controladorTrabajadores;
 
-    public GUIHistorialClinico(ControladorHistorialClinico controlador, ControladorUsuarios controladorUsuarios) {
+    public GUIHistorialClinico(ControladorHistorialClinico controlador, ControladorTrabajadores controladorTrabajadores) {
         this.controlador = controlador;
-        this.controladorUsuarios = controladorUsuarios;
+        this.controladorTrabajadores = controladorTrabajadores;
         configurarVentana();
         mostrarOpciones();
     }
@@ -30,7 +30,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
     private void configurarVentana() {
         setTitle("Historial Clínico");
         setSize(420, 300);
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(false);
     }
@@ -86,9 +86,9 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         String idAutor = JOptionPane.showInputDialog(this, "ID del trabajador que registra (autor):");
         if (idAutor == null || idAutor.isBlank()) return;
 
-        TrabajadorHospital autor = controladorUsuarios.buscarUsuarioPorId(idAutor);
+        TrabajadorHospital autor = controladorTrabajadores.buscarTrabajadorPorId(idAutor);
         if (autor == null) {
-            JOptionPane.showMessageDialog(this, "No se encontró un usuario con ese ID.");
+            JOptionPane.showMessageDialog(this, "No se encontró un trabajador con ese ID.");
             return;
         }
 

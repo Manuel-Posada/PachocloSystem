@@ -2,7 +2,7 @@ package view;
 
 /**
  * GUI raíz de la aplicación. Orquesta la navegación hacia las
- * pantallas especializadas (Usuarios, Pacientes, Historial Clínico).
+ * pantallas especializadas (Trabajadors, Pacientes, Historial Clínico).
  * No conoce controladores ni repositorios directamente.
  */
 public interface IGUIPrincipal {
@@ -13,8 +13,8 @@ public interface IGUIPrincipal {
     /** Renderiza las opciones del menú principal. */
     void mostrarOpciones();
 
-    /** Deriva el control hacia la GUI de gestión de usuarios. */
-    void irAGestionUsuarios();
+    /** Deriva el control hacia la GUI de gestión de trabajadors. */
+    void irAGestionTrabajadors();
 
     /** Deriva el control hacia la GUI de gestión de pacientes. */
     void irAGestionPacientes();

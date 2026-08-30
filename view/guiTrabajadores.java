@@ -3,18 +3,18 @@ package view;
 import javax.swing.*;
 import java.awt.*;
 
-import controller.ControladorUsuarios;
+import controller.ControladorTrabajadores;
 import model.TrabajadorHospital;
 import model.Doctor;
 import model.Enfermero;
 import model.NivelExperiencia;
 
-public class GUIUsuarios extends JFrame implements IGUIUsuarios {
+public class guiTrabajadores extends JFrame implements IguiTrabajadores {
 
     private IGUIPrincipal guiPrincipal;
-    private final ControladorUsuarios controlador;
+    private final ControladorTrabajadores controlador;
 
-    public GUIUsuarios(ControladorUsuarios controlador) {
+    public guiTrabajadores(ControladorTrabajadores controlador) {
         this.controlador = controlador;
         configurarVentana();
         mostrarOpciones();
@@ -25,7 +25,7 @@ public class GUIUsuarios extends JFrame implements IGUIUsuarios {
     }
 
     private void configurarVentana() {
-        setTitle("Gestión de Usuarios");
+        setTitle("Gestión de Trabajadors");
         setSize(420, 340);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -42,16 +42,16 @@ public class GUIUsuarios extends JFrame implements IGUIUsuarios {
         JPanel panel = new JPanel(new GridLayout(6, 1, 12, 12));
         panel.setBorder(BorderFactory.createEmptyBorder(30, 60, 30, 60));
 
-        JButton btnRegistrar = new JButton("Registrar Usuario");
-        JButton btnEditar = new JButton("Editar Usuario");
-        JButton btnEliminar = new JButton("Eliminar Usuario");
-        JButton btnListar = new JButton("Listar Usuarios");
+        JButton btnRegistrar = new JButton("Registrar Trabajador");
+        JButton btnEditar = new JButton("Editar Trabajador");
+        JButton btnEliminar = new JButton("Eliminar Trabajador");
+        JButton btnListar = new JButton("Listar Trabajadors");
         JButton btnVolver = new JButton("Volver");
 
-        btnRegistrar.addActionListener(e -> registrarUsuario());
-        btnEditar.addActionListener(e -> editarUsuario());
-        btnEliminar.addActionListener(e -> eliminarUsuario());
-        btnListar.addActionListener(e -> listarUsuarios());
+        btnRegistrar.addActionListener(e -> registrarTrabajador());
+        btnEditar.addActionListener(e -> editarTrabajador());
+        btnEliminar.addActionListener(e -> eliminarTrabajador());
+        btnListar.addActionListener(e -> listarTrabajadores());
         btnVolver.addActionListener(e -> volver());
 
         panel.add(btnRegistrar);
@@ -66,8 +66,8 @@ public class GUIUsuarios extends JFrame implements IGUIUsuarios {
     }
 
     @Override
-    public void registrarUsuario() {
-        String id = JOptionPane.showInputDialog(this, "ID del usuario:");
+    public void registrarTrabajador() {
+        String id = JOptionPane.showInputDialog(this, "ID del trabajador:");
         if (id == null || id.isBlank()) return;
 
         String nombre = JOptionPane.showInputDialog(this, "Nombre completo:");
@@ -80,11 +80,11 @@ public class GUIUsuarios extends JFrame implements IGUIUsuarios {
         if (rol == null) return;
 
         TrabajadorHospital rolEspecifico = capturarDatosDeRol(id, nombre, rol);
-        if (rolEspecifico == null) return; // el usuario canceló la captura de datos del rol
+        if (rolEspecifico == null) return; // el trabajador canceló la captura de datos del rol
 
-        boolean ok = controlador.registrarUsuario(id, nombre, rolEspecifico);
+        boolean ok = controlador.registrarTrabajador(id, nombre, rolEspecifico);
         JOptionPane.showMessageDialog(this, ok
-                ? "Usuario registrado correctamente."
+                ? "Trabajador registrado correctamente."
                 : "No se pudo registrar: datos inválidos o el ID ya existe.");
     }
 
@@ -105,13 +105,13 @@ public class GUIUsuarios extends JFrame implements IGUIUsuarios {
     }
 
     @Override
-    public void editarUsuario() {
-        String id = JOptionPane.showInputDialog(this, "ID del usuario a editar:");
+    public void editarTrabajador() {
+        String id = JOptionPane.showInputDialog(this, "ID del trabajador a editar:");
         if (id == null || id.isBlank()) return;
 
-        TrabajadorHospital existente = controlador.buscarUsuarioPorId(id);
+        TrabajadorHospital existente = controlador.buscarTrabajadorPorId(id);
         if (existente == null) {
-            JOptionPane.showMessageDialog(this, "No se encontró el usuario.");
+            JOptionPane.showMessageDialog(this, "No se encontró el trabajador.");
             return;
         }
 
@@ -137,23 +137,23 @@ public class GUIUsuarios extends JFrame implements IGUIUsuarios {
             return;
         }
 
-        boolean ok = controlador.editarUsuario(id, nuevoNombre, actualizado);
-        JOptionPane.showMessageDialog(this, ok ? "Usuario actualizado." : "No se pudo actualizar el usuario.");
+        boolean ok = controlador.editarTrabajador(id, nuevoNombre, actualizado);
+        JOptionPane.showMessageDialog(this, ok ? "Trabajador actualizado." : "No se pudo actualizar el trabajador.");
     }
 
     @Override
-    public void eliminarUsuario() {
-        String id = JOptionPane.showInputDialog(this, "ID del usuario a eliminar:");
+    public void eliminarTrabajador() {
+        String id = JOptionPane.showInputDialog(this, "ID del trabajador a eliminar:");
         if (id == null) return;
-        boolean ok = controlador.eliminarUsuario(id);
-        JOptionPane.showMessageDialog(this, ok ? "Usuario eliminado." : "No se encontró el usuario.");
+        boolean ok = controlador.eliminarTrabajador(id);
+        JOptionPane.showMessageDialog(this, ok ? "Trabajador eliminado." : "No se encontró el trabajador.");
     }
 
     @Override
-    public void listarUsuarios() {
+    public void listarTrabajadores() {
         StringBuilder sb = new StringBuilder();
-        controlador.listarUsuarios().forEach(u -> sb.append(u).append("\n"));
-        JOptionPane.showMessageDialog(this, sb.length() == 0 ? "No hay usuarios registrados." : sb.toString());
+        controlador.listarTrabajadores().forEach(u -> sb.append(u).append("\n"));
+        JOptionPane.showMessageDialog(this, sb.length() == 0 ? "No hay trabajadors registrados." : sb.toString());
     }
 
     @Override

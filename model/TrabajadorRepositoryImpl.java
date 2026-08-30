@@ -3,25 +3,25 @@ package model;
 import java.util.ArrayList;
 import java.util.List;
 
-public class UsuarioRepositoryImpl implements IUsuarioRepository {
+public class TrabajadorRepositoryImpl implements ITrabajadoresRepository {
 
-    private List<TrabajadorHospital> listaUsuarios;
+    private List<TrabajadorHospital> listaTrabajadors;
 
-    public UsuarioRepositoryImpl() {
-        this.listaUsuarios = new ArrayList<>();
+    public TrabajadorRepositoryImpl() {
+        this.listaTrabajadors = new ArrayList<>();
     }
 
     @Override
-    public boolean guardarUsuario(TrabajadorHospital u) {
+    public boolean guardarTrabajador(TrabajadorHospital u) {
         if (u == null) {
             return false;
         }
-        return listaUsuarios.add(u);
+        return listaTrabajadors.add(u);
     }
 
     @Override
     public TrabajadorHospital buscarPorId(String id) {
-        for (TrabajadorHospital u : listaUsuarios) {
+        for (TrabajadorHospital u : listaTrabajadors) {
             if (u.getIdTrabajador().equals(id)) {
                 return u;
             }
@@ -30,16 +30,16 @@ public class UsuarioRepositoryImpl implements IUsuarioRepository {
     }
 
     @Override
-    public boolean eliminarUsuario(String id) {
+    public boolean eliminarTrabajador(String id) {
         TrabajadorHospital u = buscarPorId(id);
         if (u != null) {
-            return listaUsuarios.remove(u);
+            return listaTrabajadors.remove(u);
         }
         return false;
     }
 
     @Override
     public List<TrabajadorHospital> obtenerTodos() {
-        return listaUsuarios;
+        return listaTrabajadors;
     }
 }

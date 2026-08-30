@@ -3,21 +3,16 @@ package view;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * Implementación Swing del menú principal. No conoce controladores
- * ni repositorios: solo recibe (por constructor) las tres pantallas
- * hijas ya construidas y decide cuándo mostrarlas/ocultarlas.
- */
 public class GUIPrincipal extends JFrame implements IGUIPrincipal {
 
-    private final IGUIUsuarios guiUsuarios;
+    private final IguiTrabajadores guiTrabajadores;
     private final IGUIPacientes guiPacientes;
     private final IGUIHistorialClinico guiHistorial;
 
-    public GUIPrincipal(IGUIUsuarios guiUsuarios,
+    public GUIPrincipal(IguiTrabajadores guiTrabajadores,
                          IGUIPacientes guiPacientes,
                          IGUIHistorialClinico guiHistorial) {
-        this.guiUsuarios = guiUsuarios;
+        this.guiTrabajadores = guiTrabajadores;
         this.guiPacientes = guiPacientes;
         this.guiHistorial = guiHistorial;
 
@@ -27,7 +22,7 @@ public class GUIPrincipal extends JFrame implements IGUIPrincipal {
 
     private void configurarVentana() {
         setTitle("Sistema Hospitalario - Menú Principal");
-        setSize(420, 340);
+        setSize(500, 380);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(false);
@@ -40,37 +35,76 @@ public class GUIPrincipal extends JFrame implements IGUIPrincipal {
 
     @Override
     public void mostrarOpciones() {
-        JPanel panel = new JPanel(new GridLayout(6, 1, 12, 12));
-        panel.setBorder(BorderFactory.createEmptyBorder(30, 60, 30, 60));
+        JMenuBar menuBar = new JMenuBar();
 
-        JLabel titulo = new JLabel("Seleccione una opción", SwingConstants.CENTER);
-        titulo.setFont(titulo.getFont().deriveFont(Font.BOLD, 16f));
+        // ---- Menú Trabajadores ----
+        JMenu menuTrabajadores = new JMenu("Trabajadores");
+        JMenuItem itemRegistrarTrabajador = new JMenuItem("Registrar");
+        JMenuItem itemEditarTrabajador = new JMenuItem("Editar");
+        JMenuItem itemEliminarTrabajador = new JMenuItem("Eliminar");
+        JMenuItem itemListarTrabajadores = new JMenuItem("Listar");
 
-        JButton btnUsuarios = new JButton("Gestión de Usuarios");
-        JButton btnPacientes = new JButton("Gestión de Pacientes");
-        JButton btnHistorial = new JButton("Historial Clínico");
-        JButton btnSalir = new JButton("Salir");
+        itemRegistrarTrabajador.addActionListener(e -> irAGestionTrabajadors());
+        itemEditarTrabajador.addActionListener(e -> irAGestionTrabajadors());
+        itemEliminarTrabajador.addActionListener(e -> irAGestionTrabajadors());
+        itemListarTrabajadores.addActionListener(e -> irAGestionTrabajadors());
 
-        btnUsuarios.addActionListener(e -> irAGestionUsuarios());
-        btnPacientes.addActionListener(e -> irAGestionPacientes());
-        btnHistorial.addActionListener(e -> irAHistorialClinico());
-        btnSalir.addActionListener(e -> salir());
+        menuTrabajadores.add(itemRegistrarTrabajador);
+        menuTrabajadores.add(itemEditarTrabajador);
+        menuTrabajadores.add(itemEliminarTrabajador);
+        menuTrabajadores.add(itemListarTrabajadores);
 
-        panel.add(titulo);
-        panel.add(btnUsuarios);
-        panel.add(btnPacientes);
-        panel.add(btnHistorial);
-        panel.add(btnSalir);
+        // ---- Menú Pacientes ----
+        JMenu menuPacientes = new JMenu("Pacientes");
+        JMenuItem itemRegistrarPaciente = new JMenuItem("Registrar");
+        JMenuItem itemEditarPaciente = new JMenuItem("Editar");
+        JMenuItem itemEliminarPaciente = new JMenuItem("Eliminar");
+        JMenuItem itemListarPacientes = new JMenuItem("Listar");
+        JMenuItem itemBuscarPaciente = new JMenuItem("Buscar");
 
-        setContentPane(panel);
+        itemRegistrarPaciente.addActionListener(e -> irAGestionPacientes());
+        itemEditarPaciente.addActionListener(e -> irAGestionPacientes());
+        itemEliminarPaciente.addActionListener(e -> irAGestionPacientes());
+        itemListarPacientes.addActionListener(e -> irAGestionPacientes());
+        itemBuscarPaciente.addActionListener(e -> irAGestionPacientes());
+
+        menuPacientes.add(itemRegistrarPaciente);
+        menuPacientes.add(itemEditarPaciente);
+        menuPacientes.add(itemEliminarPaciente);
+        menuPacientes.add(itemListarPacientes);
+        menuPacientes.add(itemBuscarPaciente);
+
+        // ---- Menú Historial Clínico ----
+        JMenu menuHistorial = new JMenu("Historial Clínico");
+        JMenuItem itemVerHistorial = new JMenuItem("Ver Historial");
+        itemVerHistorial.addActionListener(e -> irAHistorialClinico());
+        menuHistorial.add(itemVerHistorial);
+
+        // ---- Salir ----
+        JMenu menuSalir = new JMenu("Salir");
+        JMenuItem itemSalir = new JMenuItem("Salir del sistema");
+        itemSalir.addActionListener(e -> salir());
+        menuSalir.add(itemSalir);
+
+        menuBar.add(menuTrabajadores);
+        menuBar.add(menuPacientes);
+        menuBar.add(menuHistorial);
+        menuBar.add(menuSalir);
+
+        setJMenuBar(menuBar);
+
+        JLabel bienvenida = new JLabel("Sistema Hospitalario", SwingConstants.CENTER);
+        bienvenida.setFont(bienvenida.getFont().deriveFont(Font.BOLD, 20f));
+        setContentPane(bienvenida);
+
         revalidate();
         repaint();
     }
 
     @Override
-    public void irAGestionUsuarios() {
+    public void irAGestionTrabajadors() {
         setVisible(false);
-        guiUsuarios.mostrar();
+        guiTrabajadores.mostrar();
     }
 
     @Override
