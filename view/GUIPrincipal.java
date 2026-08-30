@@ -37,59 +37,33 @@ public class GUIPrincipal extends JFrame implements IGUIPrincipal {
     public void mostrarOpciones() {
         JMenuBar menuBar = new JMenuBar();
 
-        // ---- Menú Trabajadores ----
+        //menu de trabajadores
         JMenu menuTrabajadores = new JMenu("Trabajadores");
-        JMenuItem itemRegistrarTrabajador = new JMenuItem("Registrar");
-        JMenuItem itemEditarTrabajador = new JMenuItem("Editar");
-        JMenuItem itemEliminarTrabajador = new JMenuItem("Eliminar");
-        JMenuItem itemListarTrabajadores = new JMenuItem("Listar");
+        JMenuItem itemVerTrabajadores = new JMenuItem("Ver Trabajadores");
+        itemVerTrabajadores.addActionListener(e -> irAGestionTrabajadors());
+        menuTrabajadores.add(itemVerTrabajadores);
 
-        itemRegistrarTrabajador.addActionListener(e -> irAGestionTrabajadors());
-        itemEditarTrabajador.addActionListener(e -> irAGestionTrabajadors());
-        itemEliminarTrabajador.addActionListener(e -> irAGestionTrabajadors());
-        itemListarTrabajadores.addActionListener(e -> irAGestionTrabajadors());
-
-        menuTrabajadores.add(itemRegistrarTrabajador);
-        menuTrabajadores.add(itemEditarTrabajador);
-        menuTrabajadores.add(itemEliminarTrabajador);
-        menuTrabajadores.add(itemListarTrabajadores);
-
-        // ---- Menú Pacientes ----
+        //menu de pacientes
         JMenu menuPacientes = new JMenu("Pacientes");
-        JMenuItem itemRegistrarPaciente = new JMenuItem("Registrar");
-        JMenuItem itemEditarPaciente = new JMenuItem("Editar");
-        JMenuItem itemEliminarPaciente = new JMenuItem("Eliminar");
-        JMenuItem itemListarPacientes = new JMenuItem("Listar");
-        JMenuItem itemBuscarPaciente = new JMenuItem("Buscar");
+        JMenuItem itemVerPacientes = new JMenuItem("Ver Pacientes");
+        itemVerPacientes.addActionListener(e -> irAGestionPacientes());
+        menuPacientes.add(itemVerPacientes);
 
-        itemRegistrarPaciente.addActionListener(e -> irAGestionPacientes());
-        itemEditarPaciente.addActionListener(e -> irAGestionPacientes());
-        itemEliminarPaciente.addActionListener(e -> irAGestionPacientes());
-        itemListarPacientes.addActionListener(e -> irAGestionPacientes());
-        itemBuscarPaciente.addActionListener(e -> irAGestionPacientes());
-
-        menuPacientes.add(itemRegistrarPaciente);
-        menuPacientes.add(itemEditarPaciente);
-        menuPacientes.add(itemEliminarPaciente);
-        menuPacientes.add(itemListarPacientes);
-        menuPacientes.add(itemBuscarPaciente);
-
-        // ---- Menú Historial Clínico ----
+        //menu del historial clinico
         JMenu menuHistorial = new JMenu("Historial Clínico");
         JMenuItem itemVerHistorial = new JMenuItem("Ver Historial");
         itemVerHistorial.addActionListener(e -> irAHistorialClinico());
         menuHistorial.add(itemVerHistorial);
 
-        // ---- Salir ----
-        JMenu menuSalir = new JMenu("Salir");
-        JMenuItem itemSalir = new JMenuItem("Salir del sistema");
-        itemSalir.addActionListener(e -> salir());
-        menuSalir.add(itemSalir);
-
         menuBar.add(menuTrabajadores);
         menuBar.add(menuPacientes);
         menuBar.add(menuHistorial);
-        menuBar.add(menuSalir);
+
+        //se edito el boton de salir para no perder tiempo 
+        menuBar.add(Box.createHorizontalGlue());
+        JButton btnSalir = new JButton("Salir");
+        btnSalir.addActionListener(e -> salir());
+        menuBar.add(btnSalir);
 
         setJMenuBar(menuBar);
 
