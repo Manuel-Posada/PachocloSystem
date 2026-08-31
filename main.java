@@ -10,7 +10,7 @@ import model.TrabajadorRepositoryImpl;
 import view.GUIHistorialClinico;
 import view.GUIPacientes;
 import view.GUIPrincipal;
-import view.guiTrabajadores;
+import view.GUITrabajadores;
 
 /**
  * Punto de entrada. Ensambla repositorios -> controladores -> vistas,
@@ -35,7 +35,7 @@ class Main {
             ControladorHistorialClinico ctrlHistorial = new ControladorHistorialClinico(repoPacientes);
 
             // --- Vistas (cada una recibe su controlador) ---
-            guiTrabajadores guiTrabajadores = new guiTrabajadores(ctrlTrabajadores);
+            GUITrabajadores guiTrabajadores = new GUITrabajadores(ctrlTrabajadores);
             GUIPacientes guiPacientes = new GUIPacientes(ctrlPaciente);
             // GUIHistorialClinico necesita también ctrlTrabajadores para buscar
             // al trabajador que figura como "autor" del registro clínico

@@ -16,7 +16,7 @@ import model.Enfermero;
 import model.NivelExperiencia;
 import model.TrabajadorHospital;
 
-public class guiTrabajadores extends JFrame implements IguiTrabajadores {
+public class GUITrabajadores extends JFrame implements IGUITrabajadores {
 
     private IGUIPrincipal guiPrincipal;
     private final ControladorTrabajadores controlador;
@@ -38,7 +38,7 @@ public class guiTrabajadores extends JFrame implements IguiTrabajadores {
     private static final Pattern PATRON_CONTIENE_TEXTO =
             Pattern.compile(".*[A-Za-zÁÉÍÓÚÑÜáéíóúñü].*");
 
-    public guiTrabajadores(ControladorTrabajadores controlador) {
+    public GUITrabajadores(ControladorTrabajadores controlador) {
         this.controlador = controlador;
         configurarVentana();
         mostrarOpciones();
@@ -396,7 +396,7 @@ public class guiTrabajadores extends JFrame implements IguiTrabajadores {
                 comboNivel.setSelectedItem(((Enfermero) existente).getNivelExperiencia());
                 cardLayout.show(panelDetalleDinamico, "ENFERMERO");
             }
-            //NO se puede cambiar el rol del trabajador 
+            //NO se puede cambiar el rol del trabajador
             comboRol.setEnabled(false);
         }
 

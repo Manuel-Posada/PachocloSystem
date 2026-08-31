@@ -1,6 +1,6 @@
 package view;
 
-public interface IguiTrabajadores {
+public interface IGUITrabajadores {
 
     void mostrar();
 

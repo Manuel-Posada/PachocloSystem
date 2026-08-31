@@ -5,11 +5,11 @@ import java.awt.*;
 
 public class GUIPrincipal extends JFrame implements IGUIPrincipal {
 
-    private final IguiTrabajadores guiTrabajadores;
+    private final IGUITrabajadores guiTrabajadores;
     private final IGUIPacientes guiPacientes;
     private final IGUIHistorialClinico guiHistorial;
 
-    public GUIPrincipal(IguiTrabajadores guiTrabajadores,
+    public GUIPrincipal(IGUITrabajadores guiTrabajadores,
                          IGUIPacientes guiPacientes,
                          IGUIHistorialClinico guiHistorial) {
         this.guiTrabajadores = guiTrabajadores;
