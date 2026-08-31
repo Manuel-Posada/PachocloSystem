@@ -8,6 +8,7 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -20,31 +21,35 @@ import model.RegistroClinico;
 
 public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico {
 
+    // --- 1. VARIABLES DE CLASE ---
     private IGUIPrincipal guiPrincipal;
     private final ControladorHistorialClinico controlador;
     private final ControladorTrabajadores controladorTrabajadores;
 
+    // Componentes gráficos
     private JLabel lblEstado;
     private JTable tabla;
     private DefaultTableModel modeloTabla;
+    
+    // Estado actual de la vista
     private List<RegistroConPaciente> registrosActuales;
+    private String idPacienteActual;
+    private String nombrePacienteActual;
 
+    // Constantes
     private static final String[] COLUMNAS = {
             "ID Paciente", "Paciente", "Fecha y Hora", "Tipo", "Autor", "Contenido"
     };
     private static final DateTimeFormatter FORMATO_FECHA =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
-    //validaciones
-    private static final Pattern PATRON_ID =
-            Pattern.compile("^[A-Za-z0-9\\-]{1,20}$");
-    private static final Pattern PATRON_CONTIENE_TEXTO =
-            Pattern.compile(".*[A-Za-zÁÉÍÓÚÑÜáéíóúñü].*");
-    private static final Pattern PATRON_ENTERO =
-            Pattern.compile("^\\d{1,4}$");
-    private static final Pattern PATRON_DECIMAL =
-            Pattern.compile("^\\d{1,3}(\\.\\d{1,2})?$");
+    // Validaciones (Regex)
+    private static final Pattern PATRON_ID = Pattern.compile("^[A-Za-z0-9\\-]{1,20}$");
+    private static final Pattern PATRON_CONTIENE_TEXTO = Pattern.compile(".*[A-Za-zÁÉÍÓÚÑÜáéíóúñü].*");
+    private static final Pattern PATRON_ENTERO = Pattern.compile("^\\d{1,4}$");
+    private static final Pattern PATRON_DECIMAL = Pattern.compile("^\\d{1,3}(\\.\\d{1,2})?$");
 
+    // --- 2. CONSTRUCTOR Y CONFIGURACIÓN ---
     public GUIHistorialClinico(ControladorHistorialClinico controlador, ControladorTrabajadores controladorTrabajadores) {
         this.controlador = controlador;
         this.controladorTrabajadores = controladorTrabajadores;
@@ -65,13 +70,35 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         setResizable(true);
     }
 
+    // --- 3. MÉTODOS DE VISUALIZACIÓN Y NAVEGACIÓN ---
+    
     @Override
     public void mostrar() {
+        this.idPacienteActual = null;
+        this.nombrePacienteActual = null;
+        setTitle("Historial Clínico General");
         refrescarTabla();
         setVisible(true);
     }
 
-    //boton + tabla
+    @Override
+    public void mostrar(String idPaciente, String nombrePaciente) {
+        this.idPacienteActual = idPaciente;
+        this.nombrePacienteActual = nombrePaciente;
+        setTitle("Historial Clínico - " + nombrePaciente);
+        refrescarTabla();
+        setVisible(true);
+    }
+
+    @Override
+    public void volver() {
+        setVisible(false);
+        if (guiPrincipal != null) {
+            guiPrincipal.mostrar();
+        }
+    }
+
+    // --- 4. CONSTRUCCIÓN DE LA INTERFAZ (PANELES) ---
 
     @Override
     public void mostrarOpciones() {
@@ -147,7 +174,6 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         return panel;
     }
 
-    //apariencia tipo excel :)
     private void estilizarTabla() {
         tabla.setShowGrid(true);
         tabla.setGridColor(new Color(210, 210, 210));
@@ -162,7 +188,6 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         tabla.getTableHeader().setBackground(new Color(235, 235, 235));
         tabla.getTableHeader().setReorderingAllowed(false);
 
-        //mas cosas para que se vea mas bonita la lista
         DefaultTableCellRenderer renderer = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
@@ -175,9 +200,11 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
                 return c;
             }
         };
+
         for (int i = 0; i < tabla.getColumnCount(); i++) {
             tabla.getColumnModel().getColumn(i).setCellRenderer(renderer);
         }
+
         tabla.getColumnModel().getColumn(0).setPreferredWidth(90);   //ID paciente
         tabla.getColumnModel().getColumn(1).setPreferredWidth(140);  //paciente
         tabla.getColumnModel().getColumn(2).setPreferredWidth(130);  //fecha
@@ -186,9 +213,22 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         tabla.getColumnModel().getColumn(5).setPreferredWidth(320);  //contenido
     }
 
+    // --- 5. LÓGICA DE TABLA Y DETALLES ---
+
     private void refrescarTabla() {
-        registrosActuales = controlador.obtenerTodosLosRegistros();
         modeloTabla.setRowCount(0);
+        registrosActuales = new ArrayList<>();
+
+        if (idPacienteActual != null) {
+            // Modo: Un solo paciente
+            List<RegistroClinico> registrosPaciente = controlador.obtenerRegistrosPorPaciente(idPacienteActual);
+            for (RegistroClinico r : registrosPaciente) {
+                registrosActuales.add(new RegistroConPaciente(idPacienteActual, nombrePacienteActual, r));
+            }
+        } else {
+            // Modo: Todos los pacientes
+            registrosActuales = controlador.obtenerTodosLosRegistros();
+        }
 
         for (RegistroConPaciente rc : registrosActuales) {
             RegistroClinico r = rc.getRegistro();
@@ -206,6 +246,32 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         lblEstado.setText(vacio ? "No hay registros" : "Total de registros: " + registrosActuales.size());
     }
 
+    @Override
+    public void verHistorialClinico() {
+        int fila = tabla.getSelectedRow();
+        if (fila < 0 || registrosActuales == null || fila >= registrosActuales.size()) {
+            JOptionPane.showMessageDialog(this, "Seleccione un registro de la tabla para ver su detalle.");
+            return;
+        }
+
+        RegistroConPaciente rc = registrosActuales.get(fila);
+        RegistroClinico r = rc.getRegistro();
+
+        String detalle = "Paciente: " + rc.getNombrePaciente() + " (ID: " + rc.getIdPaciente() + ")\n"
+                + "Fecha: " + r.getFecha().format(FORMATO_FECHA) + "\n"
+                + "Tipo: " + etiquetaTipo(r.getTipo()) + "\n"
+                + "Autor: " + r.getAutor().getNombreCompleto() + "\n\n"
+                + r.getContenido();
+
+        JTextArea areaDetalle = new JTextArea(detalle, 10, 40);
+        areaDetalle.setEditable(false);
+        areaDetalle.setLineWrap(true);
+        areaDetalle.setWrapStyleWord(true);
+        
+        JOptionPane.showMessageDialog(this, new JScrollPane(areaDetalle),
+                "Detalle del Registro Clínico", JOptionPane.PLAIN_MESSAGE);
+    }
+
     private static String etiquetaTipo(TipoRegistro tipo) {
         switch (tipo) {
             case DIAGNOSTICO: return "Diagnóstico";
@@ -216,7 +282,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         }
     }
 
-    //formulario
+    // --- 6. FORMULARIO DE AGREGAR REGISTRO ---
 
     @Override
     public void agregarRegistroClinico() {
@@ -230,6 +296,11 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         JTextField campoIdPaciente = new JTextField(18);
+        // Autocompletar ID si estamos viendo el historial de un paciente específico
+        if (idPacienteActual != null) {
+            campoIdPaciente.setText(idPacienteActual);
+        }
+        
         JTextField campoIdAutor = new JTextField(18);
         JComboBox<TipoRegistro> comboTipo = new JComboBox<>(TipoRegistro.values());
         comboTipo.setRenderer(new DefaultListCellRenderer() {
@@ -244,7 +315,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             }
         });
 
-        //panel multiopciones
+        // Panel multiopciones
         CardLayout cardLayout = new CardLayout();
         JPanel panelContenidoDinamico = new JPanel(cardLayout);
 
@@ -264,12 +335,14 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         JTextArea campoObservaciones = new JTextArea(2, 22);
         campoObservaciones.setLineWrap(true);
         campoObservaciones.setWrapStyleWord(true);
+        
         JPanel panelSignos = construirPanelSignosVitales(
                 campoTemperatura, campoFrecCardiaca, campoPresionSistolica,
                 campoPresionDiastolica, campoFrecRespiratoria, campoSaturacion, campoObservaciones);
 
         panelContenidoDinamico.add(panelTexto, "TEXTO");
         panelContenidoDinamico.add(panelSignos, "SIGNOS");
+        
         comboTipo.addActionListener(e -> {
             TipoRegistro seleccionado = (TipoRegistro) comboTipo.getSelectedItem();
             cardLayout.show(panelContenidoDinamico,
@@ -383,7 +456,8 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         return panel;
     }
 
-    //Seccion para validar TODO lo que se ingrese en el formulario, se muestra una advertencia en el GUI si hay algo incorrecto
+    // --- 7. VALIDACIONES ---
+
     private String validarYGuardarRegistro(String idPacienteTexto, String idAutorTexto, TipoRegistro tipo,
             String contenidoTexto, String temperaturaTexto, String frecCardiacaTexto,
             String presionSistolicaTexto, String presionDiastolicaTexto,
@@ -397,13 +471,13 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         if (idPaciente.isEmpty()) {
             errores.append("• El ID del paciente es obligatorio.<br>");
         } else if (!PATRON_ID.matcher(idPaciente).matches()) {
-            errores.append("• El ID del paciente solo puede tener letras, números y guiones (sin espacios).<br>");
+            errores.append("• El ID del paciente solo puede tener letras, números y guiones.<br>");
         }
 
         if (idAutor.isEmpty()) {
             errores.append("• El ID del autor es obligatorio.<br>");
         } else if (!PATRON_ID.matcher(idAutor).matches()) {
-            errores.append("• El ID del autor solo puede tener letras, números y guiones (sin espacios).<br>");
+            errores.append("• El ID del autor solo puede tener letras, números y guiones.<br>");
         }
 
         if (tipo == null) {
@@ -419,26 +493,26 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             }
             Integer frecCardiaca = validarEntero(frecCardiacaTexto, 20, 250);
             if (frecCardiaca == null) {
-                errores.append("• Frecuencia Cardíaca: debe ser un número entero entre 20 y 250 lpm.<br>");
+                errores.append("• Frecuencia Cardíaca: debe ser entre 20 y 250 lpm.<br>");
             }
             Integer sistolica = validarEntero(presionSistolicaTexto, 50, 250);
             if (sistolica == null) {
-                errores.append("• Presión Sistólica: debe ser un número entero entre 50 y 250 mmHg.<br>");
+                errores.append("• Presión Sistólica: debe ser entre 50 y 250 mmHg.<br>");
             }
             Integer diastolica = validarEntero(presionDiastolicaTexto, 30, 150);
             if (diastolica == null) {
-                errores.append("• Presión Diastólica: debe ser un número entero entre 30 y 150 mmHg.<br>");
+                errores.append("• Presión Diastólica: debe ser entre 30 y 150 mmHg.<br>");
             }
             if (sistolica != null && diastolica != null && diastolica >= sistolica) {
                 errores.append("• La presión diastólica debe ser menor que la sistólica.<br>");
             }
             Integer frecRespiratoria = validarEntero(frecRespiratoriaTexto, 5, 60);
             if (frecRespiratoria == null) {
-                errores.append("• Frecuencia Respiratoria: debe ser un número entero entre 5 y 60 rpm.<br>");
+                errores.append("• Frecuencia Respiratoria: debe ser entre 5 y 60 rpm.<br>");
             }
             Integer saturacion = validarEntero(saturacionTexto, 0, 100);
             if (saturacion == null) {
-                errores.append("• Saturación de Oxígeno: debe ser un número entero entre 0 y 100%.<br>");
+                errores.append("• Saturación de Oxígeno: debe ser entre 0 y 100%.<br>");
             }
             String observaciones = observacionesTexto == null ? "" : observacionesTexto.trim();
             if (!observaciones.isEmpty() && !PATRON_CONTIENE_TEXTO.matcher(observaciones).matches()) {
@@ -480,7 +554,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             return "• No se pudo agregar el registro: verifique que el ID del paciente exista.";
         }
 
-        return null; //<- No se muestra ningun error si el usuario lleno todo de forma correcta
+        return null; // Todo correcto, sin errores
     }
 
     private Integer validarEntero(String texto, int min, int max) {
@@ -499,38 +573,5 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         double valor = Double.parseDouble(texto);
         if (valor < min || valor > max) return null;
         return valor;
-    }
-
-    //Doble click sobre una fila para ver mas detalles
-
-    @Override
-    public void verHistorialClinico() {
-        int fila = tabla.getSelectedRow();
-        if (fila < 0 || registrosActuales == null || fila >= registrosActuales.size()) {
-            JOptionPane.showMessageDialog(this, "Seleccione un registro de la tabla para ver su detalle.");
-            return;
-        }
-
-        RegistroConPaciente rc = registrosActuales.get(fila);
-        RegistroClinico r = rc.getRegistro();
-
-        String detalle = "Paciente: " + rc.getNombrePaciente() + " (ID: " + rc.getIdPaciente() + ")\n"
-                + "Fecha: " + r.getFecha().format(FORMATO_FECHA) + "\n"
-                + "Tipo: " + etiquetaTipo(r.getTipo()) + "\n"
-                + "Autor: " + r.getAutor().getNombreCompleto() + "\n\n"
-                + r.getContenido();
-
-        JTextArea areaDetalle = new JTextArea(detalle, 10, 40);
-        areaDetalle.setEditable(false);
-        areaDetalle.setLineWrap(true);
-        areaDetalle.setWrapStyleWord(true);
-        JOptionPane.showMessageDialog(this, new JScrollPane(areaDetalle),
-                "Detalle del Registro Clínico", JOptionPane.PLAIN_MESSAGE);
-    }
-
-    @Override
-    public void volver() {
-        setVisible(false);
-        guiPrincipal.mostrar();
     }
 }

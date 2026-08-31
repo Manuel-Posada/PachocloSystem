@@ -17,31 +17,34 @@ import java.util.regex.Pattern;
 import controller.ControladorPaciente;
 import model.Paciente;
 
-
 public class GUIPacientes extends JFrame implements IGUIPacientes {
 
+    // --- 1. VARIABLES DE CLASE ---
     private IGUIPrincipal guiPrincipal;
+    private IGUIHistorialClinico guiHistorial; // <- Referencia a la ventana de historial
     private final ControladorPaciente controlador;
 
+    // Componentes gráficos
     private JLabel lblEstado;
     private JTextField campoBusqueda;
     private JTable tabla;
     private DefaultTableModel modeloTabla;
+    
+    // Estado actual
     private List<Paciente> pacientesActuales;
 
+    // Constantes
     private static final String[] COLUMNAS = {
             "ID", "Nombre", "Edad", "Habitación", "Registros Clínicos", "Acciones"
     };
     private static final int COLUMNA_ACCIONES = 5;
 
-    //validaciones
-    private static final Pattern PATRON_ID =
-            Pattern.compile("^[A-Za-z0-9\\-]{1,20}$");
-    private static final Pattern PATRON_NOMBRE =
-            Pattern.compile("^[A-Za-zÁÉÍÓÚÑÜáéíóúñü][A-Za-zÁÉÍÓÚÑÜáéíóúñü\\s]{2,59}$");
-    private static final Pattern PATRON_ENTERO =
-            Pattern.compile("^\\d{1,3}$");
+    // Validaciones (Regex)
+    private static final Pattern PATRON_ID = Pattern.compile("^[A-Za-z0-9\\-]{1,20}$");
+    private static final Pattern PATRON_NOMBRE = Pattern.compile("^[A-Za-zÁÉÍÓÚÑÜáéíóúñü][A-Za-zÁÉÍÓÚÑÜáéíóúñü\\s]{2,59}$");
+    private static final Pattern PATRON_ENTERO = Pattern.compile("^\\d{1,3}$");
 
+    // --- 2. CONSTRUCTOR Y CONFIGURACIÓN ---
     public GUIPacientes(ControladorPaciente controlador) {
         this.controlador = controlador;
         configurarVentana();
@@ -52,21 +55,35 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         this.guiPrincipal = guiPrincipal;
     }
 
+    public void setGuiHistorial(IGUIHistorialClinico guiHistorial) {
+        this.guiHistorial = guiHistorial;
+    }
+
     private void configurarVentana() {
         setTitle("Gestión de Pacientes");
-        setSize(900, 520);
-        setMinimumSize(new Dimension(700, 400));
+        setSize(950, 520);
+        setMinimumSize(new Dimension(800, 400));
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(true);
     }
 
+    // --- 3. MÉTODOS DE VISUALIZACIÓN ---
     @Override
     public void mostrar() {
         refrescarTabla();
         setVisible(true);
     }
 
+    @Override
+    public void volver() {
+        setVisible(false);
+        if (guiPrincipal != null) {
+            guiPrincipal.mostrar();
+        }
+    }
+
+    // --- 4. CONSTRUCCIÓN DE LA INTERFAZ (PANELES) ---
     @Override
     public void mostrarOpciones() {
         JPanel panelRaiz = new JPanel(new BorderLayout(0, 10));
@@ -129,7 +146,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         modeloTabla = new DefaultTableModel(COLUMNAS, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == COLUMNA_ACCIONES;
+                return column == COLUMNA_ACCIONES; // Solo la columna de botones es "editable" (clickeable)
             }
         };
         tabla = new JTable(modeloTabla);
@@ -148,12 +165,12 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         return panel;
     }
 
-    //apariencia tipo excel
+    // --- 5. LÓGICA DE TABLA Y BOTONES (RENDER / EDITOR) ---
     private void estilizarTabla() {
         tabla.setShowGrid(true);
         tabla.setGridColor(new Color(210, 210, 210));
         tabla.setIntercellSpacing(new Dimension(1, 1));
-        tabla.setRowHeight(34);
+        tabla.setRowHeight(36);
         tabla.setFont(new Font("SansSerif", Font.PLAIN, 13));
         tabla.setFillsViewportHeight(true);
         tabla.setSelectionBackground(new Color(204, 228, 247));
@@ -179,14 +196,13 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
             tabla.getColumnModel().getColumn(i).setCellRenderer(renderer);
         }
 
-        tabla.getColumnModel().getColumn(0).setPreferredWidth(90);   //ID
-        tabla.getColumnModel().getColumn(1).setPreferredWidth(200);  //nombre
-        tabla.getColumnModel().getColumn(2).setPreferredWidth(70);   //edad
-        tabla.getColumnModel().getColumn(3).setPreferredWidth(110);  //habitación
-        tabla.getColumnModel().getColumn(4).setPreferredWidth(150);  //registros clinicos
-        tabla.getColumnModel().getColumn(5).setPreferredWidth(170);  //acciones
+        tabla.getColumnModel().getColumn(0).setPreferredWidth(80);   //ID
+        tabla.getColumnModel().getColumn(1).setPreferredWidth(180);  //Nombre
+        tabla.getColumnModel().getColumn(2).setPreferredWidth(60);   //Edad
+        tabla.getColumnModel().getColumn(3).setPreferredWidth(90);   //Habitación
+        tabla.getColumnModel().getColumn(4).setPreferredWidth(140);  //Registros clínicos
+        tabla.getColumnModel().getColumn(5).setPreferredWidth(260);  //Acciones (Aumentado para 3 botones)
 
-        //botones Editar/Eliminar dentro de la propia celda de la tabla
         tabla.getColumnModel().getColumn(COLUMNA_ACCIONES).setCellRenderer(new PanelAccionesRenderer());
         tabla.getColumnModel().getColumn(COLUMNA_ACCIONES).setCellEditor(new PanelAccionesEditor());
     }
@@ -215,7 +231,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
                     p.getEdad(),
                     p.getHabitacion(),
                     p.obtenerHistorial().size(),
-                    ""
+                    "" // Se llena visualmente con los botones del Renderer
             });
         }
 
@@ -229,28 +245,23 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         }
     }
 
-    private JPanel construirPanelBotones(JButton btnEditar, JButton btnEliminar) {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 2));
+    private JPanel construirPanelBotones(JButton btnHistorial, JButton btnEditar, JButton btnEliminar) {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 2));
         panel.setOpaque(true);
 
-        btnEditar.setFont(btnEditar.getFont().deriveFont(Font.BOLD, 11f));
-        btnEditar.setBackground(new Color(25, 118, 210));
-        btnEditar.setForeground(Color.WHITE);
-        btnEditar.setFocusPainted(false);
-        btnEditar.setOpaque(true);
-        btnEditar.setBorderPainted(false);
-        btnEditar.setMargin(new Insets(2, 8, 2, 8));
+        JButton[] botones = {btnHistorial, btnEditar, btnEliminar};
+        Color[] colores = {new Color(46, 125, 50), new Color(25, 118, 210), new Color(198, 40, 40)};
 
-        btnEliminar.setFont(btnEliminar.getFont().deriveFont(Font.BOLD, 11f));
-        btnEliminar.setBackground(new Color(198, 40, 40));
-        btnEliminar.setForeground(Color.WHITE);
-        btnEliminar.setFocusPainted(false);
-        btnEliminar.setOpaque(true);
-        btnEliminar.setBorderPainted(false);
-        btnEliminar.setMargin(new Insets(2, 8, 2, 8));
-
-        panel.add(btnEditar);
-        panel.add(btnEliminar);
+        for (int i = 0; i < botones.length; i++) {
+            botones[i].setFont(botones[i].getFont().deriveFont(Font.BOLD, 11f));
+            botones[i].setBackground(colores[i]);
+            botones[i].setForeground(Color.WHITE);
+            botones[i].setFocusPainted(false);
+            botones[i].setOpaque(true);
+            botones[i].setBorderPainted(false);
+            botones[i].setMargin(new Insets(2, 6, 2, 6));
+            panel.add(botones[i]);
+        }
         return panel;
     }
 
@@ -258,9 +269,11 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean isSelected, boolean hasFocus, int row, int column) {
+            JButton btnHistorial = new JButton("Historial");
             JButton btnEditar = new JButton("Editar");
             JButton btnEliminar = new JButton("Eliminar");
-            JPanel panel = construirPanelBotones(btnEditar, btnEliminar);
+            
+            JPanel panel = construirPanelBotones(btnHistorial, btnEditar, btnEliminar);
             panel.setBackground(row % 2 == 0 ? Color.WHITE : new Color(245, 247, 250));
             return panel;
         }
@@ -271,15 +284,31 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         private int filaActual;
 
         PanelAccionesEditor() {
+            JButton btnHistorial = new JButton("Historial");
             JButton btnEditar = new JButton("Editar");
             JButton btnEliminar = new JButton("Eliminar");
-            panel = construirPanelBotones(btnEditar, btnEliminar);
+            
+            panel = construirPanelBotones(btnHistorial, btnEditar, btnEliminar);
+
+            btnHistorial.addActionListener(e -> {
+                String id = String.valueOf(modeloTabla.getValueAt(filaActual, 0));
+                String nombre = String.valueOf(modeloTabla.getValueAt(filaActual, 1));
+                fireEditingStopped(); // Detener edición antes de abrir nueva ventana
+                
+                if (guiHistorial != null) {
+                    guiHistorial.mostrar(id, nombre);
+                } else {
+                    JOptionPane.showMessageDialog(panel, "Error: El módulo de Historial Clínico no está enlazado.",
+                            "Módulo no encontrado", JOptionPane.ERROR_MESSAGE);
+                }
+            });
 
             btnEditar.addActionListener(e -> {
                 String id = String.valueOf(modeloTabla.getValueAt(filaActual, 0));
                 fireEditingStopped();
                 editarPaciente(id);
             });
+
             btnEliminar.addActionListener(e -> {
                 String id = String.valueOf(modeloTabla.getValueAt(filaActual, 0));
                 fireEditingStopped();
@@ -291,7 +320,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         public Component getTableCellEditorComponent(JTable table, Object value,
                 boolean isSelected, int row, int column) {
             filaActual = row;
-            panel.setBackground(new Color(204, 228, 247));
+            panel.setBackground(new Color(204, 228, 247)); // Fondo al seleccionar
             return panel;
         }
 
@@ -301,6 +330,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         }
     }
 
+    // --- 6. ACCIONES CRUD DE PACIENTES ---
     @Override
     public void registrarPaciente() {
         abrirFormularioPaciente(null);
@@ -349,7 +379,6 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         JOptionPane.showMessageDialog(this, ok ? "Paciente eliminado." : "No se encontró el paciente.");
     }
 
-    //un solo diálogo sirve tanto para registrar como para editar
     private void abrirFormularioPaciente(Paciente existente) {
         boolean modoEdicion = existente != null;
 
@@ -444,7 +473,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         dialogo.setVisible(true);
     }
 
-    //sección para validar lo que se ingrese en el formulario
+    // --- 7. VALIDACIONES ---
     private String validarYGuardarPaciente(String idTexto, String nombreTexto,
             String edadTexto, String habitacionTexto, boolean modoEdicion) {
 
@@ -456,13 +485,13 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         if (id.isEmpty()) {
             errores.append("• El ID del paciente es obligatorio.<br>");
         } else if (!PATRON_ID.matcher(id).matches()) {
-            errores.append("• El ID solo puede tener letras, números y guiones (sin espacios).<br>");
+            errores.append("• El ID solo puede tener letras, números y guiones.<br>");
         }
 
         if (nombre.isEmpty()) {
             errores.append("• El nombre completo es obligatorio.<br>");
         } else if (!PATRON_NOMBRE.matcher(nombre).matches()) {
-            errores.append("• El nombre debe tener solo letras y espacios (3 a 60 caracteres).<br>");
+            errores.append("• El nombre debe tener letras y espacios (3 a 60 caracteres).<br>");
         }
 
         Integer edad = validarEntero(edadTexto, 0, 120);
@@ -499,11 +528,5 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         int valor = Integer.parseInt(texto);
         if (valor < min || valor > max) return null;
         return valor;
-    }
-
-    @Override
-    public void volver() {
-        setVisible(false);
-        guiPrincipal.mostrar();
     }
 }

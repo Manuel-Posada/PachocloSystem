@@ -11,6 +11,7 @@ import model.RegistroConPaciente;
 import model.TipoRegistro;
 
 public class ControladorHistorialClinico {
+
     private final IPacienteRepository repositorio;
 
     public ControladorHistorialClinico(IPacienteRepository repositorio) {
@@ -33,7 +34,7 @@ public class ControladorHistorialClinico {
         return paciente.obtenerHistorial();
     }
 
-    //recorrer todos los pacientes y juntar sus registros
+    // recorrer todos los pacientes y juntar sus registros
     public List<RegistroConPaciente> obtenerTodosLosRegistros() {
         List<RegistroConPaciente> resultado = new ArrayList<>();
         for (Paciente paciente : repositorio.obtenerTodos()) {
@@ -42,7 +43,17 @@ public class ControladorHistorialClinico {
                         paciente.getIdPaciente(), paciente.getNombre(), registro));
             }
         }
+        // Ordenar por fecha
         resultado.sort(Comparator.comparing(rc -> rc.getRegistro().getFecha()));
         return resultado;
+    }
+
+    // Método corregido: Retorna los registros de un paciente en específico
+    public List<RegistroClinico> obtenerRegistrosPorPaciente(String idPaciente) {
+        Paciente paciente = repositorio.buscarPorId(idPaciente);
+        if (paciente == null) {
+            return new ArrayList<>(); // Retorna lista vacía si no existe para evitar NullPointerException en la vista
+        }
+        return paciente.obtenerHistorial();
     }
 }

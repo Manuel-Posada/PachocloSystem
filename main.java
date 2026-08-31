@@ -48,7 +48,7 @@ class Main {
             guiTrabajadores.setGuiPrincipal(guiPrincipal);
             guiPacientes.setGuiPrincipal(guiPrincipal);
             guiHistorial.setGuiPrincipal(guiPrincipal);
-
+            guiPacientes.setGuiHistorial(guiHistorial);
             guiPrincipal.mostrar();
         });
     }
