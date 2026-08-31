@@ -27,6 +27,13 @@ public class Paciente {
         this.habitacion = nuevaHabitacion;
     }
 
+    //actualiza nombre, edad y habitación de una sola vez
+    public void actualizarDatos(String nuevoNombre, int nuevaEdad, int nuevaHabitacion) {
+        this.nombre = nuevoNombre;
+        this.edad = nuevaEdad;
+        this.habitacion = nuevaHabitacion;
+    }
+
     public List<RegistroClinico> obtenerHistorial() {
         return this.registros;
     }
@@ -51,7 +58,6 @@ public class Paciente {
         return habitacion;
     }
 
-    // En Paciente.java
     @Override
     public String toString() {
         return "ID: " + idPaciente + " | Nombre: " + nombre + " | Edad: " + edad
