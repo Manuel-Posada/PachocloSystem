@@ -27,10 +27,10 @@ class Main {
 
             // --- Repositorios (instancia normal, una sola vez) ---
             IPacienteRepository repoPacientes = new PacienteRepositoryImpl();
-            ITrabajadoresRepository repoTrabajadors = new TrabajadorRepositoryImpl();
+            ITrabajadoresRepository repotrabajadores = new TrabajadorRepositoryImpl();
 
             // --- Controladores ---
-            ControladorTrabajadores ctrlTrabajadores = new ControladorTrabajadores(repoTrabajadors);
+            ControladorTrabajadores ctrlTrabajadores = new ControladorTrabajadores(repotrabajadores);
             ControladorPaciente ctrlPaciente = new ControladorPaciente(repoPacientes);
             ControladorHistorialClinico ctrlHistorial = new ControladorHistorialClinico(repoPacientes);
 

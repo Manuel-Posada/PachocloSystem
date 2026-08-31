@@ -5,10 +5,10 @@ import java.util.List;
 
 public class TrabajadorRepositoryImpl implements ITrabajadoresRepository {
 
-    private List<TrabajadorHospital> listaTrabajadors;
+    private List<TrabajadorHospital> listatrabajadores;
 
     public TrabajadorRepositoryImpl() {
-        this.listaTrabajadors = new ArrayList<>();
+        this.listatrabajadores = new ArrayList<>();
     }
 
     @Override
@@ -16,12 +16,12 @@ public class TrabajadorRepositoryImpl implements ITrabajadoresRepository {
         if (u == null) {
             return false;
         }
-        return listaTrabajadors.add(u);
+        return listatrabajadores.add(u);
     }
 
     @Override
     public TrabajadorHospital buscarPorId(String id) {
-        for (TrabajadorHospital u : listaTrabajadors) {
+        for (TrabajadorHospital u : listatrabajadores) {
             if (u.getIdTrabajador().equals(id)) {
                 return u;
             }
@@ -33,13 +33,13 @@ public class TrabajadorRepositoryImpl implements ITrabajadoresRepository {
     public boolean eliminarTrabajador(String id) {
         TrabajadorHospital u = buscarPorId(id);
         if (u != null) {
-            return listaTrabajadors.remove(u);
+            return listatrabajadores.remove(u);
         }
         return false;
     }
 
     @Override
     public List<TrabajadorHospital> obtenerTodos() {
-        return listaTrabajadors;
+        return listatrabajadores;
     }
 }

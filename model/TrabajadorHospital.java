@@ -7,7 +7,7 @@ public abstract class TrabajadorHospital {
 
     public TrabajadorHospital(String idTrabajador, String nombreCompleto){
         this.idTrabajador = idTrabajador;
-        this.nombreCompleto = nombreCompleto;
+        this.nombreCompleto = nombreCompleto;   
     }
 
     public String getIdTrabajador() {

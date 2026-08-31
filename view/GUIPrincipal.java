@@ -40,7 +40,7 @@ public class GUIPrincipal extends JFrame implements IGUIPrincipal {
         //menu de trabajadores
         JMenu menuTrabajadores = new JMenu("Trabajadores");
         JMenuItem itemVerTrabajadores = new JMenuItem("Ver Trabajadores");
-        itemVerTrabajadores.addActionListener(e -> irAGestionTrabajadors());
+        itemVerTrabajadores.addActionListener(e -> irAGestiontrabajadores());
         menuTrabajadores.add(itemVerTrabajadores);
 
         //menu de pacientes
@@ -76,7 +76,7 @@ public class GUIPrincipal extends JFrame implements IGUIPrincipal {
     }
 
     @Override
-    public void irAGestionTrabajadors() {
+    public void irAGestiontrabajadores() {
         setVisible(false);
         guiTrabajadores.mostrar();
     }
