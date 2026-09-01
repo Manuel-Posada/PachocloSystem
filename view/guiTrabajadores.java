@@ -1,3 +1,4 @@
+// GUITrabajadores.java
 package view;
 
 import javax.swing.*;

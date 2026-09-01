@@ -1,3 +1,4 @@
+// IGUITrabajadores.java
 package view;
 
 public interface IGUITrabajadores {
