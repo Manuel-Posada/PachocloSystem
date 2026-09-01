@@ -8,15 +8,15 @@ import javax.swing.table.TableCellEditor;
 import javax.swing.table.TableCellRenderer;
 import java.awt.*;
 import java.util.List;
-import java.util.regex.Pattern;
 
 import controller.ControladorTrabajadores;
+import controller.ResultadoOperacion;
 import model.Doctor;
 import model.Enfermero;
 import model.NivelExperiencia;
 import model.TrabajadorHospital;
 
-public class GUITrabajadores extends JFrame implements IGUITrabajadores {
+public class guiTrabajadores extends JFrame implements iguiTrabajadores {
 
     private IGUIPrincipal guiPrincipal;
     private final ControladorTrabajadores controlador;
@@ -31,14 +31,7 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
     };
     private static final int COLUMNA_ACCIONES = 4;
 
-    private static final Pattern PATRON_ID =
-            Pattern.compile("^[A-Za-z0-9\\-]{1,20}$");
-    private static final Pattern PATRON_NOMBRE =
-            Pattern.compile("^[A-Za-zÁÉÍÓÚÑÜáéíóúñü][A-Za-zÁÉÍÓÚÑÜáéíóúñü\\s]{2,59}$");
-    private static final Pattern PATRON_CONTIENE_TEXTO =
-            Pattern.compile(".*[A-Za-zÁÉÍÓÚÑÜáéíóúñü].*");
-
-    public GUITrabajadores(ControladorTrabajadores controlador) {
+    public guiTrabajadores(ControladorTrabajadores controlador) {
         this.controlador = controlador;
         configurarVentana();
         mostrarOpciones();
@@ -62,8 +55,6 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
         refrescarTabla();
         setVisible(true);
     }
-
-    //boton + tabla
 
     @Override
     public void mostrarOpciones() {
@@ -130,7 +121,6 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
         return panel;
     }
 
-    //apariencia tipo excel
     private void estilizarTabla() {
         tabla.setShowGrid(true);
         tabla.setGridColor(new Color(210, 210, 210));
@@ -161,13 +151,12 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
             tabla.getColumnModel().getColumn(i).setCellRenderer(renderer);
         }
 
-        tabla.getColumnModel().getColumn(0).setPreferredWidth(90);   //ID
-        tabla.getColumnModel().getColumn(1).setPreferredWidth(220);  //nombre
-        tabla.getColumnModel().getColumn(2).setPreferredWidth(100);  //rol
-        tabla.getColumnModel().getColumn(3).setPreferredWidth(260);  //detalle
-        tabla.getColumnModel().getColumn(4).setPreferredWidth(170);  //acciones
+        tabla.getColumnModel().getColumn(0).setPreferredWidth(90);   // ID
+        tabla.getColumnModel().getColumn(1).setPreferredWidth(220);  // Nombre
+        tabla.getColumnModel().getColumn(2).setPreferredWidth(100);  // Rol
+        tabla.getColumnModel().getColumn(3).setPreferredWidth(260);  // Detalle
+        tabla.getColumnModel().getColumn(4).setPreferredWidth(170);  // Acciones
 
-        //botones Editar/Eliminar dentro de la propia celda de la tabla
         tabla.getColumnModel().getColumn(COLUMNA_ACCIONES).setCellRenderer(new PanelAccionesRenderer());
         tabla.getColumnModel().getColumn(COLUMNA_ACCIONES).setCellEditor(new PanelAccionesEditor());
     }
@@ -215,7 +204,6 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
             default: return nivel.toString();
         }
     }
-
 
     private JPanel construirPanelBotones(JButton btnEditar, JButton btnEliminar) {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 2));
@@ -320,9 +308,9 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
             return;
         }
 
-        boolean ok = controlador.eliminarTrabajador(idTrabajador);
+        ResultadoOperacion resultado = controlador.eliminarTrabajador(idTrabajador);
         refrescarTabla();
-        JOptionPane.showMessageDialog(this, ok ? "Trabajador eliminado." : "No se encontró el trabajador.");
+        JOptionPane.showMessageDialog(this, resultado.getMensaje());
     }
 
     private void abrirFormularioTrabajador(TrabajadorHospital existente) {
@@ -396,7 +384,6 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
                 comboNivel.setSelectedItem(((Enfermero) existente).getNivelExperiencia());
                 cardLayout.show(panelDetalleDinamico, "ENFERMERO");
             }
-            //NO se puede cambiar el rol del trabajador
             comboRol.setEnabled(false);
         }
 
@@ -437,11 +424,12 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
         btnCancelar.addActionListener(e -> dialogo.dispose());
         btnGuardar.addActionListener(e -> {
             String resultado = validarYGuardarTrabajador(
-                    campoId.getText(), campoNombre.getText(),
+                    campoId.getText(), 
+                    campoNombre.getText(),
                     (String) comboRol.getSelectedItem(),
                     campoEspecialidad.getText(),
                     (NivelExperiencia) comboNivel.getSelectedItem(),
-                    modoEdicion, modoEdicion ? existente.getIdTrabajador() : null);
+                    modoEdicion);
 
             if (resultado == null) {
                 dialogo.dispose();
@@ -470,66 +458,18 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
         dialogo.setVisible(true);
     }
 
-    //aqui se verifica lo que ingresa el usuario al formulario
     private String validarYGuardarTrabajador(String idTexto, String nombreTexto, String rolSeleccionado,
-            String especialidadTexto, NivelExperiencia nivelSeleccionado,
-            boolean modoEdicion, String idOriginal) {
+            String especialidadTexto, NivelExperiencia nivelSeleccionado, boolean modoEdicion) {
 
-        StringBuilder errores = new StringBuilder();
+        ResultadoOperacion resultado = modoEdicion
+                ? controlador.editarTrabajador(idTexto, nombreTexto, rolSeleccionado, especialidadTexto, nivelSeleccionado)
+                : controlador.registrarTrabajador(idTexto, nombreTexto, rolSeleccionado, especialidadTexto, nivelSeleccionado);
 
-        String id = idTexto == null ? "" : idTexto.trim();
-        String nombre = nombreTexto == null ? "" : nombreTexto.trim();
-
-        if (id.isEmpty()) {
-            errores.append("• El ID del trabajador es obligatorio.<br>");
-        } else if (!PATRON_ID.matcher(id).matches()) {
-            errores.append("• El ID solo puede tener letras, números y guiones (sin espacios).<br>");
+        if (resultado.isExito()) {
+            return null;
+        } else {
+            return resultado.getMensaje();
         }
-
-        if (nombre.isEmpty()) {
-            errores.append("• El nombre completo es obligatorio.<br>");
-        } else if (!PATRON_NOMBRE.matcher(nombre).matches()) {
-            errores.append("• El nombre debe tener solo letras y espacios (3 a 60 caracteres).<br>");
-        }
-
-        if (rolSeleccionado == null) {
-            errores.append("• Debe seleccionar un rol.<br>");
-        }
-
-        TrabajadorHospital rolEspecifico = null;
-
-        if ("Doctor".equals(rolSeleccionado)) {
-            String especialidad = especialidadTexto == null ? "" : especialidadTexto.trim();
-            if (especialidad.isEmpty()) {
-                errores.append("• La especialidad es obligatoria.<br>");
-            } else if (especialidad.length() < 3 || !PATRON_CONTIENE_TEXTO.matcher(especialidad).matches()) {
-                errores.append("• La especialidad debe ser un texto descriptivo (mínimo 3 caracteres).<br>");
-            } else if (errores.length() == 0) {
-                rolEspecifico = new Doctor(id, nombre, especialidad);
-            }
-        } else if ("Enfermero".equals(rolSeleccionado)) {
-            if (nivelSeleccionado == null) {
-                errores.append("• Debe seleccionar un nivel de experiencia.<br>");
-            } else if (errores.length() == 0) {
-                rolEspecifico = new Enfermero(id, nombre, nivelSeleccionado);
-            }
-        }
-
-        if (errores.length() > 0) {
-            return errores.toString();
-        }
-
-        boolean ok = modoEdicion
-                ? controlador.editarTrabajador(id, nombre, rolEspecifico)
-                : controlador.registrarTrabajador(id, nombre, rolEspecifico);
-
-        if (!ok) {
-            return modoEdicion
-                    ? "• No se pudo actualizar el trabajador."
-                    : "• No se pudo registrar: verifique que el ID no exista ya.";
-        }
-
-        return null; //todo salio 100/10 si se llega a este retorno
     }
 
     @Override
