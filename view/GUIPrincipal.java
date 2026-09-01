@@ -67,9 +67,28 @@ public class GUIPrincipal extends JFrame implements IGUIPrincipal {
 
         setJMenuBar(menuBar);
 
-        JLabel bienvenida = new JLabel("Sistema Hospitalario", SwingConstants.CENTER);
-        bienvenida.setFont(bienvenida.getFont().deriveFont(Font.BOLD, 20f));
-        setContentPane(bienvenida);
+        JPanel panelPrincipal = new JPanel(new BorderLayout());
+
+        ImageIcon icono = new ImageIcon(
+                "resources/LogoSistemaHospitalarioSinFondo.png"
+        );
+
+        JLabel logo = new JLabel(icono, SwingConstants.CENTER);
+
+        panelPrincipal.add(logo, BorderLayout.CENTER);
+
+        JLabel bienvenida = new JLabel(
+                "Sistema Hospitalario",
+                SwingConstants.CENTER
+        );
+
+        bienvenida.setFont(
+                bienvenida.getFont().deriveFont(Font.BOLD, 20f)
+        );
+
+        panelPrincipal.add(bienvenida, BorderLayout.SOUTH);
+
+        setContentPane(panelPrincipal);
 
         revalidate();
         repaint();
