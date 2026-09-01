@@ -13,13 +13,14 @@ public class ControladorPaciente {
         this.repositorio = repositorio;
     }
 
-    public boolean registrarPaciente(String id, String nombre, int edad, int habitacion) {
-        if (id == null || nombre == null) return false;
-        if (repositorio.buscarPorId(id) != null) {
-            return false;
-        }
+    // Antes recibía el id por parámetro; ahora lo genera el repositorio.
+    // Devuelve el id generado (o null si falló), para que la Vista pueda mostrarlo.
+    public String registrarPaciente(String nombre, int edad, int habitacion) {
+        if (nombre == null) return null;
+        String id = repositorio.generarNuevoId();
         Paciente paciente = new Paciente(id, nombre, edad, habitacion);
-        return repositorio.guardarPaciente(paciente);
+        boolean ok = repositorio.guardarPaciente(paciente);
+        return ok ? id : null;
     }
 
     //edición completa: nombre, edad y habitación

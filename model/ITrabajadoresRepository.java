@@ -4,6 +4,7 @@ import java.util.List;
  
 
 public interface ITrabajadoresRepository {
+    String generarNuevoId(String prefijo);
  
     boolean guardarTrabajador(TrabajadorHospital u);
  
@@ -12,5 +13,5 @@ public interface ITrabajadoresRepository {
     boolean eliminarTrabajador(String id);
  
     List<TrabajadorHospital> obtenerTodos();
-}
+}   
  

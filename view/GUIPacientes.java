@@ -32,6 +32,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
     
     // Estado actual
     private List<Paciente> pacientesActuales;
+    private String ultimoIdGenerado;
 
     // Constantes
     private static final String[] COLUMNAS = {
@@ -395,22 +396,26 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         JTextField campoNombre = new JTextField(18);
         JTextField campoEdad = new JTextField(18);
         JTextField campoHabitacion = new JTextField(18);
+        campoId.setEditable(false);
+        campoId.setBackground(new Color(235, 235, 235));
 
         if (modoEdicion) {
             campoId.setText(existente.getIdPaciente());
-            campoId.setEditable(false);
             campoNombre.setText(existente.getNombre());
             campoEdad.setText(String.valueOf(existente.getEdad()));
             campoHabitacion.setText(String.valueOf(existente.getHabitacion()));
         }
 
         int fila = 0;
-        gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
-        panelForm.add(new JLabel("ID del Paciente:"), gbc);
-        gbc.gridx = 1; gbc.weightx = 1;
-        panelForm.add(campoId, gbc);
 
-        fila++;
+        if (modoEdicion) {
+            gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
+            panelForm.add(new JLabel("ID del Paciente:"), gbc);
+            gbc.gridx = 1; gbc.weightx = 1;
+            panelForm.add(campoId, gbc);
+            fila++;
+        }
+
         gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
         panelForm.add(new JLabel("Nombre Completo:"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
@@ -442,7 +447,8 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         btnCancelar.addActionListener(e -> dialogo.dispose());
         btnGuardar.addActionListener(e -> {
             String resultado = validarYGuardarPaciente(
-                    campoId.getText(), campoNombre.getText(),
+                    modoEdicion ? existente.getIdPaciente() : null,
+                    campoNombre.getText(),
                     campoEdad.getText(), campoHabitacion.getText(),
                     modoEdicion);
 
@@ -451,7 +457,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
                 refrescarTabla();
                 JOptionPane.showMessageDialog(this, modoEdicion
                         ? "Paciente actualizado correctamente."
-                        : "Paciente registrado correctamente.");
+                        : "Paciente registrado correctamente. ID asignado: " + ultimoIdGenerado);
             } else {
                 lblError.setText("<html><body style='width: 320px'>" + resultado + "</body></html>");
             }
@@ -474,19 +480,13 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
     }
 
     // --- 7. VALIDACIONES ---
-    private String validarYGuardarPaciente(String idTexto, String nombreTexto,
+    // idExistente solo se usa en modo edición (viene ya validado del paciente actual).
+    private String validarYGuardarPaciente(String idExistente, String nombreTexto,
             String edadTexto, String habitacionTexto, boolean modoEdicion) {
 
         StringBuilder errores = new StringBuilder();
 
-        String id = idTexto == null ? "" : idTexto.trim();
         String nombre = nombreTexto == null ? "" : nombreTexto.trim();
-
-        if (id.isEmpty()) {
-            errores.append("• El ID del paciente es obligatorio.<br>");
-        } else if (!PATRON_ID.matcher(id).matches()) {
-            errores.append("• El ID solo puede tener letras, números y guiones.<br>");
-        }
 
         if (nombre.isEmpty()) {
             errores.append("• El nombre completo es obligatorio.<br>");
@@ -508,17 +508,17 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
             return errores.toString();
         }
 
-        boolean ok = modoEdicion
-                ? controlador.editarPaciente(id, nombre, edad, habitacion)
-                : controlador.registrarPaciente(id, nombre, edad, habitacion);
-
-        if (!ok) {
-            return modoEdicion
-                    ? "• No se pudo actualizar el paciente."
-                    : "• No se pudo registrar: verifique que el ID no exista ya.";
+        if (modoEdicion) {
+            boolean ok = controlador.editarPaciente(idExistente, nombre, edad, habitacion);
+            return ok ? null : "• No se pudo actualizar el paciente.";
+        } else {
+            String idGenerado = controlador.registrarPaciente(nombre, edad, habitacion);
+            if (idGenerado == null) {
+                return "• No se pudo registrar el paciente.";
+            }
+            ultimoIdGenerado = idGenerado;
+            return null;
         }
-
-        return null; // sin errores
     }
 
     private Integer validarEntero(String texto, int min, int max) {

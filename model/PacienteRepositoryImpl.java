@@ -6,9 +6,15 @@ import java.util.List;
 public class PacienteRepositoryImpl implements IPacienteRepository {
 
     private List<Paciente> listaPacientes;
+    private int contadorId = 1;
 
     public PacienteRepositoryImpl() {
         this.listaPacientes = new ArrayList<>();
+    }
+
+    @Override
+    public String generarNuevoId() {
+        return String.format("PAC-%04d", contadorId++);
     }
 
     @Override

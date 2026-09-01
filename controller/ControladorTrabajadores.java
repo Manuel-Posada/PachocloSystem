@@ -1,6 +1,9 @@
 package controller;
 
+import model.Doctor;
+import model.Enfermero;
 import model.ITrabajadoresRepository;
+import model.NivelExperiencia;
 import model.TrabajadorHospital;
 
 import java.util.List;
@@ -14,18 +17,20 @@ public class ControladorTrabajadores {
         this.repositorio = repositorio;
     }
 
+    // Ahora el controlador genera el ID (con prefijo según el rol) y construye
+    // el objeto correcto (Doctor/Enfermero). Devuelve el id generado, o null si falló.
+    public String registrarTrabajador(String nombre, String rol, String especialidad, NivelExperiencia nivel) {
+        if (nombre == null || rol == null) return null;
 
-    public boolean registrarTrabajador(String id, String nombre, TrabajadorHospital rolEspecifico) {
-        if (rolEspecifico == null || id == null || nombre == null) {
-            return false;
-        }
-        if (!id.equals(rolEspecifico.getIdTrabajador()) || !nombre.equals(rolEspecifico.getNombreCompleto())) {
-            return false;
-        }
-        if (repositorio.buscarPorId(id) != null) {
-            return false;
-        }
-        return repositorio.guardarTrabajador(rolEspecifico);
+        String prefijo = "Doctor".equals(rol) ? "DOC" : "ENF";
+        String id = repositorio.generarNuevoId(prefijo);
+
+        TrabajadorHospital trabajador = "Doctor".equals(rol)
+                ? new Doctor(id, nombre, especialidad)
+                : new Enfermero(id, nombre, nivel);
+
+        boolean ok = repositorio.guardarTrabajador(trabajador);
+        return ok ? id : null;
     }
 
     public boolean editarTrabajador(String id, String nombre, TrabajadorHospital rolEspecifico) {

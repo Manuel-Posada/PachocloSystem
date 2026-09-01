@@ -27,6 +27,7 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
     private DefaultTableModel modeloTabla;
     private List<TrabajadorHospital> trabajadoresActuales;
     private JTextField campoBusqueda;
+    private String ultimoIdGenerado; // guarda el id recién creado para mostrarlo en el mensaje de éxito
 
     private static final String[] COLUMNAS = {
             "ID", "Nombre Completo", "Rol", "Detalle", "Acciones"
@@ -379,6 +380,8 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         JTextField campoId = new JTextField(18);
+        campoId.setEditable(false);
+        campoId.setBackground(new Color(235, 235, 235));
         JTextField campoNombre = new JTextField(18);
         JComboBox<String> comboRol = new JComboBox<>(new String[]{"Doctor", "Enfermero"});
 
@@ -442,12 +445,15 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
         }
 
         int fila = 0;
-        gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
-        panelForm.add(new JLabel("ID del Trabajador:"), gbc);
-        gbc.gridx = 1; gbc.weightx = 1;
-        panelForm.add(campoId, gbc);
 
-        fila++;
+        if (modoEdicion) {
+            gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
+            panelForm.add(new JLabel("ID del Trabajador:"), gbc);
+            gbc.gridx = 1; gbc.weightx = 1;
+            panelForm.add(campoId, gbc);
+            fila++;
+        }
+
         gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
         panelForm.add(new JLabel("Nombre Completo:"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
@@ -478,7 +484,7 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
         btnCancelar.addActionListener(e -> dialogo.dispose());
         btnGuardar.addActionListener(e -> {
             String resultado = validarYGuardarTrabajador(
-                    campoId.getText(), campoNombre.getText(),
+                    campoNombre.getText(),
                     (String) comboRol.getSelectedItem(),
                     campoEspecialidad.getText(),
                     (NivelExperiencia) comboNivel.getSelectedItem(),
@@ -489,7 +495,7 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
                 refrescarTabla();
                 JOptionPane.showMessageDialog(this, modoEdicion
                         ? "Trabajador actualizado correctamente."
-                        : "Trabajador registrado correctamente.");
+                        : "Trabajador registrado correctamente. ID asignado: " + ultimoIdGenerado);
             } else {
                 lblError.setText("<html><body style='width: 320px'>" + resultado + "</body></html>");
             }
@@ -512,20 +518,14 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
     }
 
     //aqui se verifica lo que ingresa el usuario al formulario
-    private String validarYGuardarTrabajador(String idTexto, String nombreTexto, String rolSeleccionado,
+    //aqui se verifica lo que ingresa el usuario al formulario
+    private String validarYGuardarTrabajador(String nombreTexto, String rolSeleccionado,
             String especialidadTexto, NivelExperiencia nivelSeleccionado,
             boolean modoEdicion, String idOriginal) {
 
         StringBuilder errores = new StringBuilder();
 
-        String id = idTexto == null ? "" : idTexto.trim();
         String nombre = nombreTexto == null ? "" : nombreTexto.trim();
-
-        if (id.isEmpty()) {
-            errores.append("• El ID del trabajador es obligatorio.<br>");
-        } else if (!PATRON_ID.matcher(id).matches()) {
-            errores.append("• El ID solo puede tener letras, números y guiones (sin espacios).<br>");
-        }
 
         if (nombre.isEmpty()) {
             errores.append("• El nombre completo es obligatorio.<br>");
@@ -537,22 +537,17 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
             errores.append("• Debe seleccionar un rol.<br>");
         }
 
-        TrabajadorHospital rolEspecifico = null;
+        String especialidad = especialidadTexto == null ? "" : especialidadTexto.trim();
 
         if ("Doctor".equals(rolSeleccionado)) {
-            String especialidad = especialidadTexto == null ? "" : especialidadTexto.trim();
             if (especialidad.isEmpty()) {
                 errores.append("• La especialidad es obligatoria.<br>");
             } else if (especialidad.length() < 3 || !PATRON_CONTIENE_TEXTO.matcher(especialidad).matches()) {
                 errores.append("• La especialidad debe ser un texto descriptivo (mínimo 3 caracteres).<br>");
-            } else if (errores.length() == 0) {
-                rolEspecifico = new Doctor(id, nombre, especialidad);
             }
         } else if ("Enfermero".equals(rolSeleccionado)) {
             if (nivelSeleccionado == null) {
                 errores.append("• Debe seleccionar un nivel de experiencia.<br>");
-            } else if (errores.length() == 0) {
-                rolEspecifico = new Enfermero(id, nombre, nivelSeleccionado);
             }
         }
 
@@ -560,17 +555,22 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
             return errores.toString();
         }
 
-        boolean ok = modoEdicion
-                ? controlador.editarTrabajador(id, nombre, rolEspecifico)
-                : controlador.registrarTrabajador(id, nombre, rolEspecifico);
+        if (modoEdicion) {
+            // En edición, el rol y el id NO cambian; se reconstruye con el id original.
+            TrabajadorHospital rolEspecifico = "Doctor".equals(rolSeleccionado)
+                    ? new Doctor(idOriginal, nombre, especialidad)
+                    : new Enfermero(idOriginal, nombre, nivelSeleccionado);
 
-        if (!ok) {
-            return modoEdicion
-                    ? "• No se pudo actualizar el trabajador."
-                    : "• No se pudo registrar: verifique que el ID no exista ya.";
+            boolean ok = controlador.editarTrabajador(idOriginal, nombre, rolEspecifico);
+            return ok ? null : "• No se pudo actualizar el trabajador.";
+        } else {
+            String idGenerado = controlador.registrarTrabajador(nombre, rolSeleccionado, especialidad, nivelSeleccionado);
+            if (idGenerado == null) {
+                return "• No se pudo registrar el trabajador.";
+            }
+            ultimoIdGenerado = idGenerado;
+            return null;
         }
-
-        return null;
     }
 
     @Override
