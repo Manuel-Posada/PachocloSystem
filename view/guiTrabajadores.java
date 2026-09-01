@@ -26,6 +26,7 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
     private JTable tabla;
     private DefaultTableModel modeloTabla;
     private List<TrabajadorHospital> trabajadoresActuales;
+    private JTextField campoBusqueda;
 
     private static final String[] COLUMNAS = {
             "ID", "Nombre Completo", "Rol", "Detalle", "Acciones"
@@ -82,10 +83,21 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
     }
 
     private JPanel construirPanelSuperior() {
-        JPanel panelSuperior = new JPanel(new BorderLayout());
+        JPanel panelSuperior = new JPanel(new BorderLayout(10, 0));
 
         JLabel titulo = new JLabel("Trabajadores del Hospital");
         titulo.setFont(titulo.getFont().deriveFont(Font.BOLD, 18f));
+
+        JPanel panelBusqueda = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JLabel lblBuscar = new JLabel("Buscar:");
+        campoBusqueda = new JTextField(15);
+        campoBusqueda.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { aplicarFiltro(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { aplicarFiltro(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { aplicarFiltro(); }
+        });
+        panelBusqueda.add(lblBuscar);
+        panelBusqueda.add(campoBusqueda);
 
         JButton btnRegistrar = new JButton("+ Registrar Trabajador");
         btnRegistrar.setFont(btnRegistrar.getFont().deriveFont(Font.BOLD));
@@ -98,6 +110,7 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
         btnRegistrar.addActionListener(e -> registrarTrabajador());
 
         panelSuperior.add(titulo, BorderLayout.WEST);
+        panelSuperior.add(panelBusqueda, BorderLayout.CENTER);
         panelSuperior.add(btnRegistrar, BorderLayout.EAST);
         return panelSuperior;
     }
@@ -189,6 +202,33 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
 
         boolean vacio = trabajadoresActuales.isEmpty();
         lblEstado.setText(vacio ? "No hay trabajadores" : "Total de trabajadores: " + trabajadoresActuales.size());
+    }
+    private void aplicarFiltro() {
+        if (trabajadoresActuales == null) return;
+
+        String texto = campoBusqueda.getText() == null ? "" : campoBusqueda.getText().trim().toLowerCase();
+        modeloTabla.setRowCount(0);
+        int contador = 0;
+
+        for (TrabajadorHospital t : trabajadoresActuales) {
+            boolean coincide = texto.isEmpty()
+                    || t.getNombreCompleto().toLowerCase().contains(texto)
+                    || t.getIdTrabajador().toLowerCase().contains(texto);
+
+            if (coincide) {
+                modeloTabla.addRow(new Object[]{
+                        t.getIdTrabajador(),
+                        t.getNombreCompleto(),
+                        etiquetaRol(t),
+                        detalleRol(t),
+                        ""
+                });
+                contador++;
+            }
+        }
+
+        lblEstado.setText(contador == 0 ? "No hay trabajadores que coincidan"
+                : "Total de trabajadores: " + contador);
     }
 
     private static String etiquetaRol(TrabajadorHospital t) {
@@ -530,7 +570,7 @@ public class GUITrabajadores extends JFrame implements IGUITrabajadores {
                     : "• No se pudo registrar: verifique que el ID no exista ya.";
         }
 
-        return null; //todo salio 100/10 si se llega a este retorno
+        return null;
     }
 
     @Override

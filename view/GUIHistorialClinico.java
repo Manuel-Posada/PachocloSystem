@@ -30,6 +30,8 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
     private JLabel lblEstado;
     private JTable tabla;
     private DefaultTableModel modeloTabla;
+    private JTextField campoBusqueda;
+    private JComboBox<String> comboFiltro;
     
     // Estado actual de la vista
     private List<RegistroConPaciente> registrosActuales;
@@ -77,7 +79,10 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         this.idPacienteActual = null;
         this.nombrePacienteActual = null;
         setTitle("Historial Clínico General");
+        comboFiltro.setVisible(true);
+        comboFiltro.setSelectedItem("Todos");
         refrescarTabla();
+        aplicarFiltro();
         setVisible(true);
     }
 
@@ -86,13 +91,23 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         this.idPacienteActual = idPaciente;
         this.nombrePacienteActual = nombrePaciente;
         setTitle("Historial Clínico - " + nombrePaciente);
+        comboFiltro.setVisible(false);
         refrescarTabla();
+        aplicarFiltro();
         setVisible(true);
     }
 
     @Override
     public void volver() {
         setVisible(false);
+
+        if (idPacienteActual != null) {
+            // Se abrió desde la tabla de un paciente específico (GUIPacientes ya está detrás visible).
+            // Solo hay que cerrar esta ventana, no tocar el menú principal.
+            return;
+        }
+
+        // Se abrió desde el menú general -> ahí sí regresa al menú principal.
         if (guiPrincipal != null) {
             guiPrincipal.mostrar();
         }
@@ -116,11 +131,35 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
     }
 
     private JPanel construirPanelSuperior() {
-        JPanel panelSuperior = new JPanel(new BorderLayout());
+        JPanel panelSuperior = new JPanel(new BorderLayout(10, 0));
 
         JLabel titulo = new JLabel("Registros Clínicos");
         titulo.setFont(titulo.getFont().deriveFont(Font.BOLD, 18f));
 
+        // --- Panel de búsqueda/filtro (centro) ---
+        JPanel panelBusqueda = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+
+        JLabel lblBuscar = new JLabel("Buscar:");
+        campoBusqueda = new JTextField(15);
+
+        comboFiltro = new JComboBox<>(new String[]{"Todos", "Por Paciente", "Por Autor"});
+
+        campoBusqueda.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { aplicarFiltro(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { aplicarFiltro(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { aplicarFiltro(); }
+        });
+        comboFiltro.addActionListener(e -> aplicarFiltro());
+
+        panelBusqueda.add(lblBuscar);
+        panelBusqueda.add(campoBusqueda);
+        panelBusqueda.add(comboFiltro);
+
+        // Si estamos viendo el historial de UN paciente específico, ocultamos el combo:
+        // no tiene sentido filtrar "por paciente" si ya se sabe cuál es.
+        comboFiltro.setVisible(idPacienteActual == null);
+
+        // --- Botón agregar (derecha) ---
         JButton btnAgregar = new JButton("+ Agregar Registro Clínico");
         btnAgregar.setFont(btnAgregar.getFont().deriveFont(Font.BOLD));
         btnAgregar.setBackground(new Color(46, 125, 50));
@@ -132,6 +171,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         btnAgregar.addActionListener(e -> agregarRegistroClinico());
 
         panelSuperior.add(titulo, BorderLayout.WEST);
+        panelSuperior.add(panelBusqueda, BorderLayout.CENTER);
         panelSuperior.add(btnAgregar, BorderLayout.EAST);
         return panelSuperior;
     }
@@ -245,6 +285,50 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         boolean vacio = registrosActuales.isEmpty();
         lblEstado.setText(vacio ? "No hay registros" : "Total de registros: " + registrosActuales.size());
     }
+    private void aplicarFiltro() {
+        if (registrosActuales == null) return;
+
+        String texto = campoBusqueda.getText() == null ? "" : campoBusqueda.getText().trim().toLowerCase();
+        String modo = (idPacienteActual != null) ? "Por Autor" : (String) comboFiltro.getSelectedItem();
+
+        modeloTabla.setRowCount(0);
+        int contador = 0;
+
+        for (RegistroConPaciente rc : registrosActuales) {
+            RegistroClinico r = rc.getRegistro();
+            boolean coincide;
+
+            boolean coincidePaciente = rc.getNombrePaciente().toLowerCase().contains(texto)
+                    || rc.getIdPaciente().toLowerCase().contains(texto);
+            boolean coincideAutor = r.getAutor().getNombreCompleto().toLowerCase().contains(texto)
+                    || r.getAutor().getIdTrabajador().toLowerCase().contains(texto);
+
+            if (texto.isEmpty()) {
+                coincide = true;
+            } else if ("Por Paciente".equals(modo)) {
+                coincide = coincidePaciente;
+            } else if ("Por Autor".equals(modo)) {
+                coincide = coincideAutor;
+            } else {
+                coincide = coincidePaciente || coincideAutor;
+            }
+
+            if (coincide) {
+                modeloTabla.addRow(new Object[]{
+                        rc.getIdPaciente(),
+                        rc.getNombrePaciente(),
+                        r.getFecha().format(FORMATO_FECHA),
+                        etiquetaTipo(r.getTipo()),
+                        r.getAutor().getNombreCompleto(),
+                        r.getContenido()
+                });
+                contador++;
+            }
+        }
+
+        lblEstado.setText(contador == 0 ? "No hay registros que coincidan"
+                : "Total de registros: " + contador);
+    }
 
     @Override
     public void verHistorialClinico() {
@@ -296,9 +380,13 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         JTextField campoIdPaciente = new JTextField(18);
-        // Autocompletar ID si estamos viendo el historial de un paciente específico
+        // Si estamos viendo el historial de un paciente específico, el campo se
+        // rellena con su ID y se bloquea: no tiene sentido permitir cambiarlo,
+        // ya que el registro es para ESE paciente.
         if (idPacienteActual != null) {
             campoIdPaciente.setText(idPacienteActual);
+            campoIdPaciente.setEditable(false);
+            campoIdPaciente.setBackground(new Color(235, 235, 235));
         }
         
         JTextField campoIdAutor = new JTextField(18);

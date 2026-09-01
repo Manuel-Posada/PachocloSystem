@@ -1,6 +1,6 @@
 package model;
 
-//DTO para hacer mas facil listar en una sola tabla los registros clinicos de todos los pacientes :)
+//DTO para hacer mas facil listar en una sola tabla los registros clinicos de todos los pacientes 
 public class RegistroConPaciente {
 
     private final String idPaciente;

@@ -10,8 +10,8 @@ public class GUIPrincipal extends JFrame implements IGUIPrincipal {
     private final IGUIHistorialClinico guiHistorial;
 
     public GUIPrincipal(IGUITrabajadores guiTrabajadores,
-                         IGUIPacientes guiPacientes,
-                         IGUIHistorialClinico guiHistorial) {
+                        IGUIPacientes guiPacientes,
+                        IGUIHistorialClinico guiHistorial) {
         this.guiTrabajadores = guiTrabajadores;
         this.guiPacientes = guiPacientes;
         this.guiHistorial = guiHistorial;
@@ -39,21 +39,21 @@ public class GUIPrincipal extends JFrame implements IGUIPrincipal {
 
         //menu de trabajadores
         JMenu menuTrabajadores = new JMenu("Trabajadores");
-        JMenuItem itemVerTrabajadores = new JMenuItem("Ver Trabajadores");
-        itemVerTrabajadores.addActionListener(e -> irAGestiontrabajadores());
-        menuTrabajadores.add(itemVerTrabajadores);
+        JMenuItem itemGestionarTrabajadores = new JMenuItem("Gestionar Trabajadores");
+        itemGestionarTrabajadores.addActionListener(e -> irAGestiontrabajadores());
+        menuTrabajadores.add(itemGestionarTrabajadores);
 
         //menu de pacientes
         JMenu menuPacientes = new JMenu("Pacientes");
-        JMenuItem itemVerPacientes = new JMenuItem("Ver Pacientes");
-        itemVerPacientes.addActionListener(e -> irAGestionPacientes());
-        menuPacientes.add(itemVerPacientes);
+        JMenuItem itemGestionarPacientes = new JMenuItem("Gestionar Pacientes");
+        itemGestionarPacientes.addActionListener(e -> irAGestionPacientes());
+        menuPacientes.add(itemGestionarPacientes);
 
         //menu del historial clinico
         JMenu menuHistorial = new JMenu("Historial Clínico");
-        JMenuItem itemVerHistorial = new JMenuItem("Ver Historial");
-        itemVerHistorial.addActionListener(e -> irAHistorialClinico());
-        menuHistorial.add(itemVerHistorial);
+        JMenuItem itemGestionarHistorial = new JMenuItem("Gestionar Historial");
+        itemGestionarHistorial.addActionListener(e -> irAHistorialClinico());
+        menuHistorial.add(itemGestionarHistorial);
 
         menuBar.add(menuTrabajadores);
         menuBar.add(menuPacientes);
