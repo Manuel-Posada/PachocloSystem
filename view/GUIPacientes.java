@@ -19,33 +19,27 @@ import model.Paciente;
 
 public class GUIPacientes extends JFrame implements IGUIPacientes {
 
-    // --- 1. VARIABLES DE CLASE ---
     private IGUIPrincipal guiPrincipal;
-    private IGUIHistorialClinico guiHistorial; // <- Referencia a la ventana de historial
+    private IGUIHistorialClinico guiHistorial;
     private final ControladorPaciente controlador;
 
-    // Componentes gráficos
     private JLabel lblEstado;
     private JTextField campoBusqueda;
     private JTable tabla;
     private DefaultTableModel modeloTabla;
     
-    // Estado actual
     private List<Paciente> pacientesActuales;
     private String ultimoIdGenerado;
 
-    // Constantes
     private static final String[] COLUMNAS = {
             "ID", "Nombre", "Edad", "Habitación", "Registros Clínicos", "Acciones"
     };
     private static final int COLUMNA_ACCIONES = 5;
 
-    // Validaciones (Regex)
     private static final Pattern PATRON_ID = Pattern.compile("^[A-Za-z0-9\\-]{1,20}$");
     private static final Pattern PATRON_NOMBRE = Pattern.compile("^[A-Za-zÁÉÍÓÚÑÜáéíóúñü][A-Za-zÁÉÍÓÚÑÜáéíóúñü\\s]{2,59}$");
     private static final Pattern PATRON_ENTERO = Pattern.compile("^\\d{1,3}$");
 
-    // --- 2. CONSTRUCTOR Y CONFIGURACIÓN ---
     public GUIPacientes(ControladorPaciente controlador) {
         this.controlador = controlador;
         configurarVentana();
@@ -69,7 +63,6 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         setResizable(true);
     }
 
-    // --- 3. MÉTODOS DE VISUALIZACIÓN ---
     @Override
     public void mostrar() {
         refrescarTabla();
@@ -84,7 +77,6 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         }
     }
 
-    // --- 4. CONSTRUCCIÓN DE LA INTERFAZ (PANELES) ---
     @Override
     public void mostrarOpciones() {
         JPanel panelRaiz = new JPanel(new BorderLayout(0, 10));
@@ -147,7 +139,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         modeloTabla = new DefaultTableModel(COLUMNAS, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == COLUMNA_ACCIONES; // Solo la columna de botones es "editable" (clickeable)
+                return column == COLUMNA_ACCIONES;
             }
         };
         tabla = new JTable(modeloTabla);
@@ -166,7 +158,6 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         return panel;
     }
 
-    // --- 5. LÓGICA DE TABLA Y BOTONES (RENDER / EDITOR) ---
     private void estilizarTabla() {
         tabla.setShowGrid(true);
         tabla.setGridColor(new Color(210, 210, 210));
@@ -197,18 +188,19 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
             tabla.getColumnModel().getColumn(i).setCellRenderer(renderer);
         }
 
-        tabla.getColumnModel().getColumn(0).setPreferredWidth(80);   //ID
-        tabla.getColumnModel().getColumn(1).setPreferredWidth(180);  //Nombre
-        tabla.getColumnModel().getColumn(2).setPreferredWidth(60);   //Edad
-        tabla.getColumnModel().getColumn(3).setPreferredWidth(90);   //Habitación
-        tabla.getColumnModel().getColumn(4).setPreferredWidth(140);  //Registros clínicos
-        tabla.getColumnModel().getColumn(5).setPreferredWidth(260);  //Acciones (Aumentado para 3 botones)
+        tabla.getColumnModel().getColumn(0).setPreferredWidth(80);
+        tabla.getColumnModel().getColumn(1).setPreferredWidth(180);
+        tabla.getColumnModel().getColumn(2).setPreferredWidth(60);
+        tabla.getColumnModel().getColumn(3).setPreferredWidth(90);
+        tabla.getColumnModel().getColumn(4).setPreferredWidth(140);
+        tabla.getColumnModel().getColumn(5).setPreferredWidth(260);
 
         tabla.getColumnModel().getColumn(COLUMNA_ACCIONES).setCellRenderer(new PanelAccionesRenderer());
         tabla.getColumnModel().getColumn(COLUMNA_ACCIONES).setCellEditor(new PanelAccionesEditor());
     }
 
-    private void refrescarTabla() {
+    @Override
+    public void refrescarTabla() {
         List<Paciente> todos = controlador.listarPacientes();
         String filtro = campoBusqueda == null ? "" : campoBusqueda.getText().trim().toLowerCase(Locale.ROOT);
 
@@ -232,7 +224,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
                     p.getEdad(),
                     p.getHabitacion(),
                     p.obtenerHistorial().size(),
-                    "" // Se llena visualmente con los botones del Renderer
+                    ""
             });
         }
 
@@ -294,7 +286,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
             btnHistorial.addActionListener(e -> {
                 String id = String.valueOf(modeloTabla.getValueAt(filaActual, 0));
                 String nombre = String.valueOf(modeloTabla.getValueAt(filaActual, 1));
-                fireEditingStopped(); // Detener edición antes de abrir nueva ventana
+                fireEditingStopped();
                 
                 if (guiHistorial != null) {
                     guiHistorial.mostrar(id, nombre);
@@ -321,7 +313,7 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         public Component getTableCellEditorComponent(JTable table, Object value,
                 boolean isSelected, int row, int column) {
             filaActual = row;
-            panel.setBackground(new Color(204, 228, 247)); // Fondo al seleccionar
+            panel.setBackground(new Color(204, 228, 247));
             return panel;
         }
 
@@ -331,7 +323,6 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         }
     }
 
-    // --- 6. ACCIONES CRUD DE PACIENTES ---
     @Override
     public void registrarPaciente() {
         abrirFormularioPaciente(null);
@@ -479,8 +470,6 @@ public class GUIPacientes extends JFrame implements IGUIPacientes {
         dialogo.setVisible(true);
     }
 
-    // --- 7. VALIDACIONES ---
-    // idExistente solo se usa en modo edición (viene ya validado del paciente actual).
     private String validarYGuardarPaciente(String idExistente, String nombreTexto,
             String edadTexto, String habitacionTexto, boolean modoEdicion) {
 

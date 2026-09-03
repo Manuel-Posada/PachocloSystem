@@ -6,6 +6,8 @@ public interface IGUIPacientes {
 
     void mostrarOpciones();
 
+    void refrescarTabla();
+
     void registrarPaciente();
 
     void editarPaciente(String idPaciente);
