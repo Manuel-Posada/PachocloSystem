@@ -40,7 +40,7 @@ class Main {
             // GUIHistorialClinico necesita también ctrlTrabajadores para buscar
             // al trabajador que figura como "autor" del registro clínico
             // (todavía no hay sesión/login, así que se pide el ID manualmente).
-            GUIHistorialClinico guiHistorial = new GUIHistorialClinico(ctrlHistorial, ctrlTrabajadores);
+            GUIHistorialClinico guiHistorial = new GUIHistorialClinico(ctrlHistorial, ctrlTrabajadores, ctrlPaciente);
 
             GUIPrincipal guiPrincipal = new GUIPrincipal(guiTrabajadores, guiPacientes, guiHistorial);
 

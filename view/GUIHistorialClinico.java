@@ -1,5 +1,6 @@
 package view;
 
+import java.util.function.Function;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -14,10 +15,14 @@ import java.util.regex.Pattern;
 
 import controller.ControladorHistorialClinico;
 import controller.ControladorTrabajadores;
+import controller.ControladorPaciente;
 import model.TipoRegistro;
 import model.TrabajadorHospital;
 import model.RegistroConPaciente;
 import model.RegistroClinico;
+import model.Paciente;
+
+import java.util.function.BiFunction;
 
 public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico {
 
@@ -25,6 +30,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
     private IGUIPrincipal guiPrincipal;
     private final ControladorHistorialClinico controlador;
     private final ControladorTrabajadores controladorTrabajadores;
+    private final ControladorPaciente controladorPaciente;
 
     // Componentes gráficos
     private JLabel lblEstado;
@@ -32,7 +38,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
     private DefaultTableModel modeloTabla;
     private JTextField campoBusqueda;
     private JComboBox<String> comboFiltro;
-    
+
     // Estado actual de la vista
     private List<RegistroConPaciente> registrosActuales;
     private String idPacienteActual;
@@ -46,15 +52,15 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     // Validaciones (Regex)
-    private static final Pattern PATRON_ID = Pattern.compile("^[A-Za-z0-9\\-]{1,20}$");
     private static final Pattern PATRON_CONTIENE_TEXTO = Pattern.compile(".*[A-Za-zÁÉÍÓÚÑÜáéíóúñü].*");
     private static final Pattern PATRON_ENTERO = Pattern.compile("^\\d{1,4}$");
     private static final Pattern PATRON_DECIMAL = Pattern.compile("^\\d{1,3}(\\.\\d{1,2})?$");
 
-    // --- 2. CONSTRUCTOR Y CONFIGURACIÓN ---
-    public GUIHistorialClinico(ControladorHistorialClinico controlador, ControladorTrabajadores controladorTrabajadores) {
+    public GUIHistorialClinico(ControladorHistorialClinico controlador, ControladorTrabajadores controladorTrabajadores,
+                                ControladorPaciente controladorPaciente) {
         this.controlador = controlador;
         this.controladorTrabajadores = controladorTrabajadores;
+        this.controladorPaciente = controladorPaciente;
         configurarVentana();
         mostrarOpciones();
     }
@@ -73,7 +79,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
     }
 
     // --- 3. MÉTODOS DE VISUALIZACIÓN Y NAVEGACIÓN ---
-    
+
     @Override
     public void mostrar() {
         this.idPacienteActual = null;
@@ -285,6 +291,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         boolean vacio = registrosActuales.isEmpty();
         lblEstado.setText(vacio ? "No hay registros" : "Total de registros: " + registrosActuales.size());
     }
+
     private void aplicarFiltro() {
         if (registrosActuales == null) return;
 
@@ -351,7 +358,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         areaDetalle.setEditable(false);
         areaDetalle.setLineWrap(true);
         areaDetalle.setWrapStyleWord(true);
-        
+
         JOptionPane.showMessageDialog(this, new JScrollPane(areaDetalle),
                 "Detalle del Registro Clínico", JOptionPane.PLAIN_MESSAGE);
     }
@@ -379,17 +386,62 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         gbc.insets = new Insets(5, 5, 5, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        JTextField campoIdPaciente = new JTextField(18);
-        // Si estamos viendo el historial de un paciente específico, el campo se
-        // rellena con su ID y se bloquea: no tiene sentido permitir cambiarlo,
-        // ya que el registro es para ESE paciente.
+        // --- Campo de Paciente ---
+        // Si estamos viendo el historial de un paciente específico, se bloquea
+        // (ya sabemos de quién es el registro). Si no, se ofrece un combo buscable.
+        JTextField campoIdPacienteFijo = null;
+        JComboBox<Paciente> comboPaciente = null;
+
         if (idPacienteActual != null) {
-            campoIdPaciente.setText(idPacienteActual);
-            campoIdPaciente.setEditable(false);
-            campoIdPaciente.setBackground(new Color(235, 235, 235));
+            campoIdPacienteFijo = new JTextField(18);
+            campoIdPacienteFijo.setText(idPacienteActual + " - " + nombrePacienteActual);
+            campoIdPacienteFijo.setEditable(false);
+            campoIdPacienteFijo.setBackground(new Color(235, 235, 235));
+        } else {
+            comboPaciente = new JComboBox<>();
+            configurarComboBuscable(comboPaciente, controladorPaciente.listarPacientes(),
+                    (Paciente p, String texto) ->
+                            p.getNombre().toLowerCase().contains(texto)
+                                    || p.getIdPaciente().toLowerCase().contains(texto),
+                    (Paciente p) -> p.getIdPaciente() + " - " + p.getNombre());
+            comboPaciente.setRenderer(new DefaultListCellRenderer() {
+                @Override
+                public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                        boolean isSelected, boolean cellHasFocus) {
+                    Component c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                    if (value instanceof Paciente) {
+                        Paciente p = (Paciente) value;
+                        setText(p.getIdPaciente() + " - " + p.getNombre());
+                    }
+                    return c;
+                }
+            });
         }
-        
-        JTextField campoIdAutor = new JTextField(18);
+
+        // Variables efectivamente finales, necesarias para usarlas dentro de la lambda del botón Guardar.
+        final JTextField campoIdPacienteFinal = campoIdPacienteFijo;
+        final JComboBox<Paciente> comboPacienteFinal = comboPaciente;
+
+        JComboBox<TrabajadorHospital> comboAutor = new JComboBox<>();
+        configurarComboBuscable(comboAutor, controladorTrabajadores.listarTrabajadores(),
+                (TrabajadorHospital t, String texto) ->
+                        t.getNombreCompleto().toLowerCase().contains(texto)
+                                || t.getIdTrabajador().toLowerCase().contains(texto),
+                (TrabajadorHospital t) -> t.getIdTrabajador() + " - " + t.getNombreCompleto());
+        comboAutor.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
+                Component c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof TrabajadorHospital) {
+                    TrabajadorHospital t = (TrabajadorHospital) value;
+                    setText(t.getIdTrabajador() + " - " + t.getNombreCompleto());
+                }
+                return c;
+            }
+        });
+
+        // --- Tipo de registro ---
         JComboBox<TipoRegistro> comboTipo = new JComboBox<>(TipoRegistro.values());
         comboTipo.setRenderer(new DefaultListCellRenderer() {
             @Override
@@ -423,14 +475,14 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         JTextArea campoObservaciones = new JTextArea(2, 22);
         campoObservaciones.setLineWrap(true);
         campoObservaciones.setWrapStyleWord(true);
-        
+
         JPanel panelSignos = construirPanelSignosVitales(
                 campoTemperatura, campoFrecCardiaca, campoPresionSistolica,
                 campoPresionDiastolica, campoFrecRespiratoria, campoSaturacion, campoObservaciones);
 
         panelContenidoDinamico.add(panelTexto, "TEXTO");
         panelContenidoDinamico.add(panelSignos, "SIGNOS");
-        
+
         comboTipo.addActionListener(e -> {
             TipoRegistro seleccionado = (TipoRegistro) comboTipo.getSelectedItem();
             cardLayout.show(panelContenidoDinamico,
@@ -439,15 +491,15 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
 
         int fila = 0;
         gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
-        panelForm.add(new JLabel("ID del Paciente:"), gbc);
+        panelForm.add(new JLabel("Paciente:"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
-        panelForm.add(campoIdPaciente, gbc);
+        panelForm.add(idPacienteActual != null ? campoIdPacienteFinal : comboPacienteFinal, gbc);
 
         fila++;
         gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
-        panelForm.add(new JLabel("ID del Autor (trabajador):"), gbc);
+        panelForm.add(new JLabel("Autor (trabajador):"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
-        panelForm.add(campoIdAutor, gbc);
+        panelForm.add(comboAutor, gbc);
 
         fila++;
         gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
@@ -472,9 +524,18 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         btnGuardar.setBorderPainted(false);
 
         btnCancelar.addActionListener(e -> dialogo.dispose());
+
         btnGuardar.addActionListener(e -> {
+            String idPacienteSeleccionado = idPacienteActual != null
+                    ? idPacienteActual
+                    : (comboPacienteFinal.getSelectedItem() instanceof Paciente
+                            ? ((Paciente) comboPacienteFinal.getSelectedItem()).getIdPaciente() : null);
+
+            TrabajadorHospital autorSeleccionado = comboAutor.getSelectedItem() instanceof TrabajadorHospital
+                    ? (TrabajadorHospital) comboAutor.getSelectedItem() : null;
+
             String resultado = validarYGuardarRegistro(
-                    campoIdPaciente.getText(), campoIdAutor.getText(),
+                    idPacienteSeleccionado, autorSeleccionado,
                     (TipoRegistro) comboTipo.getSelectedItem(),
                     campoContenido.getText(),
                     campoTemperatura.getText(), campoFrecCardiaca.getText(),
@@ -546,26 +607,19 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
 
     // --- 7. VALIDACIONES ---
 
-    private String validarYGuardarRegistro(String idPacienteTexto, String idAutorTexto, TipoRegistro tipo,
+    private String validarYGuardarRegistro(String idPaciente, TrabajadorHospital autor, TipoRegistro tipo,
             String contenidoTexto, String temperaturaTexto, String frecCardiacaTexto,
             String presionSistolicaTexto, String presionDiastolicaTexto,
             String frecRespiratoriaTexto, String saturacionTexto, String observacionesTexto) {
 
         StringBuilder errores = new StringBuilder();
 
-        String idPaciente = idPacienteTexto == null ? "" : idPacienteTexto.trim();
-        String idAutor = idAutorTexto == null ? "" : idAutorTexto.trim();
-
-        if (idPaciente.isEmpty()) {
-            errores.append("• El ID del paciente es obligatorio.<br>");
-        } else if (!PATRON_ID.matcher(idPaciente).matches()) {
-            errores.append("• El ID del paciente solo puede tener letras, números y guiones.<br>");
+        if (idPaciente == null) {
+            errores.append("• Debe seleccionar un paciente de la lista.<br>");
         }
 
-        if (idAutor.isEmpty()) {
-            errores.append("• El ID del autor es obligatorio.<br>");
-        } else if (!PATRON_ID.matcher(idAutor).matches()) {
-            errores.append("• El ID del autor solo puede tener letras, números y guiones.<br>");
+        if (autor == null) {
+            errores.append("• Debe seleccionar un autor (trabajador) de la lista.<br>");
         }
 
         if (tipo == null) {
@@ -632,14 +686,9 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             return errores.toString();
         }
 
-        TrabajadorHospital autor = controladorTrabajadores.buscarTrabajadorPorId(idAutor);
-        if (autor == null) {
-            return "• No se encontró un trabajador con ese ID.";
-        }
-
         boolean ok = controlador.agregarRegistroPaciente(idPaciente, tipo, contenidoFinal, autor);
         if (!ok) {
-            return "• No se pudo agregar el registro: verifique que el ID del paciente exista.";
+            return "• No se pudo agregar el registro: verifique que el paciente exista.";
         }
 
         return null; // Todo correcto, sin errores
@@ -661,5 +710,69 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         double valor = Double.parseDouble(texto);
         if (valor < min || valor > max) return null;
         return valor;
+    }
+    // Convierte un JComboBox en un campo editable que filtra sus opciones
+    // en tiempo real según lo que el usuario escribe (busca en id y nombre).
+    // Arranca vacío (sin selección) y muestra el texto formateado, no el toString() crudo.
+    private <T> void configurarComboBuscable(JComboBox<T> combo, List<T> listaCompleta,
+                                              BiFunction<T, String, Boolean> coincide,
+                                              Function<T, String> formateador) {
+        final boolean[] actualizando = {false};
+
+        combo.setEditable(true);
+
+        DefaultComboBoxModel<T> modeloInicial = new DefaultComboBoxModel<>();
+        for (T item : listaCompleta) {
+            modeloInicial.addElement(item);
+        }
+        combo.setModel(modeloInicial);
+
+        // Editor personalizado: en vez de mostrar item.toString(), muestra el formato bonito.
+        combo.setEditor(new javax.swing.plaf.basic.BasicComboBoxEditor() {
+            @Override
+            public void setItem(Object item) {
+                actualizando[0] = true;
+                if (item == null) {
+                    editor.setText("");
+                } else {
+                    @SuppressWarnings("unchecked")
+                    T valor = (T) item;
+                    editor.setText(formateador.apply(valor));
+                }
+                actualizando[0] = false;
+            }
+        });
+
+        JTextField campoEditor = (JTextField) combo.getEditor().getEditorComponent();
+
+        // Arranca sin ninguna selección -> campo vacío al abrir el formulario.
+        combo.setSelectedItem(null);
+
+        campoEditor.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            private void filtrar() {
+                if (actualizando[0]) return;
+                actualizando[0] = true;
+
+                String texto = campoEditor.getText();
+                int caret = campoEditor.getCaretPosition();
+
+                DefaultComboBoxModel<T> modelo = new DefaultComboBoxModel<>();
+                for (T item : listaCompleta) {
+                    if (texto.isEmpty() || coincide.apply(item, texto.toLowerCase())) {
+                        modelo.addElement(item);
+                    }
+                }
+                combo.setModel(modelo);
+                campoEditor.setText(texto);
+                campoEditor.setCaretPosition(Math.min(caret, texto.length()));
+                combo.setPopupVisible(!texto.isEmpty() && modelo.getSize() > 0);
+
+                actualizando[0] = false;
+            }
+
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
+        });
     }
 }
