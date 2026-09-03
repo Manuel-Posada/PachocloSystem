@@ -34,7 +34,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
     private DefaultTableModel modeloTabla;
     private JTextField campoBusqueda;
     private JComboBox<String> comboFiltro;
-    
+
     private List<RegistroConPaciente> registrosActuales;
     private String idPacienteActual;
     private String nombrePacienteActual;
@@ -80,7 +80,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         setLocationRelativeTo(null);
         setResizable(true);
     }
-    
+
     @Override
     public void mostrar() {
         this.idPacienteActual = null;
@@ -346,7 +346,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         areaDetalle.setEditable(false);
         areaDetalle.setLineWrap(true);
         areaDetalle.setWrapStyleWord(true);
-        
+
         JOptionPane.showMessageDialog(this, new JScrollPane(areaDetalle),
                 "Detalle del Registro Clínico", JOptionPane.PLAIN_MESSAGE);
     }
@@ -361,6 +361,17 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         }
     }
 
+    /**
+     * Instala un autocompletado sobre un JTextField, mostrando un popup con
+     * lista de coincidencias (id + nombre) filtradas mientras se escribe.
+     *
+     * Cambio respecto a la versión original: el popup ya NO se limita a
+     * refrescarse solo cuando ya está visible. Ahora, apenas el usuario
+     * empieza a escribir en el campo, la lista de coincidencias se
+     * despliega automáticamente (sin necesidad de pulsar la flechita),
+     * igual que ocurre con los combos buscables. El botón "▾" se mantiene
+     * como atajo para abrir/cerrar manualmente el listado completo.
+     */
     private <T> JButton instalarAutocompletado(JTextField campo, Supplier<List<T>> proveedorDatos,
             Function<T, String> obtenerId, Function<T, String> obtenerNombre, String tooltip) {
 
@@ -421,13 +432,18 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
 
             if (popup.isVisible()) {
                 popup.pack();
+            } else {
+                popup.show(campo, 0, campo.getHeight());
             }
         };
 
+        // Antes: solo refrescaba si el popup YA estaba visible. Ahora se
+        // dispara siempre, así el listado aparece apenas se empieza a
+        // escribir en el campo.
         campo.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { if (popup.isVisible()) actualizarLista.run(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { if (popup.isVisible()) actualizarLista.run(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { if (popup.isVisible()) actualizarLista.run(); }
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { actualizarLista.run(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { actualizarLista.run(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { actualizarLista.run(); }
         });
 
         campo.addFocusListener(new java.awt.event.FocusAdapter() {
@@ -502,9 +518,12 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         botonListar.setBorder(BorderFactory.createLineBorder(COLOR_BORDE));
         botonListar.setMargin(new Insets(2, 8, 2, 8));
         botonListar.addActionListener(e -> {
-            actualizarLista.run();
-            if (!modeloLista.isEmpty() && !popup.isVisible()) {
-                popup.show(campo, 0, campo.getHeight());
+            // Ahora funciona como interruptor: si ya está abierto, lo cierra;
+            // si está cerrado, muestra el listado completo (sin filtrar).
+            if (popup.isVisible()) {
+                popup.setVisible(false);
+            } else {
+                actualizarLista.run();
             }
             campo.requestFocusInWindow();
         });
@@ -529,7 +548,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             campoIdPaciente.setEditable(false);
             campoIdPaciente.setBackground(new Color(235, 235, 235));
         }
-        
+
         JPanel panelCampoIdPaciente = new JPanel(new BorderLayout(4, 0));
         panelCampoIdPaciente.add(campoIdPaciente, BorderLayout.CENTER);
         if (idPacienteActual == null) {
@@ -583,14 +602,14 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         JTextArea campoObservaciones = new JTextArea(2, 22);
         campoObservaciones.setLineWrap(true);
         campoObservaciones.setWrapStyleWord(true);
-        
+
         JPanel panelSignos = construirPanelSignosVitales(
                 campoTemperatura, campoFrecCardiaca, campoPresionSistolica,
                 campoPresionDiastolica, campoFrecRespiratoria, campoSaturacion, campoObservaciones);
 
         panelContenidoDinamico.add(panelTexto, "TEXTO");
         panelContenidoDinamico.add(panelSignos, "SIGNOS");
-        
+
         comboTipo.addActionListener(e -> {
             TipoRegistro seleccionado = (TipoRegistro) comboTipo.getSelectedItem();
             cardLayout.show(panelContenidoDinamico,
