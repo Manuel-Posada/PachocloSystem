@@ -10,6 +10,8 @@ import java.awt.event.MouseEvent;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import controller.ControladorHistorialClinico;
@@ -18,40 +20,43 @@ import model.TipoRegistro;
 import model.TrabajadorHospital;
 import model.RegistroConPaciente;
 import model.RegistroClinico;
+import model.Paciente;
 
 public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico {
 
-    // --- 1. VARIABLES DE CLASE ---
     private IGUIPrincipal guiPrincipal;
+    private IGUIPacientes guiPacientes;
     private final ControladorHistorialClinico controlador;
     private final ControladorTrabajadores controladorTrabajadores;
 
-    // Componentes gráficos
     private JLabel lblEstado;
     private JTable tabla;
     private DefaultTableModel modeloTabla;
     private JTextField campoBusqueda;
     private JComboBox<String> comboFiltro;
     
-    // Estado actual de la vista
     private List<RegistroConPaciente> registrosActuales;
     private String idPacienteActual;
     private String nombrePacienteActual;
 
-    // Constantes
     private static final String[] COLUMNAS = {
             "ID Paciente", "Paciente", "Fecha y Hora", "Tipo", "Autor", "Contenido"
     };
     private static final DateTimeFormatter FORMATO_FECHA =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
-    // Validaciones (Regex)
     private static final Pattern PATRON_ID = Pattern.compile("^[A-Za-z0-9\\-]{1,20}$");
     private static final Pattern PATRON_CONTIENE_TEXTO = Pattern.compile(".*[A-Za-zÁÉÍÓÚÑÜáéíóúñü].*");
     private static final Pattern PATRON_ENTERO = Pattern.compile("^\\d{1,4}$");
     private static final Pattern PATRON_DECIMAL = Pattern.compile("^\\d{1,3}(\\.\\d{1,2})?$");
 
-    // --- 2. CONSTRUCTOR Y CONFIGURACIÓN ---
+    private static final Color COLOR_BORDE = new Color(210, 210, 210);
+    private static final Color COLOR_SELECCION = new Color(204, 228, 247);
+    private static final Color COLOR_FILA_PAR = Color.WHITE;
+    private static final Color COLOR_FILA_IMPAR = new Color(245, 247, 250);
+    private static final Font FUENTE_LISTA = new Font("SansSerif", Font.PLAIN, 13);
+    private static final int ALTO_FILA_LISTA = 28;
+
     public GUIHistorialClinico(ControladorHistorialClinico controlador, ControladorTrabajadores controladorTrabajadores) {
         this.controlador = controlador;
         this.controladorTrabajadores = controladorTrabajadores;
@@ -63,6 +68,10 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         this.guiPrincipal = guiPrincipal;
     }
 
+    public void setGuiPacientes(IGUIPacientes guiPacientes) {
+        this.guiPacientes = guiPacientes;
+    }
+
     private void configurarVentana() {
         setTitle("Historial Clínico");
         setSize(900, 520);
@@ -71,8 +80,6 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         setLocationRelativeTo(null);
         setResizable(true);
     }
-
-    // --- 3. MÉTODOS DE VISUALIZACIÓN Y NAVEGACIÓN ---
     
     @Override
     public void mostrar() {
@@ -102,18 +109,13 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         setVisible(false);
 
         if (idPacienteActual != null) {
-            // Se abrió desde la tabla de un paciente específico (GUIPacientes ya está detrás visible).
-            // Solo hay que cerrar esta ventana, no tocar el menú principal.
             return;
         }
 
-        // Se abrió desde el menú general -> ahí sí regresa al menú principal.
         if (guiPrincipal != null) {
             guiPrincipal.mostrar();
         }
     }
-
-    // --- 4. CONSTRUCCIÓN DE LA INTERFAZ (PANELES) ---
 
     @Override
     public void mostrarOpciones() {
@@ -136,7 +138,6 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         JLabel titulo = new JLabel("Registros Clínicos");
         titulo.setFont(titulo.getFont().deriveFont(Font.BOLD, 18f));
 
-        // --- Panel de búsqueda/filtro (centro) ---
         JPanel panelBusqueda = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
 
         JLabel lblBuscar = new JLabel("Buscar:");
@@ -155,11 +156,8 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         panelBusqueda.add(campoBusqueda);
         panelBusqueda.add(comboFiltro);
 
-        // Si estamos viendo el historial de UN paciente específico, ocultamos el combo:
-        // no tiene sentido filtrar "por paciente" si ya se sabe cuál es.
         comboFiltro.setVisible(idPacienteActual == null);
 
-        // --- Botón agregar (derecha) ---
         JButton btnAgregar = new JButton("+ Agregar Registro Clínico");
         btnAgregar.setFont(btnAgregar.getFont().deriveFont(Font.BOLD));
         btnAgregar.setBackground(new Color(46, 125, 50));
@@ -245,28 +243,24 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             tabla.getColumnModel().getColumn(i).setCellRenderer(renderer);
         }
 
-        tabla.getColumnModel().getColumn(0).setPreferredWidth(90);   //ID paciente
-        tabla.getColumnModel().getColumn(1).setPreferredWidth(140);  //paciente
-        tabla.getColumnModel().getColumn(2).setPreferredWidth(130);  //fecha
-        tabla.getColumnModel().getColumn(3).setPreferredWidth(110);  //tipo
-        tabla.getColumnModel().getColumn(4).setPreferredWidth(140);  //autor
-        tabla.getColumnModel().getColumn(5).setPreferredWidth(320);  //contenido
+        tabla.getColumnModel().getColumn(0).setPreferredWidth(90);
+        tabla.getColumnModel().getColumn(1).setPreferredWidth(140);
+        tabla.getColumnModel().getColumn(2).setPreferredWidth(130);
+        tabla.getColumnModel().getColumn(3).setPreferredWidth(110);
+        tabla.getColumnModel().getColumn(4).setPreferredWidth(140);
+        tabla.getColumnModel().getColumn(5).setPreferredWidth(320);
     }
-
-    // --- 5. LÓGICA DE TABLA Y DETALLES ---
 
     private void refrescarTabla() {
         modeloTabla.setRowCount(0);
         registrosActuales = new ArrayList<>();
 
         if (idPacienteActual != null) {
-            // Modo: Un solo paciente
             List<RegistroClinico> registrosPaciente = controlador.obtenerRegistrosPorPaciente(idPacienteActual);
             for (RegistroClinico r : registrosPaciente) {
                 registrosActuales.add(new RegistroConPaciente(idPacienteActual, nombrePacienteActual, r));
             }
         } else {
-            // Modo: Todos los pacientes
             registrosActuales = controlador.obtenerTodosLosRegistros();
         }
 
@@ -285,6 +279,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         boolean vacio = registrosActuales.isEmpty();
         lblEstado.setText(vacio ? "No hay registros" : "Total de registros: " + registrosActuales.size());
     }
+
     private void aplicarFiltro() {
         if (registrosActuales == null) return;
 
@@ -366,7 +361,156 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         }
     }
 
-    // --- 6. FORMULARIO DE AGREGAR REGISTRO ---
+    private <T> JButton instalarAutocompletado(JTextField campo, Supplier<List<T>> proveedorDatos,
+            Function<T, String> obtenerId, Function<T, String> obtenerNombre, String tooltip) {
+
+        final int FILAS_VISIBLES_MAX = 4;
+
+        JPopupMenu popup = new JPopupMenu();
+        popup.setFocusable(false);
+        popup.setBorder(BorderFactory.createLineBorder(COLOR_BORDE));
+
+        DefaultListModel<T> modeloLista = new DefaultListModel<>();
+        JList<T> lista = new JList<>(modeloLista);
+        lista.setFont(FUENTE_LISTA);
+        lista.setFocusable(false);
+        lista.setFixedCellHeight(ALTO_FILA_LISTA);
+        lista.setSelectionBackground(COLOR_SELECCION);
+        lista.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        lista.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> l, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
+                Component c = super.getListCellRendererComponent(l, value, index, isSelected, cellHasFocus);
+                @SuppressWarnings("unchecked")
+                T item = (T) value;
+                setText(obtenerId.apply(item) + "  -  " + obtenerNombre.apply(item));
+                setBorder(new EmptyBorder(4, 10, 4, 10));
+                if (!isSelected) {
+                    c.setBackground(index % 2 == 0 ? COLOR_FILA_PAR : COLOR_FILA_IMPAR);
+                }
+                return c;
+            }
+        });
+
+        JScrollPane scrollLista = new JScrollPane(lista);
+        scrollLista.setBorder(BorderFactory.createEmptyBorder());
+        scrollLista.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollLista.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        popup.add(scrollLista);
+
+        Runnable actualizarLista = () -> {
+            String texto = campo.getText() == null ? "" : campo.getText().trim().toLowerCase();
+            modeloLista.clear();
+            for (T item : proveedorDatos.get()) {
+                String id = obtenerId.apply(item) == null ? "" : obtenerId.apply(item).toLowerCase();
+                String nombre = obtenerNombre.apply(item) == null ? "" : obtenerNombre.apply(item).toLowerCase();
+                if (texto.isEmpty() || id.contains(texto) || nombre.contains(texto)) {
+                    modeloLista.addElement(item);
+                }
+            }
+
+            if (modeloLista.isEmpty()) {
+                popup.setVisible(false);
+                return;
+            }
+
+            int filas = Math.min(modeloLista.size(), FILAS_VISIBLES_MAX);
+            int ancho = Math.max(campo.getWidth(), 240);
+            scrollLista.setPreferredSize(new Dimension(ancho, filas * ALTO_FILA_LISTA + 4));
+
+            if (popup.isVisible()) {
+                popup.pack();
+            }
+        };
+
+        campo.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { if (popup.isVisible()) actualizarLista.run(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { if (popup.isVisible()) actualizarLista.run(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { if (popup.isVisible()) actualizarLista.run(); }
+        });
+
+        campo.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                popup.setVisible(false);
+            }
+        });
+
+        Runnable seleccionarActual = () -> {
+            T seleccionado = lista.getSelectedValue();
+            if (seleccionado != null) {
+                campo.setText(obtenerId.apply(seleccionado));
+            }
+            popup.setVisible(false);
+        };
+
+        lista.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                int indice = lista.locationToIndex(e.getPoint());
+                if (indice >= 0) {
+                    lista.setSelectedIndex(indice);
+                    seleccionarActual.run();
+                    campo.requestFocusInWindow();
+                }
+            }
+        });
+
+        campo.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override
+            public void keyPressed(java.awt.event.KeyEvent e) {
+                if (!popup.isVisible() || modeloLista.isEmpty()) return;
+                switch (e.getKeyCode()) {
+                    case java.awt.event.KeyEvent.VK_DOWN: {
+                        int idx = Math.min(lista.getSelectedIndex() + 1, modeloLista.size() - 1);
+                        lista.setSelectedIndex(idx);
+                        lista.ensureIndexIsVisible(idx);
+                        e.consume();
+                        break;
+                    }
+                    case java.awt.event.KeyEvent.VK_UP: {
+                        int idx = Math.max(lista.getSelectedIndex() - 1, 0);
+                        lista.setSelectedIndex(idx);
+                        lista.ensureIndexIsVisible(idx);
+                        e.consume();
+                        break;
+                    }
+                    case java.awt.event.KeyEvent.VK_ENTER:
+                        if (lista.getSelectedIndex() < 0) lista.setSelectedIndex(0);
+                        seleccionarActual.run();
+                        e.consume();
+                        break;
+                    case java.awt.event.KeyEvent.VK_ESCAPE:
+                        popup.setVisible(false);
+                        e.consume();
+                        break;
+                    default:
+                        break;
+                }
+            }
+        });
+
+        JButton botonListar = new JButton("▾");
+        botonListar.setToolTipText(tooltip);
+        botonListar.setFocusable(false);
+        botonListar.setFont(new Font("SansSerif", Font.BOLD, 12));
+        botonListar.setBackground(new Color(235, 235, 235));
+        botonListar.setForeground(new Color(90, 90, 90));
+        botonListar.setOpaque(true);
+        botonListar.setBorderPainted(true);
+        botonListar.setBorder(BorderFactory.createLineBorder(COLOR_BORDE));
+        botonListar.setMargin(new Insets(2, 8, 2, 8));
+        botonListar.addActionListener(e -> {
+            actualizarLista.run();
+            if (!modeloLista.isEmpty() && !popup.isVisible()) {
+                popup.show(campo, 0, campo.getHeight());
+            }
+            campo.requestFocusInWindow();
+        });
+
+        return botonListar;
+    }
 
     @Override
     public void agregarRegistroClinico() {
@@ -380,16 +524,33 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         JTextField campoIdPaciente = new JTextField(18);
-        // Si estamos viendo el historial de un paciente específico, el campo se
-        // rellena con su ID y se bloquea: no tiene sentido permitir cambiarlo,
-        // ya que el registro es para ESE paciente.
         if (idPacienteActual != null) {
             campoIdPaciente.setText(idPacienteActual);
             campoIdPaciente.setEditable(false);
             campoIdPaciente.setBackground(new Color(235, 235, 235));
         }
         
+        JPanel panelCampoIdPaciente = new JPanel(new BorderLayout(4, 0));
+        panelCampoIdPaciente.add(campoIdPaciente, BorderLayout.CENTER);
+        if (idPacienteActual == null) {
+            JButton botonListarPacientes = instalarAutocompletado(campoIdPaciente,
+                    controlador::obtenerTodosLosPacientes,
+                    Paciente::getIdPaciente,
+                    Paciente::getNombre,
+                    "Ver lista de pacientes");
+            panelCampoIdPaciente.add(botonListarPacientes, BorderLayout.EAST);
+        }
+
         JTextField campoIdAutor = new JTextField(18);
+        JButton botonListarAutores = instalarAutocompletado(campoIdAutor,
+                controladorTrabajadores::listarTrabajadores,
+                TrabajadorHospital::getIdTrabajador,
+                TrabajadorHospital::getNombreCompleto,
+                "Ver lista de trabajadores");
+        JPanel panelCampoIdAutor = new JPanel(new BorderLayout(4, 0));
+        panelCampoIdAutor.add(campoIdAutor, BorderLayout.CENTER);
+        panelCampoIdAutor.add(botonListarAutores, BorderLayout.EAST);
+
         JComboBox<TipoRegistro> comboTipo = new JComboBox<>(TipoRegistro.values());
         comboTipo.setRenderer(new DefaultListCellRenderer() {
             @Override
@@ -403,7 +564,6 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             }
         });
 
-        // Panel multiopciones
         CardLayout cardLayout = new CardLayout();
         JPanel panelContenidoDinamico = new JPanel(cardLayout);
 
@@ -441,13 +601,13 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
         panelForm.add(new JLabel("ID del Paciente:"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
-        panelForm.add(campoIdPaciente, gbc);
+        panelForm.add(panelCampoIdPaciente, gbc);
 
         fila++;
         gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
         panelForm.add(new JLabel("ID del Autor (trabajador):"), gbc);
         gbc.gridx = 1; gbc.weightx = 1;
-        panelForm.add(campoIdAutor, gbc);
+        panelForm.add(panelCampoIdAutor, gbc);
 
         fila++;
         gbc.gridx = 0; gbc.gridy = fila; gbc.weightx = 0;
@@ -485,6 +645,10 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             if (resultado == null) {
                 dialogo.dispose();
                 refrescarTabla();
+                aplicarFiltro();
+                if (guiPacientes != null) {
+                    guiPacientes.refrescarTabla();
+                }
                 JOptionPane.showMessageDialog(this, "Registro clínico agregado correctamente.");
             } else {
                 lblError.setText("<html><body style='width: 320px'>" + resultado + "</body></html>");
@@ -543,8 +707,6 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
 
         return panel;
     }
-
-    // --- 7. VALIDACIONES ---
 
     private String validarYGuardarRegistro(String idPacienteTexto, String idAutorTexto, TipoRegistro tipo,
             String contenidoTexto, String temperaturaTexto, String frecCardiacaTexto,
@@ -642,7 +804,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             return "• No se pudo agregar el registro: verifique que el ID del paciente exista.";
         }
 
-        return null; // Todo correcto, sin errores
+        return null;
     }
 
     private Integer validarEntero(String texto, int min, int max) {
