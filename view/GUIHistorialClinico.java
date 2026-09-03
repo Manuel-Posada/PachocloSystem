@@ -400,6 +400,7 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
             campoIdPacienteFijo.setBackground(new Color(235, 235, 235));
         } else {
             comboPaciente = new JComboBox<>();
+            
             configurarComboBuscable(comboPaciente, controladorPaciente.listarPacientes(),
                     (Paciente p, String texto) ->
                             p.getNombre().toLowerCase().contains(texto)
@@ -527,13 +528,17 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         btnCancelar.addActionListener(e -> dialogo.dispose());
 
         btnGuardar.addActionListener(e -> {
-            String idPacienteSeleccionado = idPacienteActual != null
-                    ? idPacienteActual
-                    : (comboPacienteFinal.getSelectedItem() instanceof Paciente
-                            ? ((Paciente) comboPacienteFinal.getSelectedItem()).getIdPaciente() : null);
+Paciente pacienteSeleccionado = idPacienteActual != null
+        ? null
+        : obtenerSeleccionPorTexto(comboPacienteFinal, controladorPaciente.listarPacientes(),
+                (Paciente p) -> p.getIdPaciente() + " - " + p.getNombre());
+String idPacienteSeleccionado = idPacienteActual != null
+        ? idPacienteActual
+        : (pacienteSeleccionado != null ? pacienteSeleccionado.getIdPaciente() : null);
 
-            TrabajadorHospital autorSeleccionado = comboAutor.getSelectedItem() instanceof TrabajadorHospital
-                    ? (TrabajadorHospital) comboAutor.getSelectedItem() : null;
+TrabajadorHospital autorSeleccionado = obtenerSeleccionPorTexto(comboAutor,
+        controladorTrabajadores.listarTrabajadores(),
+        (TrabajadorHospital t) -> t.getIdTrabajador() + " - " + t.getNombreCompleto());
 
             String resultado = validarYGuardarRegistro(
                     idPacienteSeleccionado, autorSeleccionado,
@@ -713,6 +718,22 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         return valor;
     }
 
+// Busca en la lista real cuál elemento tiene el texto formateado EXACTAMENTE
+// igual al que está escrito en el combo. Se usa al presionar Guardar, en vez
+// de confiar en JComboBox.getSelectedItem() -- que en un combo editable puede
+// perder la selección por los propios eventos internos del componente.
+private <T> T obtenerSeleccionPorTexto(JComboBox<T> combo, List<T> listaCompleta, Function<T, String> formateador) {
+    String texto = ((JTextField) combo.getEditor().getEditorComponent()).getText().trim();
+    T encontrado = null;
+    int total = 0;
+    for (T item : listaCompleta) {
+        if (formateador.apply(item).equals(texto)) {
+            encontrado = item;
+            total++;
+        }
+    }
+    return total == 1 ? encontrado : null;
+}
     // --- 8. COMBOS BUSCABLES (autocompletado que reordena, no oculta) ---
 
     // Convierte un JComboBox en un campo editable donde, al escribir, las
@@ -769,8 +790,35 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
 
             private void reordenar() {
                 String texto = campoEditor.getText();
+                String textoTrim = texto.trim();
                 String textoLower = texto.toLowerCase();
                 int caret = campoEditor.getCaretPosition();
+
+                // Si el texto coincide EXACTAMENTE con el formato de un único elemento,
+                // es que el usuario ya completó una selección real (clic en el desplegable
+                // o Enter) -- no una escritura parcial. En ese caso fijamos esa selección
+                // de verdad y no la pisamos con setSelectedItem(null).
+                T coincidenciaExacta = null;
+                int totalExactos = 0;
+                for (T item : listaCompleta) {
+                    if (formateador.apply(item).equals(textoTrim)) {
+                        coincidenciaExacta = item;
+                        totalExactos++;
+                    }
+                }
+                if (totalExactos == 1) {
+                    T seleccion = coincidenciaExacta;
+                    actualizandoModelo[0] = true;
+                    try {
+                        combo.setSelectedItem(seleccion);
+                    } finally {
+                        actualizandoModelo[0] = false;
+                    }
+                    if (combo.isPopupVisible()) {
+                        combo.hidePopup();
+                    }
+                    return;
+                }
 
                 List<T> coincidentes = new ArrayList<>();
                 List<T> resto = new ArrayList<>();
