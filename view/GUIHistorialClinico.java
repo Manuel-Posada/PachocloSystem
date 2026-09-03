@@ -12,6 +12,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.function.Function;
 
 import controller.ControladorHistorialClinico;
 import controller.ControladorTrabajadores;
@@ -711,15 +712,24 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         if (valor < min || valor > max) return null;
         return valor;
     }
-    // Convierte un JComboBox en un campo editable que filtra sus opciones
-    // en tiempo real según lo que el usuario escribe (busca en id y nombre).
-    // Arranca vacío (sin selección) y muestra el texto formateado, no el toString() crudo.
+
+    // --- 8. COMBOS BUSCABLES (autocompletado que reordena, no oculta) ---
+
+    // Convierte un JComboBox en un campo editable donde, al escribir, las
+    // coincidencias (por id o nombre) suben al principio de la lista, sin
+    // ocultar el resto. Muestra scroll cuando hay muchos elementos (via
+    // setMaximumRowCount), y muestra el texto formateado en vez del
+    // toString() crudo del objeto.
     private <T> void configurarComboBuscable(JComboBox<T> combo, List<T> listaCompleta,
                                               BiFunction<T, String, Boolean> coincide,
                                               Function<T, String> formateador) {
-        final boolean[] actualizando = {false};
+
+        // Flag simple: solo protege al editor mientras reconstruimos el modelo,
+        // para que no se sobreescriba lo que el usuario está escribiendo.
+        final boolean[] actualizandoModelo = {false};
 
         combo.setEditable(true);
+        combo.setMaximumRowCount(6); // altura fija del desplegable -> aparece scroll con más de 6 elementos
 
         DefaultComboBoxModel<T> modeloInicial = new DefaultComboBoxModel<>();
         for (T item : listaCompleta) {
@@ -727,11 +737,10 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
         }
         combo.setModel(modeloInicial);
 
-        // Editor personalizado: en vez de mostrar item.toString(), muestra el formato bonito.
         combo.setEditor(new javax.swing.plaf.basic.BasicComboBoxEditor() {
             @Override
             public void setItem(Object item) {
-                actualizando[0] = true;
+                if (actualizandoModelo[0]) return; // no tocar el texto mientras reordenamos
                 if (item == null) {
                     editor.setText("");
                 } else {
@@ -739,40 +748,64 @@ public class GUIHistorialClinico extends JFrame implements IGUIHistorialClinico 
                     T valor = (T) item;
                     editor.setText(formateador.apply(valor));
                 }
-                actualizando[0] = false;
             }
         });
 
         JTextField campoEditor = (JTextField) combo.getEditor().getEditorComponent();
-
-        // Arranca sin ninguna selección -> campo vacío al abrir el formulario.
-        combo.setSelectedItem(null);
+        combo.setSelectedItem(null); // arranca vacío al abrir el formulario
 
         campoEditor.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            private void filtrar() {
-                if (actualizando[0]) return;
-                actualizando[0] = true;
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { programarReordenamiento(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { programarReordenamiento(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { }
 
-                String texto = campoEditor.getText();
-                int caret = campoEditor.getCaretPosition();
-
-                DefaultComboBoxModel<T> modelo = new DefaultComboBoxModel<>();
-                for (T item : listaCompleta) {
-                    if (texto.isEmpty() || coincide.apply(item, texto.toLowerCase())) {
-                        modelo.addElement(item);
-                    }
-                }
-                combo.setModel(modelo);
-                campoEditor.setText(texto);
-                campoEditor.setCaretPosition(Math.min(caret, texto.length()));
-                combo.setPopupVisible(!texto.isEmpty() && modelo.getSize() > 0);
-
-                actualizando[0] = false;
+            private void programarReordenamiento() {
+                // CLAVE: no tocamos el Document aquí mismo. Se difiere a *después*
+                // de que Swing termine de procesar la tecla actual -- eso evita el
+                // beep y hace que el filtro se recalcule bien en cada tecla,
+                // incluida borrar hasta dejarlo vacío.
+                SwingUtilities.invokeLater(this::reordenar);
             }
 
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
+            private void reordenar() {
+                String texto = campoEditor.getText();
+                String textoLower = texto.toLowerCase();
+                int caret = campoEditor.getCaretPosition();
+
+                List<T> coincidentes = new ArrayList<>();
+                List<T> resto = new ArrayList<>();
+                for (T item : listaCompleta) {
+                    if (texto.isEmpty() || coincide.apply(item, textoLower)) {
+                        coincidentes.add(item);
+                    } else {
+                        resto.add(item);
+                    }
+                }
+
+                DefaultComboBoxModel<T> modelo = new DefaultComboBoxModel<>();
+                for (T item : coincidentes) modelo.addElement(item);
+                for (T item : resto) modelo.addElement(item);
+
+                actualizandoModelo[0] = true;
+                try {
+                    combo.setModel(modelo);
+                    combo.setSelectedItem(null); // nunca "seleccionar" automático mientras el usuario escribe
+                } finally {
+                    actualizandoModelo[0] = false;
+                }
+
+                // Refrescar el popup para que se vea el nuevo orden en vivo,
+                // sin robarle el foco al campo de texto.
+                if (combo.isPopupVisible()) {
+                    combo.hidePopup();
+                    combo.showPopup();
+                } else if (!texto.isEmpty()) {
+                    combo.showPopup();
+                }
+
+                campoEditor.requestFocusInWindow();
+                campoEditor.setCaretPosition(Math.min(caret, campoEditor.getText().length()));
+            }
         });
     }
 }
