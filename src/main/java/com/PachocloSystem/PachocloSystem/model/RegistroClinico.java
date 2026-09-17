@@ -1,9 +1,7 @@
 package com.PachocloSystem.PachocloSystem.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.NotBlank;
+import lombok.*;
 
 @Data
 @NoArgsConstructor
@@ -11,7 +9,12 @@ import lombok.NoArgsConstructor;
 @Builder
 public class RegistroClinico {
 
+    @NotBlank(message = "El ID del registro es obligatorio")
     private String idRegistro;
+
+    @NotBlank(message = "La descripción no puede estar vacía")
     private String descripcion;
+
+    @NotBlank(message = "La fecha es obligatoria")
     private String fecha;
 }

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba Endpoints</title>
+</head>
+<body>
+
+    <h1>PAGINA SOLO DE PRUEBA - PRUEBA DE ENDPOINTS</h1>
+
+    <div>
+        <h3>1. Crear Paciente (POST)</h3>
+        <label>ID Paciente:</label>
+        <input type="text" id="post-id" value="PAC-001"><br>
+        <label>Nombre:</label>
+        <input type="text" id="post-nombre" value="Ana López"><br>
+        <label>Edad:</label>
+        <input type="number" id="post-edad" value="29"><br>
+        <label>Habitación:</label>
+        <input type="number" id="post-habitacion" value="102"><br>
+        <button onclick="crearPaciente()">Registrar Paciente</button>
+    </div>
+
+    <hr>
+
+    <div>
+        <h3>2. Consultas (GET)</h3>
+        <button onclick="listarPacientes()">Listar Todos los Pacientes</button>
+        <br><br>
+        <label>Buscar por ID:</label>
+        <input type="text" id="get-id" value="PAC-001">
+        <button onclick="buscarPorId()">Buscar Paciente</button>
+    </div>
+
+    <hr>
+
+    <div>
+        <h3>3. Actualizar Paciente (PUT)</h3>
+        <label>ID Paciente a modificar:</label>
+        <input type="text" id="put-id" value="PAC-001"><br>
+        <label>Nuevo Nombre:</label>
+        <input type="text" id="put-nombre" value="Ana López de Victoria"><br>
+        <label>Nueva Edad:</label>
+        <input type="number" id="put-edad" value="30"><br>
+        <label>Nueva Habitación:</label>
+        <input type="number" id="put-habitacion" value="205"><br>
+        <button onclick="actualizarPaciente()">Actualizar Paciente</button>
+    </div>
+
+    <hr>
+
+    <div>
+        <h3>4. Eliminar Paciente (DELETE)</h3>
+        <label>ID Paciente:</label>
+        <input type="text" id="delete-id" value="PAC-001"><br>
+        <button onclick="eliminarPaciente()">Eliminar Paciente</button>
+    </div>
+
+    <hr>
+
+    <div>
+        <h3>5. Agregar Historial (POST)</h3>
+        <label>ID Paciente:</label>
+        <input type="text" id="hist-idpaciente" value="PAC-001"><br>
+        <label>ID Registro:</label>
+        <input type="text" id="hist-idregistro" value="REG-101"><br>
+        <label>Descripción:</label><br>
+        <textarea id="hist-descripcion" rows="2">Paciente presenta fiebre ligera.</textarea><br>
+        <label>Fecha:</label>
+        <input type="text" id="hist-fecha" value="2026-09-17"><br>
+        <button onclick="agregarHistorial()">Añadir Registro Clínico</button>
+    </div>
+
+    <hr>
+
+    <div>
+        <strong>Resultado HTTP / JSON:</strong>
+        <pre id="output">// Esperando petición...</pre>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8080/api/v1';
+
+        function mostrarRespuesta(data) {
+            document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function crearPaciente() {
+            const body = {
+                idPaciente: document.getElementById('post-id').value,
+                nombre: document.getElementById('post-nombre').value,
+                edad: parseInt(document.getElementById('post-edad').value),
+                habitacion: parseInt(document.getElementById('post-habitacion').value)
+            };
+            const res = await fetch(`${API_URL}/pacientes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            mostrarRespuesta(await res.json());
+        }
+
+        async function listarPacientes() {
+            const res = await fetch(`${API_URL}/pacientes`);
+            mostrarRespuesta(await res.json());
+        }
+
+        async function buscarPorId() {
+            const id = document.getElementById('get-id').value;
+            const res = await fetch(`${API_URL}/pacientes/${id}`);
+            mostrarRespuesta(await res.json());
+        }
+
+        async function actualizarPaciente() {
+            const id = document.getElementById('put-id').value;
+            const body = {
+                idPaciente: id,
+                nombre: document.getElementById('put-nombre').value,
+                edad: parseInt(document.getElementById('put-edad').value),
+                habitacion: parseInt(document.getElementById('put-habitacion').value)
+            };
+            const res = await fetch(`${API_URL}/pacientes/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            mostrarRespuesta(await res.json());
+        }
+
+        async function eliminarPaciente() {
+            const id = document.getElementById('delete-id').value;
+            const res = await fetch(`${API_URL}/pacientes/${id}`, { method: 'DELETE' });
+            if (res.status === 204) {
+                mostrarRespuesta({ mensaje: `Paciente ${id} eliminado con éxito (HTTP 204).` });
+            } else {
+                mostrarRespuesta(await res.json());
+            }
+        }
+
+        async function agregarHistorial() {
+            const idPaciente = document.getElementById('hist-idpaciente').value;
+            const body = {
+                idRegistro: document.getElementById('hist-idregistro').value,
+                descripcion: document.getElementById('hist-descripcion').value,
+                fecha: document.getElementById('hist-fecha').value
+            };
+            const res = await fetch(`${API_URL}/historial/${idPaciente}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            mostrarRespuesta(await res.json());
+        }
+    </script>
+</body>
+</html>
