@@ -1,14 +1,17 @@
 package com.pachoclosystem.pachoclosystem.service;
 
 import com.pachoclosystem.pachoclosystem.dto.RegistroResponse;
+import com.pachoclosystem.pachoclosystem.dto.SignosVitalesRequest;
 import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
 import com.pachoclosystem.pachoclosystem.model.Doctor;
 import com.pachoclosystem.pachoclosystem.model.Enfermero;
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
 import com.pachoclosystem.pachoclosystem.model.Paciente;
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
+import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryImpl;
 import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
 import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
@@ -212,9 +215,11 @@ class TrabajadorServiceTest {
         HistorialClinicoService historial = new HistorialClinicoService(
                 repositorioPacientes, repositorio);
 
+        Usuario autor = new Usuario("USR-0001", "enfermero.prueba", "hash-de-prueba",
+                Rol.ENFERMERO, enfermero.getIdTrabajador());
         RegistroResponse registro = historial.agregarRegistroPaciente(
-                paciente.getIdPaciente(), enfermero.getIdTrabajador(),
-                TipoRegistro.EVOLUCION, "Evolucion de Ana", null);
+                paciente.getIdPaciente(), autor, TipoRegistro.SIGNOS_VITALES, null,
+                new SignosVitalesRequest(36.5, 80, 120, 80, 16, 98, null));
 
         servicio.eliminarTrabajador(enfermero.getIdTrabajador());
 

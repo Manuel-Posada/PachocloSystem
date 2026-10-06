@@ -6,10 +6,13 @@ import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
 import com.pachoclosystem.pachoclosystem.model.Paciente;
 import com.pachoclosystem.pachoclosystem.model.RegistroClinico;
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
+import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.IPacienteRepository;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -32,14 +35,26 @@ public class HistorialClinicoService {
         this.repositorioTrabajadores = repositorioTrabajadores;
     }
 
-    public RegistroResponse agregarRegistroPaciente(String idPaciente, String idAutor, TipoRegistro tipo,
+    /**
+     * Agrega un registro clínico a un paciente. El autor es el usuario
+     * autenticado (nunca un dato del cuerpo). Un ENFERMERO solo puede registrar
+     * {@code SIGNOS_VITALES}; para el resto de tipos recibe 403, y esa
+     * comprobación precede a la validación del contenido y a la búsqueda del
+     * paciente.
+     */
+    public RegistroResponse agregarRegistroPaciente(String idPaciente, Usuario usuarioAutor, TipoRegistro tipo,
                                                     String contenido, SignosVitalesRequest signos) {
+        if (usuarioAutor.getRol() == Rol.ENFERMERO && tipo != TipoRegistro.SIGNOS_VITALES) {
+            throw new AccessDeniedException("No tiene permisos para realizar esta operación.");
+        }
+
         String contenidoFinal = construirContenido(tipo, contenido, signos);
 
         Paciente paciente = buscarPacienteActivo(idPaciente);
-        TrabajadorHospital autor = repositorioTrabajadores.buscarPorId(idAutor);
+        TrabajadorHospital autor = repositorioTrabajadores.buscarPorId(usuarioAutor.getIdTrabajador());
         if (autor == null) {
-            throw new NotFoundException("No se encontró un trabajador con el ID " + idAutor + ".");
+            throw new NotFoundException(
+                    "No se encontró un trabajador con el ID " + usuarioAutor.getIdTrabajador() + ".");
         }
 
         RegistroClinico registro = new RegistroClinico(tipo, contenidoFinal, autor);

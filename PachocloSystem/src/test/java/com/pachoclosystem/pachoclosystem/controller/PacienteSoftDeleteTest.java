@@ -88,10 +88,10 @@ class PacienteSoftDeleteTest extends MockMvcBaseTest {
         String activo = registrarPaciente("Ana Torres", 30, 101);
         String dadoDeBaja = registrarPaciente("Bruno Diaz", 45, 202);
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
-        registrarRegistro(dadoDeBaja, """
-                {"tipo":"DIAGNOSTICO","idAutor":"%s","contenido":"Cuadro inicial"}""".formatted(doctor));
-        registrarRegistro(activo, """
-                {"tipo":"DIAGNOSTICO","idAutor":"%s","contenido":"Hipertension leve"}""".formatted(doctor));
+        registrarRegistro(dadoDeBaja, Rol.DOCTOR, doctor,
+                "{\"tipo\":\"DIAGNOSTICO\",\"contenido\":\"Cuadro inicial\"}");
+        registrarRegistro(activo, Rol.DOCTOR, doctor,
+                "{\"tipo\":\"DIAGNOSTICO\",\"contenido\":\"Hipertension leve\"}");
 
         perform(delete("/api/pacientes/{id}", dadoDeBaja)).andExpect(status().isNoContent());
 

@@ -2,9 +2,12 @@ package com.pachoclosystem.pachoclosystem.controller;
 
 import com.pachoclosystem.pachoclosystem.dto.RegistroRequest;
 import com.pachoclosystem.pachoclosystem.dto.RegistroResponse;
+import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.service.HistorialClinicoService;
+import com.pachoclosystem.pachoclosystem.service.UsuarioService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,9 +21,11 @@ import java.util.List;
 public class HistorialClinicoController {
 
     private final HistorialClinicoService servicio;
+    private final UsuarioService usuarioService;
 
-    public HistorialClinicoController(HistorialClinicoService servicio) {
+    public HistorialClinicoController(HistorialClinicoService servicio, UsuarioService usuarioService) {
         this.servicio = servicio;
+        this.usuarioService = usuarioService;
     }
 
     /** Historial general; filtro: todos (por defecto) | paciente | autor. */
@@ -38,9 +43,13 @@ public class HistorialClinicoController {
 
     @PostMapping("/api/pacientes/{id}/historial")
     public ResponseEntity<RegistroResponse> agregarRegistro(@PathVariable String id,
+                                                            Authentication autenticacion,
                                                             @Valid @RequestBody RegistroRequest request) {
+        // El autor es el usuario autenticado: se relee del repositorio por su
+        // username (igual que /api/auth/me), nunca del cuerpo ni del token.
+        Usuario autor = usuarioService.buscarPorUsername(autenticacion.getName());
         RegistroResponse creado = servicio.agregarRegistroPaciente(
-                id, request.idAutor(), request.tipo(), request.contenido(), request.signosVitales());
+                id, autor, request.tipo(), request.contenido(), request.signosVitales());
         return ResponseEntity.status(201).body(creado);
     }
 }

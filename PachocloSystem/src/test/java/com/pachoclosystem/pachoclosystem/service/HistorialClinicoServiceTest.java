@@ -7,15 +7,19 @@ import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
 import com.pachoclosystem.pachoclosystem.model.Enfermero;
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
 import com.pachoclosystem.pachoclosystem.model.Paciente;
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
+import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryImpl;
 import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
 import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -51,6 +55,23 @@ class HistorialClinicoServiceTest {
                 nombre, "Enfermero", null, NivelExperiencia.AVANZADO);
     }
 
+    /** Usuario autenticado vinculado al trabajador; el servicio toma de él el autor real del registro. */
+    private Usuario autor(TrabajadorHospital trabajador, Rol rol) {
+        return new Usuario("USR-" + trabajador.getIdTrabajador(),
+                "usuario." + trabajador.getIdTrabajador().toLowerCase(Locale.ROOT),
+                "hash-de-prueba", rol, trabajador.getIdTrabajador());
+    }
+
+    /** Usuario cuyo trabajador vinculado no existe. */
+    private Usuario usuarioConTrabajadorInexistente() {
+        return new Usuario("USR-0000", "usuario.inexistente", "hash-de-prueba", Rol.DOCTOR, "DOC-9999");
+    }
+
+    /** Signos vitales válidos, el único tipo que puede registrar un ENFERMERO. */
+    private SignosVitalesRequest signosValidos() {
+        return new SignosVitalesRequest(36.5, 80, 120, 80, 16, 98, null);
+    }
+
     /** Espera para que dos registros consecutivos tengan fechas distintas (resolución en ms). */
     private static void dormir(long milisegundos) {
         try {
@@ -67,7 +88,7 @@ class HistorialClinicoServiceTest {
         TrabajadorHospital d = doctor("Carlos Mena");
 
         RegistroResponse registro = servicio.agregarRegistroPaciente(
-                p.getIdPaciente(), d.getIdTrabajador(), TipoRegistro.DIAGNOSTICO,
+                p.getIdPaciente(), autor(d, Rol.DOCTOR), TipoRegistro.DIAGNOSTICO,
                 "Hipertension leve", null);
 
         assertThat(registro.idRegistro()).isNotBlank();
@@ -89,7 +110,7 @@ class HistorialClinicoServiceTest {
         SignosVitalesRequest signos = new SignosVitalesRequest(36.5, 80, 120, 80, 16, 98, null);
 
         RegistroResponse registro = servicio.agregarRegistroPaciente(
-                p.getIdPaciente(), e.getIdTrabajador(), TipoRegistro.SIGNOS_VITALES, null, signos);
+                p.getIdPaciente(), autor(e, Rol.ENFERMERO), TipoRegistro.SIGNOS_VITALES, null, signos);
 
         assertThat(registro.contenido()).isEqualTo(
                 "Signos vitales - Temp: 36.5°C | FC: 80 lpm | PA: 120/80 mmHg"
@@ -105,7 +126,7 @@ class HistorialClinicoServiceTest {
                 "  paciente estable  ");
 
         RegistroResponse registro = servicio.agregarRegistroPaciente(
-                p.getIdPaciente(), e.getIdTrabajador(), TipoRegistro.SIGNOS_VITALES, null, signos);
+                p.getIdPaciente(), autor(e, Rol.ENFERMERO), TipoRegistro.SIGNOS_VITALES, null, signos);
 
         assertThat(registro.contenido()).isEqualTo(
                 "Signos vitales - Temp: 37.2°C | FC: 72 lpm | PA: 118/76 mmHg"
@@ -119,7 +140,7 @@ class HistorialClinicoServiceTest {
 
         assertThatExceptionOfType(SolicitudInvalidaException.class)
                 .isThrownBy(() -> servicio.agregarRegistroPaciente(
-                        p.getIdPaciente(), e.getIdTrabajador(), TipoRegistro.SIGNOS_VITALES, null, null))
+                        p.getIdPaciente(), autor(e, Rol.ENFERMERO), TipoRegistro.SIGNOS_VITALES, null, null))
                 .withMessage("Los signos vitales son obligatorios para este tipo de registro.");
     }
 
@@ -131,7 +152,7 @@ class HistorialClinicoServiceTest {
 
         assertThatExceptionOfType(SolicitudInvalidaException.class)
                 .isThrownBy(() -> servicio.agregarRegistroPaciente(
-                        p.getIdPaciente(), e.getIdTrabajador(), TipoRegistro.SIGNOS_VITALES, null, signos))
+                        p.getIdPaciente(), autor(e, Rol.ENFERMERO), TipoRegistro.SIGNOS_VITALES, null, signos))
                 .withMessage("La presión diastólica debe ser menor que la sistólica.");
     }
 
@@ -143,7 +164,7 @@ class HistorialClinicoServiceTest {
 
         assertThatExceptionOfType(SolicitudInvalidaException.class)
                 .isThrownBy(() -> servicio.agregarRegistroPaciente(
-                        p.getIdPaciente(), e.getIdTrabajador(), TipoRegistro.SIGNOS_VITALES, null, signos))
+                        p.getIdPaciente(), autor(e, Rol.ENFERMERO), TipoRegistro.SIGNOS_VITALES, null, signos))
                 .withMessage("Las observaciones no pueden ser solo números.");
     }
 
@@ -155,7 +176,7 @@ class HistorialClinicoServiceTest {
 
         assertThatExceptionOfType(SolicitudInvalidaException.class)
                 .isThrownBy(() -> servicio.agregarRegistroPaciente(
-                        p.getIdPaciente(), e.getIdTrabajador(), TipoRegistro.SIGNOS_VITALES, null, signos))
+                        p.getIdPaciente(), autor(e, Rol.ENFERMERO), TipoRegistro.SIGNOS_VITALES, null, signos))
                 .satisfies(excepcion -> assertThat(excepcion.getErrores()).containsExactly(
                         "La presión diastólica debe ser menor que la sistólica.",
                         "Las observaciones no pueden ser solo números."));
@@ -168,7 +189,7 @@ class HistorialClinicoServiceTest {
 
         assertThatExceptionOfType(SolicitudInvalidaException.class)
                 .isThrownBy(() -> servicio.agregarRegistroPaciente(
-                        p.getIdPaciente(), d.getIdTrabajador(), TipoRegistro.EVOLUCION, "   ", null))
+                        p.getIdPaciente(), autor(d, Rol.DOCTOR), TipoRegistro.EVOLUCION, "   ", null))
                 .withMessage("El contenido no puede estar vacío.");
     }
 
@@ -179,7 +200,7 @@ class HistorialClinicoServiceTest {
 
         assertThatExceptionOfType(SolicitudInvalidaException.class)
                 .isThrownBy(() -> servicio.agregarRegistroPaciente(
-                        p.getIdPaciente(), d.getIdTrabajador(), TipoRegistro.EVOLUCION, "abc", null))
+                        p.getIdPaciente(), autor(d, Rol.DOCTOR), TipoRegistro.EVOLUCION, "abc", null))
                 .withMessage("El contenido es demasiado corto (mínimo 5 caracteres).");
     }
 
@@ -190,7 +211,7 @@ class HistorialClinicoServiceTest {
 
         assertThatExceptionOfType(SolicitudInvalidaException.class)
                 .isThrownBy(() -> servicio.agregarRegistroPaciente(
-                        p.getIdPaciente(), d.getIdTrabajador(), TipoRegistro.EVOLUCION,
+                        p.getIdPaciente(), autor(d, Rol.DOCTOR), TipoRegistro.EVOLUCION,
                         "12345678", null))
                 .withMessage("El contenido debe incluir texto descriptivo, no solo números.");
     }
@@ -201,7 +222,7 @@ class HistorialClinicoServiceTest {
         TrabajadorHospital d = doctor("Carlos Mena");
 
         RegistroResponse registro = servicio.agregarRegistroPaciente(
-                p.getIdPaciente(), d.getIdTrabajador(), TipoRegistro.EVOLUCION,
+                p.getIdPaciente(), autor(d, Rol.DOCTOR), TipoRegistro.EVOLUCION,
                 "   Evolucion favorable   ", null);
 
         assertThat(registro.contenido()).isEqualTo("Evolucion favorable");
@@ -213,7 +234,7 @@ class HistorialClinicoServiceTest {
 
         assertThatExceptionOfType(NotFoundException.class)
                 .isThrownBy(() -> servicio.agregarRegistroPaciente(
-                        "PAC-9999", d.getIdTrabajador(), TipoRegistro.DIAGNOSTICO,
+                        "PAC-9999", autor(d, Rol.DOCTOR), TipoRegistro.DIAGNOSTICO,
                         "Hipertension leve", null))
                 .withMessage("No se encontró el paciente PAC-9999.");
     }
@@ -224,7 +245,7 @@ class HistorialClinicoServiceTest {
 
         assertThatExceptionOfType(NotFoundException.class)
                 .isThrownBy(() -> servicio.agregarRegistroPaciente(
-                        p.getIdPaciente(), "DOC-9999", TipoRegistro.DIAGNOSTICO,
+                        p.getIdPaciente(), usuarioConTrabajadorInexistente(), TipoRegistro.DIAGNOSTICO,
                         "Hipertension leve", null))
                 .withMessage("No se encontró un trabajador con el ID DOC-9999.");
     }
@@ -237,10 +258,31 @@ class HistorialClinicoServiceTest {
     }
 
     @Test
+    void elEnfermeroNoPuedeRegistrarTiposDistintosDeSignosVitales() {
+        Paciente p = paciente("Ana Torres");
+        Enfermero e = enfermero("Maria Lopez");
+
+        assertThatExceptionOfType(AccessDeniedException.class)
+                .isThrownBy(() -> servicio.agregarRegistroPaciente(
+                        p.getIdPaciente(), autor(e, Rol.ENFERMERO), TipoRegistro.DIAGNOSTICO,
+                        "Hipertension leve", null));
+    }
+
+    @Test
+    void el403DelEnfermeroPrecedeALaValidacionYAlaBusquedaDelPaciente() {
+        Enfermero e = enfermero("Maria Lopez");
+
+        // Paciente inexistente y contenido vacío: aun así, 403.
+        assertThatExceptionOfType(AccessDeniedException.class)
+                .isThrownBy(() -> servicio.agregarRegistroPaciente(
+                        "PAC-9999", autor(e, Rol.ENFERMERO), TipoRegistro.EVOLUCION, "   ", null));
+    }
+
+    @Test
     void historialDePacienteDadoDeBajaLanzaNotFoundYNoAdmiteNuevosRegistros() {
         Paciente p = paciente("Ana Torres");
         TrabajadorHospital d = doctor("Carlos Mena");
-        servicio.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(),
+        servicio.agregarRegistroPaciente(p.getIdPaciente(), autor(d, Rol.DOCTOR),
                 TipoRegistro.DIAGNOSTICO, "Hipertension leve", null);
         servicioPacientes.eliminarPaciente(p.getIdPaciente());
 
@@ -248,7 +290,7 @@ class HistorialClinicoServiceTest {
                 .isThrownBy(() -> servicio.obtenerRegistrosPorPaciente(p.getIdPaciente(), null))
                 .withMessage("No se encontró el paciente " + p.getIdPaciente() + ".");
         assertThatExceptionOfType(NotFoundException.class)
-                .isThrownBy(() -> servicio.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(),
+                .isThrownBy(() -> servicio.agregarRegistroPaciente(p.getIdPaciente(), autor(d, Rol.DOCTOR),
                         TipoRegistro.DIAGNOSTICO, "Otra observacion", null))
                 .withMessage("No se encontró el paciente " + p.getIdPaciente() + ".");
     }
@@ -258,9 +300,9 @@ class HistorialClinicoServiceTest {
         Paciente activo = paciente("Ana Torres");
         Paciente dadoDeBaja = paciente("Bruno Diaz");
         TrabajadorHospital d = doctor("Carlos Mena");
-        servicio.agregarRegistroPaciente(activo.getIdPaciente(), d.getIdTrabajador(),
+        servicio.agregarRegistroPaciente(activo.getIdPaciente(), autor(d, Rol.DOCTOR),
                 TipoRegistro.DIAGNOSTICO, "Diagnostico de Ana", null);
-        servicio.agregarRegistroPaciente(dadoDeBaja.getIdPaciente(), d.getIdTrabajador(),
+        servicio.agregarRegistroPaciente(dadoDeBaja.getIdPaciente(), autor(d, Rol.DOCTOR),
                 TipoRegistro.EVOLUCION, "Evolucion de Bruno", null);
         servicioPacientes.eliminarPaciente(dadoDeBaja.getIdPaciente());
 
@@ -286,13 +328,13 @@ class HistorialClinicoServiceTest {
         // El registro de Bruno se crea primero: si no se ordenara por fecha,
         // el de Ana (paciente insertado antes) aparecería en primer lugar.
         RegistroResponse registroB = servicio.agregarRegistroPaciente(
-                b.getIdPaciente(), e.getIdTrabajador(), TipoRegistro.EVOLUCION,
-                "Evolucion de Bruno", null);
+                b.getIdPaciente(), autor(e, Rol.ENFERMERO), TipoRegistro.SIGNOS_VITALES,
+                null, signosValidos());
         // LocalDateTime.now() tiene resolución de milisegundos: se separan ambas
         // fechas para que el orden cronológico sea comprobable de forma estable.
         dormir(20);
         RegistroResponse registroA = servicio.agregarRegistroPaciente(
-                a.getIdPaciente(), d.getIdTrabajador(), TipoRegistro.DIAGNOSTICO,
+                a.getIdPaciente(), autor(d, Rol.DOCTOR), TipoRegistro.DIAGNOSTICO,
                 "Diagnostico de Ana", null);
 
         List<RegistroResponse> historial = servicio.obtenerTodosLosRegistros("todos", null);
@@ -307,10 +349,10 @@ class HistorialClinicoServiceTest {
         Paciente b = paciente("Bruno Diaz");
         TrabajadorHospital d = doctor("Carlos Mena");
         TrabajadorHospital e = enfermero("Maria Lopez");
-        servicio.agregarRegistroPaciente(a.getIdPaciente(), d.getIdTrabajador(),
+        servicio.agregarRegistroPaciente(a.getIdPaciente(), autor(d, Rol.DOCTOR),
                 TipoRegistro.DIAGNOSTICO, "Diagnostico de Ana", null);
-        servicio.agregarRegistroPaciente(b.getIdPaciente(), e.getIdTrabajador(),
-                TipoRegistro.EVOLUCION, "Evolucion de Bruno", null);
+        servicio.agregarRegistroPaciente(b.getIdPaciente(), autor(e, Rol.ENFERMERO),
+                TipoRegistro.SIGNOS_VITALES, null, signosValidos());
 
         List<RegistroResponse> porPaciente = servicio.obtenerTodosLosRegistros("paciente", "ana");
         assertThat(porPaciente).hasSize(1);
@@ -333,24 +375,25 @@ class HistorialClinicoServiceTest {
         Paciente a = paciente("Ana Torres");
         TrabajadorHospital d = doctor("Carlos Mena");
         TrabajadorHospital e = enfermero("Maria Lopez");
-        servicio.agregarRegistroPaciente(a.getIdPaciente(), d.getIdTrabajador(),
+        servicio.agregarRegistroPaciente(a.getIdPaciente(), autor(d, Rol.DOCTOR),
                 TipoRegistro.DIAGNOSTICO, "Diagnostico de Ana", null);
-        servicio.agregarRegistroPaciente(a.getIdPaciente(), e.getIdTrabajador(),
-                TipoRegistro.EVOLUCION, "Evolucion de Ana", null);
+        servicio.agregarRegistroPaciente(a.getIdPaciente(), autor(e, Rol.ENFERMERO),
+                TipoRegistro.SIGNOS_VITALES, null, signosValidos());
 
         List<RegistroResponse> filtrados = servicio.obtenerRegistrosPorPaciente(
                 a.getIdPaciente(), "maria");
 
         assertThat(filtrados).hasSize(1);
-        assertThat(filtrados.get(0).contenido()).isEqualTo("Evolucion de Ana");
+        // El enfermero solo puede registrar SIGNOS_VITALES; se comprueba el autor.
+        assertThat(filtrados.get(0).autor().nombreCompleto()).isEqualTo("Maria Lopez");
     }
 
     @Test
     void eliminarAlAutorNoBorraLosRegistrosYaEscritos() {
         Paciente p = paciente("Ana Torres");
         Enfermero e = enfermero("Maria Lopez");
-        servicio.agregarRegistroPaciente(p.getIdPaciente(), e.getIdTrabajador(),
-                TipoRegistro.EVOLUCION, "Evolucion de Ana", null);
+        servicio.agregarRegistroPaciente(p.getIdPaciente(), autor(e, Rol.ENFERMERO),
+                TipoRegistro.SIGNOS_VITALES, null, signosValidos());
 
         servicioTrabajadores.eliminarTrabajador(e.getIdTrabajador());
 

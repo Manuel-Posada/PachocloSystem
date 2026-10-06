@@ -1,7 +1,6 @@
 package com.pachoclosystem.pachoclosystem.controller;
 
 import com.jayway.jsonpath.JsonPath;
-import com.pachoclosystem.pachoclosystem.model.Enfermero;
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
 import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
@@ -204,14 +203,11 @@ public abstract class MockMvcBaseTest {
 
     /**
      * Agrega un registro al historial de un paciente y devuelve su ID. La
-     * petición se autentica con un token real del trabajador autor indicado en
-     * el cuerpo ({@code idAutor}), de modo que el rol de la ruta coincide con el
-     * autor del registro.
+     * petición se autentica con un token real del trabajador autor, que es el
+     * autor que el servicio toma del usuario autenticado (el cuerpo ya no lleva
+     * {@code idAutor}).
      */
-    protected String registrarRegistro(String idPaciente, String cuerpo) throws Exception {
-        String idAutor = JsonPath.read(cuerpo, "$.idAutor");
-        boolean esEnfermero = repositorioTrabajadores.buscarPorId(idAutor) instanceof Enfermero;
-        Rol rol = esEnfermero ? Rol.ENFERMERO : Rol.DOCTOR;
+    protected String registrarRegistro(String idPaciente, Rol rol, String idAutor, String cuerpo) throws Exception {
         MvcResult resultado = performConToken(tokenDeTrabajador(rol, idAutor),
                 post("/api/pacientes/{id}/historial", idPaciente)
                         .contentType(MediaType.APPLICATION_JSON)
