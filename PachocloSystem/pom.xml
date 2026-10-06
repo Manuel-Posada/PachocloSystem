@@ -9,9 +9,9 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.pachoclosystem</groupId>
-	<artifactId>demo</artifactId>
+	<artifactId>pachoclosystem</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>demo</name>
+	<name>PachocloSystem</name>
 	<description>API REST hospitalaria (pacientes, trabajadores e historial clínico) con persistencia en memoria</description>
 	<properties>
 		<java.version>25</java.version>

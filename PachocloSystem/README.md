@@ -27,7 +27,7 @@ La API queda en `http://localhost:8080`. Otros comandos útiles:
 ## Estructura
 
 ```
-src/main/java/com/pachoclosystem/demo/
+src/main/java/com/pachoclosystem/pachoclosystem/
 ├── controller/   endpoints REST
 ├── service/      lógica de negocio y validaciones
 ├── repository/   almacenamiento en memoria
