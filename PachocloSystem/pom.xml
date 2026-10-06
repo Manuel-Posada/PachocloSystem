@@ -38,10 +38,24 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- Solo crypto (BCrypt); sin starter de seguridad: los endpoints siguen abiertos -->
+		<!-- Seguridad web + OAuth2 resource server (Nimbus JWT): la API pasa a
+		     exigir un token JWT bearer (HS256) salvo en POST /api/auth/login. -->
 		<dependency>
-			<groupId>org.springframework.security</groupId>
-			<artifactId>spring-security-crypto</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+
+		<!-- Soporte de pruebas de seguridad (MockMvc con seguridad). El hash de
+		     contraseñas (spring-security-crypto / BCrypt) llega arrastrado por el
+		     starter de seguridad: ya no hace falta declararlo aparte. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 

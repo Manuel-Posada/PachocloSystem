@@ -23,7 +23,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void listarSinTrabajadoresDevuelve200YListaVacia() throws Exception {
-        mockMvc.perform(get("/api/trabajadores"))
+        perform(get("/api/trabajadores"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$", hasSize(0)));
@@ -31,7 +31,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarDoctorDevuelve201ConIdPrefijadoDoc() throws Exception {
-        MvcResult resultado = mockMvc.perform(post("/api/trabajadores")
+        MvcResult resultado = perform(post("/api/trabajadores")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Carlos Mena","rol":"Doctor","especialidad":"Cardiologia"}"""))
@@ -49,7 +49,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarEnfermeroDevuelve201ConIdPrefijadoEnf() throws Exception {
-        MvcResult resultado = mockMvc.perform(post("/api/trabajadores")
+        MvcResult resultado = perform(post("/api/trabajadores")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Maria Lopez","rol":"Enfermero","nivelExperiencia":"AVANZADO"}"""))
@@ -70,17 +70,17 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
         registrarDoctor("Carlos Mena", "Cardiologia");
         registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
 
-        mockMvc.perform(get("/api/trabajadores").param("q", "carlos"))
+        perform(get("/api/trabajadores").param("q", "carlos"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].nombreCompleto").value("Carlos Mena"));
 
-        mockMvc.perform(get("/api/trabajadores").param("q", "ENF-"))
+        perform(get("/api/trabajadores").param("q", "ENF-"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].rol").value("Enfermero"));
 
-        mockMvc.perform(get("/api/trabajadores").param("q", "zzz"))
+        perform(get("/api/trabajadores").param("q", "zzz"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
     }
@@ -89,7 +89,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
     void obtenerTrabajadorPorIdDevuelve200() throws Exception {
         String id = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        mockMvc.perform(get("/api/trabajadores/{id}", id))
+        perform(get("/api/trabajadores/{id}", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idTrabajador").value(id))
                 .andExpect(jsonPath("$.nombreCompleto").value("Carlos Mena"))
@@ -101,7 +101,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
     void editarDoctorDevuelve200ConDatosActualizados() throws Exception {
         String id = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        mockMvc.perform(put("/api/trabajadores/{id}", id)
+        perform(put("/api/trabajadores/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Carlos Alberto Mena","rol":"Doctor","especialidad":"Neurologia"}"""))
@@ -116,17 +116,17 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
     void eliminarTrabajadorDevuelve204YDespuesDevuelve404() throws Exception {
         String id = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
 
-        mockMvc.perform(delete("/api/trabajadores/{id}", id))
+        perform(delete("/api/trabajadores/{id}", id))
                 .andExpect(status().isNoContent())
                 .andExpect(content().string(""));
 
-        mockMvc.perform(get("/api/trabajadores/{id}", id))
+        perform(get("/api/trabajadores/{id}", id))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void obtenerTrabajadorInexistenteDevuelve404ConErrorResponse() throws Exception {
-        mockMvc.perform(get("/api/trabajadores/{id}", "DOC-9999"))
+        perform(get("/api/trabajadores/{id}", "DOC-9999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.error").value("Not Found"))
@@ -136,7 +136,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void editarTrabajadorInexistenteDevuelve404ConErrorResponse() throws Exception {
-        mockMvc.perform(put("/api/trabajadores/{id}", "DOC-9999")
+        perform(put("/api/trabajadores/{id}", "DOC-9999")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Carlos Mena","rol":"Doctor","especialidad":"Cardiologia"}"""))
@@ -148,7 +148,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void eliminarTrabajadorInexistenteDevuelve404ConErrorResponse() throws Exception {
-        mockMvc.perform(delete("/api/trabajadores/{id}", "ENF-9999"))
+        perform(delete("/api/trabajadores/{id}", "ENF-9999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.error").value("Not Found"))
@@ -157,7 +157,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarTrabajadorConRolInvalidoDevuelve400() throws Exception {
-        mockMvc.perform(post("/api/trabajadores")
+        perform(post("/api/trabajadores")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Carlos Mena","rol":"Medico"}"""))
@@ -170,7 +170,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarTrabajadorConNombreInvalidoDevuelve400() throws Exception {
-        mockMvc.perform(post("/api/trabajadores")
+        perform(post("/api/trabajadores")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"12345","rol":"Doctor","especialidad":"Cardiologia"}"""))
@@ -182,7 +182,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarDoctorSinEspecialidadDevuelve400() throws Exception {
-        mockMvc.perform(post("/api/trabajadores")
+        perform(post("/api/trabajadores")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Carlos Mena","rol":"Doctor"}"""))
@@ -193,7 +193,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarDoctorConEspecialidadCortaDevuelve400() throws Exception {
-        mockMvc.perform(post("/api/trabajadores")
+        perform(post("/api/trabajadores")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Carlos Mena","rol":"Doctor","especialidad":"12"}"""))
@@ -205,7 +205,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarDoctorConEspecialidadSoloNumerosDevuelve400() throws Exception {
-        mockMvc.perform(post("/api/trabajadores")
+        perform(post("/api/trabajadores")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Carlos Mena","rol":"Doctor","especialidad":"12345678"}"""))
@@ -217,7 +217,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarEnfermeroSinNivelDeExperienciaDevuelve400() throws Exception {
-        mockMvc.perform(post("/api/trabajadores")
+        perform(post("/api/trabajadores")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Maria Lopez","rol":"Enfermero"}"""))
@@ -230,7 +230,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
     void editarTrabajadorNoPermiteCambiarElRolDevuelve400() throws Exception {
         String id = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        mockMvc.perform(put("/api/trabajadores/{id}", id)
+        perform(put("/api/trabajadores/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Carlos Mena","rol":"Enfermero","nivelExperiencia":"NOVATO"}"""))
@@ -244,7 +244,7 @@ class TrabajadorControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarTrabajadorSinCamposObligatoriosDevuelve400ConMensajesOrdenados() throws Exception {
-        mockMvc.perform(post("/api/trabajadores")
+        perform(post("/api/trabajadores")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())

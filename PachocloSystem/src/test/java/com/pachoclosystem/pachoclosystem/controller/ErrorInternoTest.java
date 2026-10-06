@@ -48,7 +48,7 @@ class ErrorInternoTest extends MockMvcBaseTest {
 
     @Test
     void errorInesperadoDevuelve500GenericoSinDetallesEnLaRespuesta() throws Exception {
-        mockMvc.perform(get("/test/exploto"))
+        perform(get("/test/exploto"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.error").value("Internal Server Error"))
