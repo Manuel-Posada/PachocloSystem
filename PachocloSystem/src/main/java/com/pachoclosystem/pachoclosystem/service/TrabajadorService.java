@@ -6,7 +6,10 @@ import com.pachoclosystem.pachoclosystem.model.Doctor;
 import com.pachoclosystem.pachoclosystem.model.Enfermero;
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
+import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
+import com.pachoclosystem.pachoclosystem.repository.IUsuarioRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -21,8 +24,22 @@ public class TrabajadorService {
 
     private final ITrabajadoresRepository repositorio;
 
+    /**
+     * Repositorio de usuarios para la cascada de desactivación. Se inyecta por
+     * setter (no por constructor) para no acoplar {@link TrabajadorService} con
+     * {@link UsuarioService} (el servicio de usuarios ya depende de este
+     * servicio) y para conservar el constructor de un solo argumento que usan
+     * los tests unitarios; Spring inyecta el repositorio en la aplicación.
+     */
+    private IUsuarioRepository usuarioRepository;
+
     public TrabajadorService(ITrabajadoresRepository repositorio) {
         this.repositorio = repositorio;
+    }
+
+    @Autowired
+    public void setUsuarioRepository(IUsuarioRepository usuarioRepository) {
+        this.usuarioRepository = usuarioRepository;
     }
 
     // El servicio genera el ID (con prefijo según el rol) y construye el objeto correcto.
@@ -65,6 +82,26 @@ public class TrabajadorService {
     public void eliminarTrabajador(String id) {
         if (!repositorio.eliminarTrabajador(id)) {
             throw noEncontrado(id);
+        }
+        desactivarUsuarioVinculado(id);
+    }
+
+    /**
+     * Cascada de desactivación: al eliminar un trabajador, su usuario
+     * vinculado (si lo tiene) queda {@code activo=false} para que sus tokens
+     * dejen de ser válidos. Si el trabajador no tiene usuario, no se toca nada.
+     */
+    private void desactivarUsuarioVinculado(String idTrabajador) {
+        if (usuarioRepository == null) {
+            // Construcción unitaria sin Spring (tests): sin repositorio de
+            // usuarios no hay cascada que aplicar.
+            return;
+        }
+        Usuario usuario = usuarioRepository.buscarPorIdTrabajador(idTrabajador);
+        if (usuario != null) {
+            // desactivar() es idempotente; el objeto vive en el mapa del
+            // repositorio, así que la desactivación queda persistida en memoria.
+            usuario.desactivar();
         }
     }
 
