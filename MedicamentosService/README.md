@@ -153,9 +153,13 @@ reenvía las llamadas aquí. Para que nadie se salte esa puerta, se puede exigir
 - Defensa adicional opcional: `server.address=127.0.0.1` para que solo acepte conexiones locales.
 
 ```bash
-MEDICAMENTOS_API_KEY=clave-local-123 ./mvnw spring-boot:run
-curl localhost:8081/api/medicamentos -H "X-Api-Key: clave-local-123"
+MEDICAMENTOS_API_KEY=<clave-del-servicio> ./mvnw spring-boot:run
+curl localhost:8081/api/medicamentos -H "X-Api-Key: <clave-del-servicio>"
 ```
+
+> `<clave-del-servicio>` es un marcador: sustitúyalo por su propia clave. Este ejemplo es solo para
+> desarrollo; en producción no use valores de ejemplo, genere una clave propia y no la guarde en el
+> repositorio.
 
 ## Errores
 
