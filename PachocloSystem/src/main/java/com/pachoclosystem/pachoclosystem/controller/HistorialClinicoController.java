@@ -40,7 +40,8 @@ public class HistorialClinicoController {
     public ResponseEntity<RegistroResponse> agregarRegistro(@PathVariable String id,
                                                             @Valid @RequestBody RegistroRequest request) {
         RegistroResponse creado = servicio.agregarRegistroPaciente(
-                id, request.idAutor(), request.tipo(), request.contenido(), request.signosVitales());
+                id, request.idAutor(), request.tipo(), request.contenido(), request.signosVitales(),
+                request.idMedicamento(), request.cantidad());
         return ResponseEntity.status(201).body(creado);
     }
 }

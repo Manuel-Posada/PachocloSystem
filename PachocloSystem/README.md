@@ -33,8 +33,9 @@ src/main/java/com/pachoclosystem/pachoclosystem/
 ├── repository/   almacenamiento en memoria
 ├── model/        entidades (Paciente, Doctor, Enfermero, RegistroClinico, Usuario, Rol, ...)
 ├── dto/          requests y responses
-├── config/       configuración (seguridad, JWT, PasswordEncoder y admin inicial)
+├── config/       configuración (seguridad, JWT, PasswordEncoder, admin inicial y cliente de medicamentos)
 ├── security/     JWT, entry point 401/403 y login
+├── client/       cliente HTTP de MedicamentosService
 └── exception/    errores y @RestControllerAdvice
 ```
 
@@ -90,12 +91,91 @@ Cuerpo de `POST /api/pacientes/{id}/historial`:
 }
 ```
 
+Un registro `MEDICACION` puede además descontar stock del inventario indicando `idMedicamento` y
+`cantidad` (los dos juntos; ver [Integración con MedicamentosService](#integración-con-medicamentosservice)):
+
+```json
+{ "tipo": "MEDICACION", "idAutor": "DOC-0001", "contenido": "Paracetamol 500 mg vía oral",
+  "idMedicamento": "MED-0001", "cantidad": 2 }
+```
+
+### Medicamentos — `/api/medicamentos`
+
+Los datos viven en **MedicamentosService** (otro proceso); estos endpoints los reenvían por HTTP.
+Exigen token como el resto de la API.
+
+| Método | Ruta | Descripción | Respuestas |
+|---|---|---|---|
+| GET | `/api/medicamentos?q=` | Lista; `q` filtra por id, nombre o principio activo | 200 / 503 |
+| GET | `/api/medicamentos/{id}` | Obtiene un medicamento | 200 / 404 / 503 |
+| POST | `/api/medicamentos` | Registra un medicamento (con `cantidadStock` inicial) | 201 / 400 / 409 / 503 |
+| PUT | `/api/medicamentos/{id}` | Edita los datos (todo menos el stock) | 200 / 400 / 404 / 409 / 503 |
+| DELETE | `/api/medicamentos/{id}` | Elimina un medicamento | 204 / 404 / 503 |
+| POST | `/api/medicamentos/{id}/entradas` | Suma `{cantidad}` al stock | 200 / 400 / 404 / 503 |
+| POST | `/api/medicamentos/{id}/salidas` | Resta `{cantidad}`; 400 si no alcanza o está vencido | 200 / 400 / 404 / 503 |
+| GET | `/api/medicamentos/stock-bajo` | Stock igual o menor que el mínimo | 200 / 503 |
+| GET | `/api/medicamentos/por-vencer?dias=` | Vencen en los próximos `dias` (1–365, por defecto 30) | 200 / 400 / 503 |
+| GET | `/api/medicamentos/vencidos` | Ya vencidos | 200 / 503 |
+
+Los cuerpos y campos son los de MedicamentosService (ver su README).
+
 ## Errores
 
 Los errores devuelven un cuerpo uniforme:
 
 ```json
 { "status": 400, "error": "Bad Request", "mensajes": ["La especialidad es obligatoria."] }
+```
+
+## Integración con MedicamentosService
+
+El servicio principal es la única puerta de entrada (con JWT) al inventario de medicamentos,
+que vive en `MedicamentosService` (puerto 8081). Se comunican solo por HTTP; no comparten código.
+
+Configuración (`application.properties`):
+
+| Propiedad | Variable de entorno | Por defecto | Para qué |
+|---|---|---|---|
+| `medicamentos.url` | `MEDICAMENTOS_URL` | `http://localhost:8081` | URL base del servicio |
+| `medicamentos.timeout-conexion` | — | `2s` | Tiempo máximo para conectar |
+| `medicamentos.timeout-lectura` | — | `5s` | Tiempo máximo de espera de la respuesta |
+| `medicamentos.api-key` | `MEDICAMENTOS_API_KEY` | vacía | Clave compartida que se envía en `X-Api-Key` |
+
+**Autenticación entre servicios.** El usuario se autentica con JWT aquí; MedicamentosService solo
+comprueba que quien llama es este servicio, con una clave compartida en la cabecera `X-Api-Key`.
+`MEDICAMENTOS_API_KEY` debe tener **el mismo valor en los dos servicios**. Si MedicamentosService
+la tiene definida, rechaza (401) cualquier llamada directa sin ella.
+
+**Cómo llegan los errores al cliente:**
+
+| MedicamentosService responde | Este servicio responde |
+|---|---|
+| 404, 400 o 409 | El mismo código y los mismos mensajes |
+| 401/403 (clave distinta), 5xx o una respuesta ilegible | 502 "El servicio de medicamentos respondió de forma inesperada." |
+| No responde (caído, conexión rechazada o timeout) | 503 "El servicio de medicamentos no está disponible. Vuelva a intentarlo más tarde." |
+
+**Registros de medicación.** Con `idMedicamento` y `cantidad`, primero se hace la salida de stock
+en MedicamentosService y solo si sale bien se guarda el registro; si la salida falla (medicamento
+inexistente, stock insuficiente, vencido o servicio caído) no se crea el registro.
+
+> **Límite conocido:** si MedicamentosService aplica la salida pero su respuesta no llega a tiempo
+> (timeout de lectura), el stock queda descontado sin registro y el cliente recibe 503. Resolverlo
+> del todo (clave de idempotencia o compensación) queda fuera del alcance de este proyecto.
+
+**Prueba manual con los dos servicios** (Git Bash, dos terminales):
+
+```bash
+# Terminal 1
+cd MedicamentosService && MEDICAMENTOS_API_KEY=clave-local-123 ./mvnw spring-boot:run
+# Terminal 2
+cd PachocloSystem && MEDICAMENTOS_API_KEY=clave-local-123 ADMIN_PASSWORD=Admin12345 \
+  JWT_SECRET=una-clave-jwt-local-de-al-menos-32-bytes ./mvnw spring-boot:run
+
+# Terminal 3: login y llamadas
+TOKEN=$(curl -s -X POST localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"Admin12345"}' | sed 's/.*"token":"\([^"]*\)".*/\1/')
+curl localhost:8080/api/medicamentos -H "Authorization: Bearer $TOKEN"   # 200
+curl localhost:8081/api/medicamentos                                     # 401: falta X-Api-Key
 ```
 
 ## Usuarios, roles y autenticación

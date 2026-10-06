@@ -70,6 +70,11 @@ public abstract class MockMvcBaseTest {
         return mockMvc.perform(autenticado(peticion));
     }
 
+    /** Ejecuta una petición sin cabecera {@code Authorization} (para probar el 401). */
+    protected ResultActions sinToken(MockHttpServletRequestBuilder peticion) throws Exception {
+        return mockMvc.perform(peticion);
+    }
+
     /** Token JWT del usuario administrador (la contraseña de prueba está en application.properties de test). */
     protected String tokenAdmin() {
         Usuario admin = repositorioUsuarios.buscarPorUsername("admin");

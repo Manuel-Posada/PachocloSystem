@@ -46,6 +46,10 @@ public class GlobalExceptionHandler {
     private static final String MENSAJE_ERROR_INTERNO =
             "Se produjo un error interno. Vuelva a intentarlo más tarde.";
     private static final String MENSAJE_CREDENCIALES_INVALIDAS = "Credenciales inválidas.";
+    private static final String MENSAJE_SERVICIO_NO_DISPONIBLE =
+            "El servicio de medicamentos no está disponible. Vuelva a intentarlo más tarde.";
+    private static final String MENSAJE_RESPUESTA_SERVICIO_INVALIDA =
+            "El servicio de medicamentos respondió de forma inesperada.";
 
     /** 401: credenciales incorrectas en el login (usuario inexistente, contraseña mala o desactivado). */
     @ExceptionHandler(CredencialesInvalidasException.class)
@@ -56,6 +60,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> noEncontrado(NotFoundException ex) {
         return respuesta(HttpStatus.NOT_FOUND, List.of(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ConflictoException.class)
+    public ResponseEntity<ErrorResponse> conflicto(ConflictoException ex) {
+        return respuesta(HttpStatus.CONFLICT, List.of(ex.getMessage()));
+    }
+
+    /** 503: el servicio de medicamentos no respondió (caído o timeout). */
+    @ExceptionHandler(ServicioNoDisponibleException.class)
+    public ResponseEntity<ErrorResponse> servicioNoDisponible(ServicioNoDisponibleException ex) {
+        LOG.warn("Servicio externo no disponible: {}", ex.getMessage());
+        return respuesta(HttpStatus.SERVICE_UNAVAILABLE, List.of(MENSAJE_SERVICIO_NO_DISPONIBLE));
+    }
+
+    /** 502: el servicio de medicamentos respondió algo que no se puede trasladar al cliente. */
+    @ExceptionHandler(RespuestaServicioInvalidaException.class)
+    public ResponseEntity<ErrorResponse> respuestaServicioInvalida(RespuestaServicioInvalidaException ex) {
+        LOG.error("Respuesta inesperada de un servicio externo: {}", ex.getMessage());
+        return respuesta(HttpStatus.BAD_GATEWAY, List.of(MENSAJE_RESPUESTA_SERVICIO_INVALIDA));
     }
 
     @ExceptionHandler(SolicitudInvalidaException.class)

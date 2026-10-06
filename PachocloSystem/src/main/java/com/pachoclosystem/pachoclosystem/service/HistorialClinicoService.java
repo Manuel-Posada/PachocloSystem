@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.service;
 
+import com.pachoclosystem.pachoclosystem.client.MedicamentosClient;
 import com.pachoclosystem.pachoclosystem.dto.RegistroResponse;
 import com.pachoclosystem.pachoclosystem.dto.SignosVitalesRequest;
 import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
@@ -10,6 +11,7 @@ import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.repository.IPacienteRepository;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -25,15 +27,38 @@ public class HistorialClinicoService {
 
     private final IPacienteRepository repositorioPacientes;
     private final ITrabajadoresRepository repositorioTrabajadores;
+    /** Para descontar stock en registros de MEDICACION; null en tests unitarios sin Spring. */
+    private final MedicamentosClient clienteMedicamentos;
 
     public HistorialClinicoService(IPacienteRepository repositorioPacientes,
                                    ITrabajadoresRepository repositorioTrabajadores) {
+        this(repositorioPacientes, repositorioTrabajadores, null);
+    }
+
+    @Autowired
+    public HistorialClinicoService(IPacienteRepository repositorioPacientes,
+                                   ITrabajadoresRepository repositorioTrabajadores,
+                                   MedicamentosClient clienteMedicamentos) {
         this.repositorioPacientes = repositorioPacientes;
         this.repositorioTrabajadores = repositorioTrabajadores;
+        this.clienteMedicamentos = clienteMedicamentos;
     }
 
     public RegistroResponse agregarRegistroPaciente(String idPaciente, String idAutor, TipoRegistro tipo,
                                                     String contenido, SignosVitalesRequest signos) {
+        return agregarRegistroPaciente(idPaciente, idAutor, tipo, contenido, signos, null, null);
+    }
+
+    /**
+     * Agrega un registro. Si es MEDICACION con {@code idMedicamento} y {@code cantidad},
+     * primero se hace la salida de stock en MedicamentosService y solo si sale bien se
+     * guarda el registro: si la salida falla (medicamento inexistente, stock
+     * insuficiente, vencido o servicio caído) no se crea nada.
+     */
+    public RegistroResponse agregarRegistroPaciente(String idPaciente, String idAutor, TipoRegistro tipo,
+                                                    String contenido, SignosVitalesRequest signos,
+                                                    String idMedicamento, Integer cantidad) {
+        validarMedicacion(tipo, idMedicamento, cantidad);
         String contenidoFinal = construirContenido(tipo, contenido, signos);
 
         Paciente paciente = repositorioPacientes.buscarPorId(idPaciente);
@@ -45,7 +70,15 @@ public class HistorialClinicoService {
             throw new NotFoundException("No se encontró un trabajador con el ID " + idAutor + ".");
         }
 
-        RegistroClinico registro = new RegistroClinico(tipo, contenidoFinal, autor);
+        String medicamento = idMedicamento == null ? null : idMedicamento.trim();
+        if (medicamento != null) {
+            if (clienteMedicamentos == null) {
+                throw new IllegalStateException("No hay cliente de medicamentos configurado.");
+            }
+            clienteMedicamentos.registrarSalida(medicamento, cantidad);
+        }
+
+        RegistroClinico registro = new RegistroClinico(tipo, contenidoFinal, autor, medicamento, cantidad);
         paciente.agregarRegistro(registro);
         repositorioPacientes.guardarPaciente(paciente);
         return RegistroResponse.from(paciente, registro);
@@ -96,6 +129,23 @@ public class HistorialClinicoService {
                 default -> coincidePaciente || coincideAutor;
             };
         }).toList();
+    }
+
+    /** idMedicamento y cantidad: los dos o ninguno, y solo en registros de MEDICACION. */
+    private void validarMedicacion(TipoRegistro tipo, String idMedicamento, Integer cantidad) {
+        boolean hayMedicamento = idMedicamento != null && !idMedicamento.isBlank();
+        boolean hayCantidad = cantidad != null;
+        if (!hayMedicamento && !hayCantidad) {
+            return;
+        }
+        if (tipo != TipoRegistro.MEDICACION) {
+            throw new SolicitudInvalidaException(
+                    "Solo los registros de MEDICACION pueden descontar stock de un medicamento.");
+        }
+        if (hayMedicamento != hayCantidad) {
+            throw new SolicitudInvalidaException(
+                    "Para descontar stock hay que indicar el ID del medicamento y la cantidad.");
+        }
     }
 
     private String construirContenido(TipoRegistro tipo, String contenido, SignosVitalesRequest signos) {
