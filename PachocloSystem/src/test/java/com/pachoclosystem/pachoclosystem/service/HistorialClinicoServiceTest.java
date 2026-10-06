@@ -237,6 +237,39 @@ class HistorialClinicoServiceTest {
     }
 
     @Test
+    void historialDePacienteDadoDeBajaLanzaNotFoundYNoAdmiteNuevosRegistros() {
+        Paciente p = paciente("Ana Torres");
+        TrabajadorHospital d = doctor("Carlos Mena");
+        servicio.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(),
+                TipoRegistro.DIAGNOSTICO, "Hipertension leve", null);
+        servicioPacientes.eliminarPaciente(p.getIdPaciente());
+
+        assertThatExceptionOfType(NotFoundException.class)
+                .isThrownBy(() -> servicio.obtenerRegistrosPorPaciente(p.getIdPaciente(), null))
+                .withMessage("No se encontró el paciente " + p.getIdPaciente() + ".");
+        assertThatExceptionOfType(NotFoundException.class)
+                .isThrownBy(() -> servicio.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(),
+                        TipoRegistro.DIAGNOSTICO, "Otra observacion", null))
+                .withMessage("No se encontró el paciente " + p.getIdPaciente() + ".");
+    }
+
+    @Test
+    void elHistorialGlobalExcluyeLosRegistrosDePacientesDadosDeBaja() {
+        Paciente activo = paciente("Ana Torres");
+        Paciente dadoDeBaja = paciente("Bruno Diaz");
+        TrabajadorHospital d = doctor("Carlos Mena");
+        servicio.agregarRegistroPaciente(activo.getIdPaciente(), d.getIdTrabajador(),
+                TipoRegistro.DIAGNOSTICO, "Diagnostico de Ana", null);
+        servicio.agregarRegistroPaciente(dadoDeBaja.getIdPaciente(), d.getIdTrabajador(),
+                TipoRegistro.EVOLUCION, "Evolucion de Bruno", null);
+        servicioPacientes.eliminarPaciente(dadoDeBaja.getIdPaciente());
+
+        List<RegistroResponse> historial = servicio.obtenerTodosLosRegistros("todos", null);
+        assertThat(historial).hasSize(1);
+        assertThat(historial.get(0).idPaciente()).isEqualTo(activo.getIdPaciente());
+    }
+
+    @Test
     void elFiltroDelHistorialGeneralDebeSerTodosPacienteOAutor() {
         assertThatExceptionOfType(SolicitudInvalidaException.class)
                 .isThrownBy(() -> servicio.obtenerTodosLosRegistros("inventado", null))

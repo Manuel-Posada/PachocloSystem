@@ -36,10 +36,7 @@ public class HistorialClinicoService {
                                                     String contenido, SignosVitalesRequest signos) {
         String contenidoFinal = construirContenido(tipo, contenido, signos);
 
-        Paciente paciente = repositorioPacientes.buscarPorId(idPaciente);
-        if (paciente == null) {
-            throw new NotFoundException("No se encontró el paciente " + idPaciente + ".");
-        }
+        Paciente paciente = buscarPacienteActivo(idPaciente);
         TrabajadorHospital autor = repositorioTrabajadores.buscarPorId(idAutor);
         if (autor == null) {
             throw new NotFoundException("No se encontró un trabajador con el ID " + idAutor + ".");
@@ -60,6 +57,10 @@ public class HistorialClinicoService {
 
         List<RegistroResponse> resultado = new ArrayList<>();
         for (Paciente paciente : repositorioPacientes.obtenerTodos()) {
+            // El historial global excluye los registros de pacientes dados de baja.
+            if (!paciente.isActivo()) {
+                continue;
+            }
             for (RegistroClinico registro : paciente.obtenerHistorial()) {
                 resultado.add(RegistroResponse.from(paciente, registro));
             }
@@ -70,14 +71,20 @@ public class HistorialClinicoService {
 
     /** Registros de un paciente; si hay texto, filtra por autor (como la vista de un paciente). */
     public List<RegistroResponse> obtenerRegistrosPorPaciente(String idPaciente, String texto) {
-        Paciente paciente = repositorioPacientes.buscarPorId(idPaciente);
-        if (paciente == null) {
-            throw new NotFoundException("No se encontró el paciente " + idPaciente + ".");
-        }
+        Paciente paciente = buscarPacienteActivo(idPaciente);
         List<RegistroResponse> registros = paciente.obtenerHistorial().stream()
                 .map(r -> RegistroResponse.from(paciente, r))
                 .toList();
         return aplicarFiltro(registros, "autor", texto);
+    }
+
+    /** Devuelve el paciente si existe y está activo; si no, 404 (un paciente dado de baja es inexistente). */
+    private Paciente buscarPacienteActivo(String idPaciente) {
+        Paciente paciente = repositorioPacientes.buscarPorId(idPaciente);
+        if (paciente == null || !paciente.isActivo()) {
+            throw new NotFoundException("No se encontró el paciente " + idPaciente + ".");
+        }
+        return paciente;
     }
 
     private List<RegistroResponse> aplicarFiltro(List<RegistroResponse> registros, String modo, String texto) {
