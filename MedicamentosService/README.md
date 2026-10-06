@@ -137,6 +137,26 @@ Respuesta de un medicamento:
 }
 ```
 
+## Autenticación entre servicios
+
+Este servicio no tiene login de usuarios: los usuarios entran por **PachocloSystem** (con JWT), que
+reenvía las llamadas aquí. Para que nadie se salte esa puerta, se puede exigir una clave compartida:
+
+| Propiedad | Variable de entorno | Por defecto |
+|---|---|---|
+| `medicamentos.api-key` | `MEDICAMENTOS_API_KEY` | vacía |
+
+- Con la clave definida, toda petición a `/api/**` debe traer la cabecera `X-Api-Key` con ese valor;
+  si falta o no coincide responde **401** ("Falta la clave de servicio o no es válida.").
+  PachocloSystem debe tener el mismo `MEDICAMENTOS_API_KEY`.
+- Con la clave vacía no se exige nada (solo para desarrollo); al arrancar se registra un WARN.
+- Defensa adicional opcional: `server.address=127.0.0.1` para que solo acepte conexiones locales.
+
+```bash
+MEDICAMENTOS_API_KEY=clave-local-123 ./mvnw spring-boot:run
+curl localhost:8081/api/medicamentos -H "X-Api-Key: clave-local-123"
+```
+
 ## Errores
 
 Todas las respuestas de error tienen el mismo formato, sin trazas ni detalles internos:
@@ -152,6 +172,7 @@ Todas las respuestas de error tienen el mismo formato, sin trazas ni detalles in
 | Código | Cuándo |
 |---|---|
 | 400 | Validación de campos, JSON malformado, stock insuficiente, salida de un vencido, `dias` fuera de rango |
+| 401 | Falta la cabecera `X-Api-Key` o no coincide (solo si `MEDICAMENTOS_API_KEY` está definida) |
 | 404 | Medicamento o ruta inexistente |
 | 405 | Método HTTP no permitido en la ruta (incluye cabecera `Allow`) |
 | 409 | Ya existe un medicamento con el mismo nombre, concentración, presentación y lote |
