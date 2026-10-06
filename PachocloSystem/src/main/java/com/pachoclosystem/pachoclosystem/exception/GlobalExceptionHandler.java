@@ -45,6 +45,13 @@ public class GlobalExceptionHandler {
             "El tipo de contenido solicitado en la respuesta no está disponible.";
     private static final String MENSAJE_ERROR_INTERNO =
             "Se produjo un error interno. Vuelva a intentarlo más tarde.";
+    private static final String MENSAJE_CREDENCIALES_INVALIDAS = "Credenciales inválidas.";
+
+    /** 401: credenciales incorrectas en el login (usuario inexistente, contraseña mala o desactivado). */
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    public ResponseEntity<ErrorResponse> credencialesInvalidas(CredencialesInvalidasException ex) {
+        return respuesta(HttpStatus.UNAUTHORIZED, List.of(MENSAJE_CREDENCIALES_INVALIDAS));
+    }
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> noEncontrado(NotFoundException ex) {
