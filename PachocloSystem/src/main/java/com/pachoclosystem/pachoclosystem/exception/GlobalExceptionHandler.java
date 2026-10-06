@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -46,11 +47,23 @@ public class GlobalExceptionHandler {
     private static final String MENSAJE_ERROR_INTERNO =
             "Se produjo un error interno. Vuelva a intentarlo más tarde.";
     private static final String MENSAJE_CREDENCIALES_INVALIDAS = "Credenciales inválidas.";
+    private static final String MENSAJE_ACCESO_DENEGADO =
+            "No tiene permisos para realizar esta operación.";
 
     /** 401: credenciales incorrectas en el login (usuario inexistente, contraseña mala o desactivado). */
     @ExceptionHandler(CredencialesInvalidasException.class)
     public ResponseEntity<ErrorResponse> credencialesInvalidas(CredencialesInvalidasException ex) {
         return respuesta(HttpStatus.UNAUTHORIZED, List.of(MENSAJE_CREDENCIALES_INVALIDAS));
+    }
+
+    /**
+     * 403: un usuario autenticado sin permisos para la operación. Cubre también
+     * {@code AuthorizationDeniedException} (subclase). Mismo cuerpo uniforme que
+     * el manejador de la cadena de seguridad, sin detalles internos.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> accesoDenegado(AccessDeniedException ex) {
+        return respuesta(HttpStatus.FORBIDDEN, List.of(MENSAJE_ACCESO_DENEGADO));
     }
 
     @ExceptionHandler(NotFoundException.class)
