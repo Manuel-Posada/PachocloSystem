@@ -1,4 +1,4 @@
-package model;
+package com.pachoclosystem.demo.model;
 
 public class Enfermero extends TrabajadorHospital{
     private NivelExperiencia nivelExperiencia;

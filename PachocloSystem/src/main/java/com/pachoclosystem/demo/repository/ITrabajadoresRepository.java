@@ -1,5 +1,7 @@
-package model;
+package com.pachoclosystem.demo.repository;
  
+import com.pachoclosystem.demo.model.TrabajadorHospital;
+
 import java.util.List;
  
 

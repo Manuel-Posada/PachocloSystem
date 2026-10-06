@@ -1,4 +1,4 @@
-package PachocloSystem.src.main.java.com.pachoclosystem.demo;
+package com.pachoclosystem.demo;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

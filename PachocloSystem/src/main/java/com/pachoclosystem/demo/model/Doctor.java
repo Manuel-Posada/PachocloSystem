@@ -1,4 +1,4 @@
-package model;
+package com.pachoclosystem.demo.model;
 
 public class Doctor extends TrabajadorHospital {
     private String especialidad;

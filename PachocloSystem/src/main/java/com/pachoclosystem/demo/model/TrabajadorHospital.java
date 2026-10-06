@@ -1,4 +1,4 @@
-package model;
+package com.pachoclosystem.demo.model;
 
 public abstract class TrabajadorHospital {
 

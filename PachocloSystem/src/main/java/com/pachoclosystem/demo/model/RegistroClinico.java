@@ -1,4 +1,4 @@
-package model;
+package com.pachoclosystem.demo.model;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

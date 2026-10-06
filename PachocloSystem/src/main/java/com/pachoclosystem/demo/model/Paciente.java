@@ -1,14 +1,14 @@
-package model;
+package com.pachoclosystem.demo.model;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class Paciente {
 
     private String idPaciente;
-    private String nombre;
-    private int edad;
-    private int habitacion;
+    private volatile String nombre;
+    private volatile int edad;
+    private volatile int habitacion;
     private List<RegistroClinico> registros;
 
     public Paciente(String idPaciente, String nombre, int edad, int habitacion) {
@@ -16,7 +16,7 @@ public class Paciente {
         this.nombre = nombre;
         this.edad = edad;
         this.habitacion = habitacion;
-        this.registros = new ArrayList<>();
+        this.registros = new CopyOnWriteArrayList<>();
     }
 
     public boolean estaDisponible() {
