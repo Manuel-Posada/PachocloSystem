@@ -73,9 +73,12 @@ public class SecurityConfig {
                 .exceptionHandling(errores -> errores
                         .authenticationEntryPoint(puntoDeEntrada)
                         .accessDeniedHandler(accesoDenegado))
-                .oauth2ResourceServer(recurso -> recurso.jwt(jwt -> jwt
-                        .decoder(decoder)
-                        .jwtAuthenticationConverter(conversor)));
+                .oauth2ResourceServer(recurso -> recurso
+                        .authenticationEntryPoint(puntoDeEntrada)
+                        .accessDeniedHandler(accesoDenegado)
+                        .jwt(jwt -> jwt
+                                .decoder(decoder)
+                                .jwtAuthenticationConverter(conversor)));
         return http.build();
     }
 }
