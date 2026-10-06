@@ -22,7 +22,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void listarSinPacientesDevuelve200YListaVacia() throws Exception {
-        mockMvc.perform(get("/api/pacientes"))
+        perform(get("/api/pacientes"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$", hasSize(0)));
@@ -30,7 +30,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteDevuelve201ConLocationYBody() throws Exception {
-        MvcResult resultado = mockMvc.perform(post("/api/pacientes")
+        MvcResult resultado = perform(post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":30,"habitacion":101}"""))
@@ -51,17 +51,17 @@ class PacienteControllerTest extends MockMvcBaseTest {
         registrarPaciente("Ana Torres", 30, 101);
         registrarPaciente("Bruno Diaz", 45, 202);
 
-        mockMvc.perform(get("/api/pacientes").param("q", "ana"))
+        perform(get("/api/pacientes").param("q", "ana"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].nombre").value("Ana Torres"));
 
-        mockMvc.perform(get("/api/pacientes").param("q", "BRUNO"))
+        perform(get("/api/pacientes").param("q", "BRUNO"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].nombre").value("Bruno Diaz"));
 
-        mockMvc.perform(get("/api/pacientes").param("q", "zzz"))
+        perform(get("/api/pacientes").param("q", "zzz"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
     }
@@ -70,7 +70,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
     void obtenerPacientePorIdDevuelve200() throws Exception {
         String id = registrarPaciente("Ana Torres", 30, 101);
 
-        mockMvc.perform(get("/api/pacientes/{id}", id))
+        perform(get("/api/pacientes/{id}", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idPaciente").value(id))
                 .andExpect(jsonPath("$.nombre").value("Ana Torres"))
@@ -82,7 +82,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
     void editarPacienteDevuelve200ConDatosActualizados() throws Exception {
         String id = registrarPaciente("Ana Torres", 30, 101);
 
-        mockMvc.perform(put("/api/pacientes/{id}", id)
+        perform(put("/api/pacientes/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Maria Torres","edad":31,"habitacion":205}"""))
@@ -97,7 +97,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
     void editarHabitacionDevuelve200YElRestoNoCambia() throws Exception {
         String id = registrarPaciente("Ana Torres", 30, 101);
 
-        mockMvc.perform(patch("/api/pacientes/{id}/habitacion", id)
+        perform(patch("/api/pacientes/{id}/habitacion", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"habitacion":310}"""))
@@ -112,17 +112,17 @@ class PacienteControllerTest extends MockMvcBaseTest {
     void eliminarPacienteDevuelve204YDespuesDevuelve404() throws Exception {
         String id = registrarPaciente("Ana Torres", 30, 101);
 
-        mockMvc.perform(delete("/api/pacientes/{id}", id))
+        perform(delete("/api/pacientes/{id}", id))
                 .andExpect(status().isNoContent())
                 .andExpect(content().string(""));
 
-        mockMvc.perform(get("/api/pacientes/{id}", id))
+        perform(get("/api/pacientes/{id}", id))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void obtenerPacienteInexistenteDevuelve404ConErrorResponse() throws Exception {
-        mockMvc.perform(get("/api/pacientes/{id}", "PAC-9999"))
+        perform(get("/api/pacientes/{id}", "PAC-9999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.error").value("Not Found"))
@@ -132,7 +132,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void editarPacienteInexistenteDevuelve404ConErrorResponse() throws Exception {
-        mockMvc.perform(put("/api/pacientes/{id}", "PAC-9999")
+        perform(put("/api/pacientes/{id}", "PAC-9999")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":30,"habitacion":101}"""))
@@ -144,7 +144,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void editarHabitacionDePacienteInexistenteDevuelve404ConErrorResponse() throws Exception {
-        mockMvc.perform(patch("/api/pacientes/{id}/habitacion", "PAC-9999")
+        perform(patch("/api/pacientes/{id}/habitacion", "PAC-9999")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"habitacion":310}"""))
@@ -156,7 +156,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void eliminarPacienteInexistenteDevuelve404ConErrorResponse() throws Exception {
-        mockMvc.perform(delete("/api/pacientes/{id}", "PAC-9999"))
+        perform(delete("/api/pacientes/{id}", "PAC-9999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.error").value("Not Found"))
@@ -165,7 +165,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteConNombreInvalidoDevuelve400() throws Exception {
-        mockMvc.perform(post("/api/pacientes")
+        perform(post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"12345","edad":30,"habitacion":101}"""))
@@ -179,7 +179,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteConEdadFueraDeRangoDevuelve400() throws Exception {
-        mockMvc.perform(post("/api/pacientes")
+        perform(post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":200,"habitacion":101}"""))
@@ -190,7 +190,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteConHabitacionFueraDeRangoDevuelve400() throws Exception {
-        mockMvc.perform(post("/api/pacientes")
+        perform(post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":30,"habitacion":0}"""))
@@ -201,7 +201,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteSinCamposObligatoriosDevuelve400ConMensajesOrdenados() throws Exception {
-        mockMvc.perform(post("/api/pacientes")
+        perform(post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -217,7 +217,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
     void editarHabitacionInvalidaDevuelve400() throws Exception {
         String id = registrarPaciente("Ana Torres", 30, 101);
 
-        mockMvc.perform(patch("/api/pacientes/{id}/habitacion", id)
+        perform(patch("/api/pacientes/{id}/habitacion", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"habitacion":1000}"""))
