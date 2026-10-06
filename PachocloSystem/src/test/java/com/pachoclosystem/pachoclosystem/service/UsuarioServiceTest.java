@@ -30,7 +30,8 @@ class UsuarioServiceTest {
     @BeforeEach
     void preparar() {
         repositorio = new UsuarioRepositoryImpl();
-        trabajadorService = new TrabajadorService(new TrabajadorRepositoryImpl());
+        trabajadorService = new TrabajadorService(new TrabajadorRepositoryImpl(),
+                new UsuarioRepositoryImpl());
         encoder = new BCryptPasswordEncoder();
         servicio = new UsuarioService(repositorio, trabajadorService, encoder);
     }

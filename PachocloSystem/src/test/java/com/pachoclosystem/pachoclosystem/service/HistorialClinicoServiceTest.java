@@ -11,6 +11,7 @@ import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryImpl;
 import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +34,7 @@ class HistorialClinicoServiceTest {
         repositorioPacientes = new PacienteRepositoryImpl();
         repositorioTrabajadores = new TrabajadorRepositoryImpl();
         servicioPacientes = new PacienteService(repositorioPacientes);
-        servicioTrabajadores = new TrabajadorService(repositorioTrabajadores);
+        servicioTrabajadores = new TrabajadorService(repositorioTrabajadores, new UsuarioRepositoryImpl());
         servicio = new HistorialClinicoService(repositorioPacientes, repositorioTrabajadores);
     }
 

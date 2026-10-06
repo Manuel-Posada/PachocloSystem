@@ -11,6 +11,7 @@ import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryImpl;
 import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,12 +19,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 /** Reglas de negocio de los trabajadores, sin contexto Spring. */
 class TrabajadorServiceTest {
 
     private PacienteRepositoryImpl repositorioPacientes;
     private TrabajadorRepositoryImpl repositorio;
+    private UsuarioRepositoryImpl repositorioUsuarios;
     private PacienteService servicioPacientes;
     private TrabajadorService servicio;
 
@@ -31,8 +34,16 @@ class TrabajadorServiceTest {
     void preparar() {
         repositorioPacientes = new PacienteRepositoryImpl();
         repositorio = new TrabajadorRepositoryImpl();
+        repositorioUsuarios = new UsuarioRepositoryImpl();
         servicioPacientes = new PacienteService(repositorioPacientes);
-        servicio = new TrabajadorService(repositorio);
+        servicio = new TrabajadorService(repositorio, repositorioUsuarios);
+    }
+
+    @Test
+    void construirElServicioSinRepositorioDeUsuariosFallaInmediatamente() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> new TrabajadorService(repositorio, null))
+                .withMessageContaining("repositorio de usuarios");
     }
 
     @Test

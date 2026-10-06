@@ -40,7 +40,8 @@ class AdminInicialTest {
     void preparar() {
         repositorio = new UsuarioRepositoryImpl();
         servicio = new UsuarioService(repositorio,
-                new TrabajadorService(new TrabajadorRepositoryImpl()), new BCryptPasswordEncoder());
+                new TrabajadorService(new TrabajadorRepositoryImpl(), new UsuarioRepositoryImpl()),
+                new BCryptPasswordEncoder());
         entorno = new MockEnvironment();
         adminInicial = new AdminInicial(servicio, repositorio, entorno);
 
