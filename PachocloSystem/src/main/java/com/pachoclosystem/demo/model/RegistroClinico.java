@@ -19,10 +19,6 @@ public class RegistroClinico {
         this.autor = autor;
     }
 
-    public String obtenerResumen() {
-        return "[" + tipo + "] " + fecha + " - " + autor.getNombreCompleto() + ": " + contenido;
-    }
-
     // Solo getters — el registro es inmutable una vez creado
     public String getIdRegistro() {
         return idRegistro;

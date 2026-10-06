@@ -19,10 +19,6 @@ public class Paciente {
         this.registros = new CopyOnWriteArrayList<>();
     }
 
-    public boolean estaDisponible() {
-        return this.habitacion > 0;
-    }
-
     public void actualizarDatos(int nuevaHabitacion) {
         this.habitacion = nuevaHabitacion;
     }

@@ -17,12 +17,5 @@ public class Doctor extends TrabajadorHospital {
         this.especialidad = especialidad;
     }
 
-    @Override
-    public String obtenerPerfil() {
-        return "Doctor: " + nombreCompleto + " | Especialidad: " + especialidad;
-    }
-
-    
-
 }
 

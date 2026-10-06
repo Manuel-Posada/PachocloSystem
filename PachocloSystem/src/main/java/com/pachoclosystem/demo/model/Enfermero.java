@@ -16,9 +16,4 @@ public class Enfermero extends TrabajadorHospital{
         this.nivelExperiencia = nivelExperiencia;
     }
 
-    @Override
-    public String obtenerPerfil() {
-        return "Enfermero: " + nombreCompleto + " | Nivel: " + nivelExperiencia;
-    }
-    
 }

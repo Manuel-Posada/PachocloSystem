@@ -14,10 +14,6 @@ public abstract class TrabajadorHospital {
         return idTrabajador;
     }
 
-    public void setIdTrabajador(String idTrabajador) {
-        this.idTrabajador = idTrabajador;
-    }
-
     public String getNombreCompleto() {
         return nombreCompleto;
     }
@@ -25,6 +21,4 @@ public abstract class TrabajadorHospital {
     public void setNombreCompleto(String nombreCompleto) {
         this.nombreCompleto = nombreCompleto;
     }
-
-    public abstract String obtenerPerfil();
 }
