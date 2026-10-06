@@ -25,7 +25,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
 
     @Test
     void rutaInexistenteDevuelve404ConErrorResponseYSinTrazas() throws Exception {
-        mockMvc.perform(get("/api/noexiste"))
+        perform(get("/api/noexiste"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.error").value("Not Found"))
@@ -40,7 +40,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
 
     @Test
     void metodoNoSoportadoDevuelve405ConErrorResponseYSinTrazas() throws Exception {
-        mockMvc.perform(delete("/api/pacientes"))
+        perform(delete("/api/pacientes"))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.status").value(405))
                 .andExpect(jsonPath("$.error").value("Method Not Allowed"))
@@ -58,7 +58,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
 
     @Test
     void cuerpoJsonMalformadoDevuelve400ConErrorResponseYSinTrazas() throws Exception {
-        mockMvc.perform(post("/api/pacientes")
+        perform(post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":"""))
@@ -78,7 +78,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        mockMvc.perform(post("/api/pacientes/{id}/historial", paciente)
+        perform(post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo":"INVENTADO","idAutor":"%s","contenido":"Hipertension leve"}"""
@@ -95,14 +95,14 @@ class ErroresHttpTest extends MockMvcBaseTest {
 
     @Test
     void elHandlerGenericoNoPisaAlDeNoEncontrado() throws Exception {
-        mockMvc.perform(get("/api/pacientes/{id}", "PAC-9999"))
+        perform(get("/api/pacientes/{id}", "PAC-9999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.mensajes[0]").value("No se encontró el paciente PAC-9999."));
     }
 
     @Test
     void elHandlerGenericoNoPisaALaValidacionDeDtos() throws Exception {
-        mockMvc.perform(post("/api/pacientes")
+        perform(post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -112,7 +112,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
 
     @Test
     void elHandlerGenericoNoPisaALasSolicitudesInvalidasDeNegocio() throws Exception {
-        mockMvc.perform(get("/api/historial").param("filtro", "inventado"))
+        perform(get("/api/historial").param("filtro", "inventado"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.mensajes[0]")
                         .value("El filtro debe ser todos, paciente o autor."));
@@ -120,7 +120,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
 
     @Test
     void contentTypeNoSoportadoDevuelve415ConErrorResponseYSinTrazas() throws Exception {
-        mockMvc.perform(post("/api/pacientes")
+        perform(post("/api/pacientes")
                         .contentType(MediaType.TEXT_PLAIN)
                         .content("nombre=Ana"))
                 .andExpect(status().isUnsupportedMediaType())
@@ -146,7 +146,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
      */
     @Test
     void acceptNoNegociableDevuelve406SinTrazas() throws Exception {
-        mockMvc.perform(get("/api/pacientes").accept(MediaType.APPLICATION_XML))
+        perform(get("/api/pacientes").accept(MediaType.APPLICATION_XML))
                 .andExpect(status().isNotAcceptable())
                 .andExpect(content().string(""))
                 .andExpect(content().string(not(containsString("trace"))))
