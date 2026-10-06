@@ -23,10 +23,14 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  * Cadena de filtros de seguridad stateless con tokens JWT (HS256) y resource
  * server de OAuth2 (Nimbus).
  *
- * <p>Solo {@code POST /api/auth/login} es público; el resto de {@code /api/**}
- * exige estar autenticado (aún no hay autorización por rol). Todo el estado de
- * autenticación vive en el token <em>bearer</em>: sin sesiones HTTP, sin login
- * por formulario, sin Basic auth.</p>
+ * <p>Solo {@code POST /api/auth/login} es público. El resto de los endpoints
+ * reales exigen autenticación y, además, autorización por rol según la matriz
+ * de permisos (ADMIN, DOCTOR, ENFERMERO): la lectura es para cualquier usuario
+ * autenticado, la gestión de trabajadores y la baja de pacientes son solo de
+ * ADMIN, el alta/edición de pacientes es solo de DOCTOR y el alta de registros
+ * clínicos corresponde a DOCTOR o ENFERMERO (el tipo se valida en el servicio).
+ * Todo el estado de autenticación vive en el token <em>bearer</em>: sin
+ * sesiones HTTP, sin login por formulario, sin Basic auth.</p>
  */
 @Configuration
 @EnableWebSecurity
@@ -66,7 +70,39 @@ public class SecurityConfig {
                 .httpBasic(basica -> basica.disable())
                 .logout(cierre -> cierre.disable())
                 .authorizeHttpRequests(peticiones -> peticiones
+                        // Único endpoint público.
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+
+                        // Identidad: cualquier usuario autenticado puede verse a sí mismo.
+                        .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
+
+                        // Pacientes: lectura (listado, búsqueda, detalle e historial)
+                        // para cualquier usuario autenticado.
+                        .requestMatchers(HttpMethod.GET, "/api/pacientes", "/api/pacientes/**").authenticated()
+                        // Alta y edición de pacientes: solo DOCTOR.
+                        .requestMatchers(HttpMethod.POST, "/api/pacientes").hasRole("DOCTOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/pacientes/**").hasRole("DOCTOR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/pacientes/**").hasRole("DOCTOR")
+                        // Baja (soft delete): solo ADMIN.
+                        .requestMatchers(HttpMethod.DELETE, "/api/pacientes/**").hasRole("ADMIN")
+
+                        // Historial: lectura para todos; alta de registro para DOCTOR y
+                        // ENFERMERO (el tipo permitido por rol se valida en el servicio).
+                        .requestMatchers(HttpMethod.GET, "/api/historial").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/pacientes/*/historial").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/pacientes/*/historial")
+                        .hasAnyRole("DOCTOR", "ENFERMERO")
+
+                        // Trabajadores: lectura para todos; alta/edición/baja solo ADMIN.
+                        .requestMatchers(HttpMethod.GET, "/api/trabajadores", "/api/trabajadores/**")
+                        .authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/trabajadores").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/trabajadores/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/trabajadores/**").hasRole("ADMIN")
+
+                        // Ningún endpoint real depende de esta red final: se conserva
+                        // para que las rutas inexistentes sigan dando 401 sin token y
+                        // 404 (uniforme) con token.
                         .anyRequest().authenticated())
                 // 401 y 403 con el cuerpo de error uniforme de la API
                 // (ErrorResponse, sin trazas ni detalles internos).

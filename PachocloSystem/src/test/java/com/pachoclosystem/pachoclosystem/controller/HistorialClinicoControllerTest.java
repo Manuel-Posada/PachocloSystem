@@ -1,8 +1,11 @@
 package com.pachoclosystem.pachoclosystem.controller;
 
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -23,7 +26,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
 
         String cuerpo = CUERPO_DIAGNOSTICO.formatted(doctor, "Hipertension leve");
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoDoctor(doctor, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(cuerpo))
                 .andExpect(status().isCreated())
@@ -43,7 +46,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String enfermero = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoEnfermero(enfermero, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo":"SIGNOS_VITALES","idAutor":"%s","signosVitales":{
@@ -62,7 +65,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String enfermero = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoEnfermero(enfermero, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo":"SIGNOS_VITALES","idAutor":"%s","signosVitales":{
@@ -194,7 +197,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
     void agregarRegistroAPacienteInexistenteDevuelve404ConErrorResponse() throws Exception {
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        perform(post("/api/pacientes/{id}/historial", "PAC-9999")
+        comoDoctor(doctor, post("/api/pacientes/{id}/historial", "PAC-9999")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CUERPO_DIAGNOSTICO.formatted(doctor, "Hipertension leve")))
                 .andExpect(status().isNotFound())
@@ -207,7 +210,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
     void agregarRegistroConAutorInexistenteDevuelve404ConErrorResponse() throws Exception {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        performComo(Rol.DOCTOR, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CUERPO_DIAGNOSTICO.formatted("DOC-9999", "Hipertension leve")))
                 .andExpect(status().isNotFound())
@@ -221,7 +224,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoDoctor(doctor, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CUERPO_DIAGNOSTICO.formatted(doctor, "   ")))
                 .andExpect(status().isBadRequest())
@@ -236,7 +239,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoDoctor(doctor, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CUERPO_DIAGNOSTICO.formatted(doctor, "abc")))
                 .andExpect(status().isBadRequest())
@@ -250,7 +253,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoDoctor(doctor, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CUERPO_DIAGNOSTICO.formatted(doctor, "12345678")))
                 .andExpect(status().isBadRequest())
@@ -264,7 +267,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String enfermero = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoEnfermero(enfermero, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo":"SIGNOS_VITALES","idAutor":"%s"}""".formatted(enfermero)))
@@ -279,7 +282,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String enfermero = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoEnfermero(enfermero, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo":"SIGNOS_VITALES","idAutor":"%s","signosVitales":{
@@ -297,7 +300,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String enfermero = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoEnfermero(enfermero, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo":"SIGNOS_VITALES","idAutor":"%s","signosVitales":{
@@ -316,7 +319,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String enfermero = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoEnfermero(enfermero, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo":"SIGNOS_VITALES","idAutor":"%s","signosVitales":{
@@ -334,7 +337,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String enfermero = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoEnfermero(enfermero, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo":"SIGNOS_VITALES","idAutor":"%s","signosVitales":{
@@ -352,7 +355,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        comoDoctor(doctor, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"idAutor":"%s","contenido":"Hipertension leve"}""".formatted(doctor)))
@@ -367,7 +370,7 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
     void agregarRegistroConAutorMalFormadoDevuelve400() throws Exception {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        performComo(Rol.DOCTOR, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CUERPO_DIAGNOSTICO.formatted("no valido!", "Hipertension leve")))
                 .andExpect(status().isBadRequest())
@@ -392,5 +395,15 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
                 .andExpect(jsonPath("$[0].contenido").value("Evolucion de Ana"))
                 .andExpect(jsonPath("$[0].autor.idTrabajador").value(enfermero))
                 .andExpect(jsonPath("$[0].autor.nombreCompleto").value("Maria Lopez"));
+    }
+
+    /** Petición de alta de registro autenticada con el trabajador DOCTOR indicado. */
+    private ResultActions comoDoctor(String idDoctor, MockHttpServletRequestBuilder peticion) throws Exception {
+        return performComoAutor(Rol.DOCTOR, idDoctor, peticion);
+    }
+
+    /** Petición de alta de registro autenticada con el trabajador ENFERMERO indicado. */
+    private ResultActions comoEnfermero(String idEnfermero, MockHttpServletRequestBuilder peticion) throws Exception {
+        return performComoAutor(Rol.ENFERMERO, idEnfermero, peticion);
     }
 }

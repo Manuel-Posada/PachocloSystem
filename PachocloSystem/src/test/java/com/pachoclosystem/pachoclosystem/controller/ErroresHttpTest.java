@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.controller;
 
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
@@ -58,7 +59,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
 
     @Test
     void cuerpoJsonMalformadoDevuelve400ConErrorResponseYSinTrazas() throws Exception {
-        perform(post("/api/pacientes")
+        performComo(Rol.DOCTOR, post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":"""))
@@ -78,7 +79,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
+        performComo(Rol.DOCTOR, post("/api/pacientes/{id}/historial", paciente)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"tipo":"INVENTADO","idAutor":"%s","contenido":"Hipertension leve"}"""
@@ -102,7 +103,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
 
     @Test
     void elHandlerGenericoNoPisaALaValidacionDeDtos() throws Exception {
-        perform(post("/api/pacientes")
+        performComo(Rol.DOCTOR, post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -120,7 +121,7 @@ class ErroresHttpTest extends MockMvcBaseTest {
 
     @Test
     void contentTypeNoSoportadoDevuelve415ConErrorResponseYSinTrazas() throws Exception {
-        perform(post("/api/pacientes")
+        performComo(Rol.DOCTOR, post("/api/pacientes")
                         .contentType(MediaType.TEXT_PLAIN)
                         .content("nombre=Ana"))
                 .andExpect(status().isUnsupportedMediaType())
