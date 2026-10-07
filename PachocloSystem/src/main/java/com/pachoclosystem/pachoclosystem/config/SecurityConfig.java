@@ -3,6 +3,7 @@ package com.pachoclosystem.pachoclosystem.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -18,6 +19,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
  * Cadena de filtros de seguridad stateless con tokens JWT (HS256) y resource
@@ -62,11 +64,17 @@ public class SecurityConfig {
                                         JwtDecoder decoder,
                                         Converter<Jwt, ? extends AbstractAuthenticationToken> conversor,
                                         AuthenticationEntryPoint puntoDeEntrada,
-                                        AccessDeniedHandler accesoDenegado) throws Exception {
+                                        AccessDeniedHandler accesoDenegado,
+                                        @Qualifier("corsConfigurationSource") CorsConfigurationSource corsFuente) throws Exception {
         http
                 // API stateless protegida con token bearer: no hay cookies ni sesiones,
                 // así que no hay estado que un ataque CSRF pueda aprovechar; se desactiva.
                 .csrf(csrf -> csrf.disable())
+                // CORS por orígenes explícitos (CorsConfiguracion): las preflight OPTIONS
+                // de un origen permitido se resuelven aquí, antes de la autenticación, y
+                // no exigen token. Con app.cors.origenes vacío no se emite ninguna
+                // cabecera Access-Control-Allow-*.
+                .cors(cors -> cors.configurationSource(corsFuente))
                 .sessionManagement(sesiones -> sesiones.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .formLogin(login -> login.disable())
                 .httpBasic(basica -> basica.disable())
