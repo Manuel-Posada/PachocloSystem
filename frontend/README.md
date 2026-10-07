@@ -48,13 +48,14 @@ Convención: nombres de dominio en español y sufijos de Angular en inglés
 
 ## Patrón de los módulos CRUD
 
-Pacientes (`features/pacientes/`) es la referencia; trabajadores ya lo sigue y medicamentos lo seguirá:
+Pacientes, trabajadores y medicamentos siguen el mismo patrón:
 
 - **`<entidad>.service.ts`**: solo HTTP (listar con `?q=`, registrar, editar, eliminar). Sin estado.
-- **`<entidad>s-lista`**: guarda el estado en signals (`cargando`, `errores`, datos y filtro).
-  Busca en el servidor al dejar de escribir, muestra los estados de carga, vacío y error (con
-  reintento) y recarga tras cada cambio. Para el maquetado usa las clases globales `lista-*` de
-  `styles.scss`.
+- **`<entidad>s-lista`**: carga los datos con `crearListaRemota()` de `shared/listas.ts`, que da
+  `elementos`, `cargando`, `errores`, la `consulta` de la última carga y `recargar()`. El buscador
+  usa `textoBuscado()`, que espera a que se deje de escribir. La consulta puede ser cualquier tipo:
+  medicamentos la usa para sus pestañas (`{ vista, texto | dias }`). Para el maquetado usa las
+  clases globales `lista-*` de `styles.scss`.
 - **Diálogos de formulario**: validan en local con `shared/validadores.ts` (mismas reglas y
   mensajes que el backend). Guardan ellos mismos, así un 400 se muestra dentro del formulario con
   `<app-errores-formulario>`, y se cierran con la entidad guardada.
@@ -66,6 +67,13 @@ El backend usa dos formatos: `'ADMIN' | 'DOCTOR' | 'ENFERMERO'` para usuarios (l
 `'Doctor' | 'Enfermero'` para trabajadores. `core/roles.ts` es el único sitio que los convierte
 (`rolDeUsuario`, `rolDeTrabajador`) y les pone etiqueta (`etiquetaRol`).
 
+## Fechas
+
+Las fechas sin hora del backend (`LocalDate`, p. ej. `fechaVencimiento: "2027-01-31"`) se manejan
+siempre como texto: se editan con `<input type="date">`, que ya da `AAAA-MM-DD`, y se muestran con
+`formatearFecha()` de `shared/fechas.ts`. Nunca se pasan por `Date`: lo interpretaría como medianoche
+UTC y en UTC-5 mostraría el día anterior.
+
 ## Sesión y errores
 
 - El token JWT vive en memoria y se copia en `sessionStorage`: aguanta una recarga y se pierde
@@ -73,4 +81,7 @@ El backend usa dos formatos: `'ADMIN' | 'DOCTOR' | 'ENFERMERO'` para usuarios (l
 - Dura 30 minutos y no se renueva: se avisa 5 minutos antes y al expirar se vuelve al login,
   recordando la ruta en la que se estaba.
 - Todo error HTTP llega a los componentes como `ApiError` (`status` y `mensajes`, los del
-  `ErrorResponse` del backend). Un 401 fuera del login cierra la sesión.
+  `ErrorResponse` del backend). Sin ese cuerpo, por ejemplo con el backend apagado, el mensaje
+  es "No se pudo conectar con el servidor". Un 401 fuera del login cierra la sesión.
+- Si MedicamentosService no responde, el backend devuelve 503 (o 502). Medicamentos lo muestra
+  como aviso dentro del módulo y el resto de la app sigue funcionando.
