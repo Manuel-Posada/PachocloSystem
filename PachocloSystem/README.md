@@ -136,9 +136,10 @@ curl -X POST localhost:8080/api/pacientes/PAC-0001/historial \
 - **Peticiones simultáneas con la misma clave:** se atienden de una en una; se crea un solo
   registro y todas reciben ese registro.
 - **Con descuento de stock**, la misma clave se reenvía a la salida de MedicamentosService (que
-  tampoco descuenta dos veces con ella). Si la salida no responde (timeout o error de E/S), se
-  reintenta **una vez** con la misma clave. Si tampoco responde: `503` "No se pudo confirmar; puede
-  reintentar sin riesgo de descontar dos veces.".
+  tampoco descuenta dos veces con ella). Si la salida no responde (timeout o error de E/S, también
+  cuando las cabeceras llegan a tiempo pero el cuerpo no), se reintenta **una vez** con la misma
+  clave. Si tampoco responde: `503` "No se pudo confirmar; puede reintentar sin riesgo de descontar
+  dos veces.". Una respuesta con el cuerpo mal formado no se reintenta: `502`.
 - **Un fallo que no cambió nada** (`400`, `403`, `404` o `409`, propios o de MedicamentosService,
   como stock insuficiente) **no consume la clave**: el reintento se vuelve a evaluar.
 - **Un fallo con resultado incierto** (el `503` anterior, un `502` de MedicamentosService o un
@@ -248,6 +249,11 @@ descontado sin registro:
   [Registros idempotentes](#registros-idempotentes-idempotency-key)).
 - **Sin la cabecera** sigue siendo un límite conocido: el cliente recibe `503`, el stock queda
   descontado sin registro y un reintento descontaría otra vez.
+
+> **Límite conocido (sin `Idempotency-Key`):** si el tiempo de lectura se agota cuando las
+> cabeceras de la respuesta ya llegaron pero el cuerpo no, el cliente recibe `502` "El servicio de
+> medicamentos respondió de forma inesperada." en lugar de `503`, sin reintento. Es el
+> comportamiento de siempre y no se ha cambiado; con clave ese caso se trata como un timeout.
 
 > **Límite conocido:** el paciente se lee antes de la salida de stock y se vuelve a guardar después.
 > Si un ADMIN borra al paciente mientras se espera la salida (con clave puede tardar el doble por el
