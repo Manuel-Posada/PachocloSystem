@@ -22,6 +22,7 @@ import {
 } from 'rxjs';
 import { mensajesDeError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
+import { PermisosService } from '../../../core/permisos';
 import { confirmar } from '../../../shared/confirmacion-dialogo/confirmacion-dialogo.component';
 import { formatearFecha } from '../../../shared/fechas';
 import { ESPERA_BUSQUEDA_MS, crearListaRemota, textoBuscado } from '../../../shared/listas';
@@ -68,6 +69,20 @@ export class MedicamentosListaComponent {
   private readonly servicio = inject(MedicamentoService);
   private readonly dialogo = inject(MatDialog);
   private readonly notificaciones = inject(NotificacionService);
+  /** Qué acciones mostrar según el rol (el backend sigue siendo quien decide). */
+  protected readonly permisos = inject(PermisosService);
+
+  protected readonly columnas = computed(() => [
+    'idMedicamento',
+    'medicamento',
+    'lote',
+    'stock',
+    'vencimiento',
+    'estado',
+    ...(this.permisos.puede('medicamentos.escribir') || this.permisos.puede('medicamentos.salidas')
+      ? ['acciones']
+      : []),
+  ]);
   private readonly cambiosDeVista = new Subject<void>();
 
   protected readonly pestanas: readonly { vista: Vista; etiqueta: string }[] = [
@@ -75,15 +90,6 @@ export class MedicamentosListaComponent {
     { vista: 'stock-bajo', etiqueta: 'Stock bajo' },
     { vista: 'por-vencer', etiqueta: 'Por vencer' },
     { vista: 'vencidos', etiqueta: 'Vencidos' },
-  ];
-  protected readonly columnas = [
-    'idMedicamento',
-    'medicamento',
-    'lote',
-    'stock',
-    'vencimiento',
-    'estado',
-    'acciones',
   ];
   protected readonly vista = signal<Vista>('todos');
   protected readonly busqueda = new FormControl('', { nonNullable: true });

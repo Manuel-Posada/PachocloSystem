@@ -1,9 +1,11 @@
 <header class="lista-encabezado">
   <h1>Pacientes</h1>
-  <button mat-flat-button type="button" (click)="nuevo()">
-    <mat-icon>add</mat-icon>
-    Nuevo paciente
-  </button>
+  @if (permisos.puede('pacientes.escribir')) {
+    <button mat-flat-button type="button" (click)="nuevo()">
+      <mat-icon>add</mat-icon>
+      Nuevo paciente
+    </button>
+  }
 </header>
 
 <mat-form-field class="lista-busqueda" subscriptSizing="dynamic">
@@ -59,33 +61,39 @@
           >
             <mat-icon>history_edu</mat-icon>
           </a>
-          <button
-            mat-icon-button
-            type="button"
-            matTooltip="Editar"
-            [attr.aria-label]="'Editar a ' + p.nombre"
-            (click)="editar(p)"
-          >
-            <mat-icon>edit</mat-icon>
-          </button>
-          <button
-            mat-icon-button
-            type="button"
-            matTooltip="Cambiar habitación"
-            [attr.aria-label]="'Cambiar habitación de ' + p.nombre"
-            (click)="cambiarHabitacion(p)"
-          >
-            <mat-icon>bed</mat-icon>
-          </button>
-          <button
-            mat-icon-button
-            type="button"
-            matTooltip="Eliminar"
-            [attr.aria-label]="'Eliminar a ' + p.nombre"
-            (click)="eliminar(p)"
-          >
-            <mat-icon>delete</mat-icon>
-          </button>
+          @if (permisos.puede('pacientes.escribir')) {
+            <button
+              mat-icon-button
+              type="button"
+              matTooltip="Editar"
+              [attr.aria-label]="'Editar a ' + p.nombre"
+              (click)="editar(p)"
+            >
+              <mat-icon>edit</mat-icon>
+            </button>
+          }
+          @if (permisos.puede('pacientes.habitacion')) {
+            <button
+              mat-icon-button
+              type="button"
+              matTooltip="Cambiar habitación"
+              [attr.aria-label]="'Cambiar habitación de ' + p.nombre"
+              (click)="cambiarHabitacion(p)"
+            >
+              <mat-icon>bed</mat-icon>
+            </button>
+          }
+          @if (permisos.puede('pacientes.eliminar')) {
+            <button
+              mat-icon-button
+              type="button"
+              matTooltip="Eliminar"
+              [attr.aria-label]="'Eliminar a ' + p.nombre"
+              (click)="eliminar(p)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          }
         </td>
       </ng-container>
 

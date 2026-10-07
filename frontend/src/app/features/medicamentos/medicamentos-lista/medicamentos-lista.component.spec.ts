@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Observable, Subject, of, throwError } from 'rxjs';
+import { Permiso, PermisosService, tienePermiso } from '../../../core/permisos';
+import { Rol } from '../../../core/roles';
 import { ApiError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
 import { ESPERA_BUSQUEDA_MS } from '../../../shared/listas';
@@ -20,6 +22,8 @@ function textoCelda(celda: Element): string {
 }
 
 describe('MedicamentosListaComponent', () => {
+  /** Rol de los permisos simulados; ADMIN (todo) salvo en los tests de rol. */
+  let rol: Rol = 'ADMIN';
   const dolex: Medicamento = {
     idMedicamento: 'MED-0001',
     nombre: 'Dolex',
@@ -74,6 +78,7 @@ describe('MedicamentosListaComponent', () => {
         { provide: MedicamentoService, useValue: servicio },
         { provide: MatDialog, useValue: dialogo },
         { provide: NotificacionService, useValue: notificaciones },
+        { provide: PermisosService, useValue: { puede: (p: Permiso) => tienePermiso(rol, p) } },
       ],
     });
     const fixture = TestBed.createComponent(MedicamentosListaComponent);
@@ -109,6 +114,7 @@ describe('MedicamentosListaComponent', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    rol = 'ADMIN';
     servicio.listar.mockReturnValue(of([dolex, amoxil]));
   });
 
@@ -134,6 +140,26 @@ describe('MedicamentosListaComponent', () => {
         '',
       ],
     ]);
+  });
+
+  it('el enfermero solo ve las salidas de stock', async () => {
+    rol = 'ENFERMERO';
+    const { elemento, boton } = await renderizar();
+
+    expect(elemento.querySelector('.lista-encabezado button')).toBeNull();
+    expect(boton('Salida de stock de Dolex 500 mg')).not.toBeNull();
+    expect(boton('Entrada de stock de Dolex 500 mg')).toBeNull();
+    expect(boton('Editar Dolex 500 mg')).toBeNull();
+    expect(boton('Eliminar Dolex 500 mg')).toBeNull();
+  });
+
+  it('el doctor solo consulta: sin alta ni columna de acciones', async () => {
+    rol = 'DOCTOR';
+    const { elemento, filas } = await renderizar();
+
+    expect(filas()).toHaveLength(2);
+    expect(elemento.querySelector('.lista-encabezado button')).toBeNull();
+    expect(elemento.querySelector('.celda-acciones')).toBeNull();
   });
 
   it('busca en el servidor desde la pestaña Todos', async () => {

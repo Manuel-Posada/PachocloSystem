@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -11,6 +11,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { filter, switchMap } from 'rxjs';
 import { mensajesDeError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
+import { PermisosService } from '../../../core/permisos';
 import { etiquetaRol } from '../../../core/roles';
 import { confirmar } from '../../../shared/confirmacion-dialogo/confirmacion-dialogo.component';
 import { crearListaRemota, textoBuscado } from '../../../shared/listas';
@@ -41,8 +42,17 @@ export class TrabajadoresListaComponent {
   private readonly servicio = inject(TrabajadorService);
   private readonly dialogo = inject(MatDialog);
   private readonly notificaciones = inject(NotificacionService);
+  /** Qué acciones mostrar según el rol (el backend sigue siendo quien decide). */
+  protected readonly permisos = inject(PermisosService);
 
-  protected readonly columnas = ['idTrabajador', 'nombreCompleto', 'rol', 'detalle', 'acciones'];
+  protected readonly columnas = computed(() => [
+    'idTrabajador',
+    'nombreCompleto',
+    'rol',
+    'detalle',
+    ...(this.permisos.puede('trabajadores.escribir') ? ['acciones'] : []),
+  ]);
+
   protected readonly busqueda = new FormControl('', { nonNullable: true });
   private readonly lista = crearListaRemota({
     inicial: '',

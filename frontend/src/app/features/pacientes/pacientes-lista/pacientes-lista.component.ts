@@ -13,6 +13,7 @@ import { RouterLink } from '@angular/router';
 import { filter, switchMap } from 'rxjs';
 import { mensajesDeError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
+import { PermisosService } from '../../../core/permisos';
 import { confirmar } from '../../../shared/confirmacion-dialogo/confirmacion-dialogo.component';
 import { crearListaRemota, textoBuscado } from '../../../shared/listas';
 import { HabitacionDialogoComponent } from '../habitacion-dialogo/habitacion-dialogo.component';
@@ -45,6 +46,8 @@ export class PacientesListaComponent {
   private readonly servicio = inject(PacienteService);
   private readonly dialogo = inject(MatDialog);
   private readonly notificaciones = inject(NotificacionService);
+  /** Qué acciones mostrar según el rol (el backend sigue siendo quien decide). */
+  protected readonly permisos = inject(PermisosService);
 
   protected readonly columnas = ['idPaciente', 'nombre', 'edad', 'habitacion', 'acciones'];
   protected readonly busqueda = new FormControl('', { nonNullable: true });

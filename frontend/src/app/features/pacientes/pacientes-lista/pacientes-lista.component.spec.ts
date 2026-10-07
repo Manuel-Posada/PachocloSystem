@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
+import { Permiso, PermisosService, tienePermiso } from '../../../core/permisos';
+import { Rol } from '../../../core/roles';
 import { ApiError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
 import { ConfirmacionDialogoComponent } from '../../../shared/confirmacion-dialogo/confirmacion-dialogo.component';
@@ -12,6 +14,8 @@ import { ESPERA_BUSQUEDA_MS } from '../../../shared/listas';
 import { PacientesListaComponent } from './pacientes-lista.component';
 
 describe('PacientesListaComponent', () => {
+  /** Rol de los permisos simulados; ADMIN (todo) salvo en los tests de rol. */
+  let rol: Rol = 'ADMIN';
   const ana: Paciente = { idPaciente: 'PAC-0001', nombre: 'Ana Ruiz', edad: 40, habitacion: 12 };
   const luis: Paciente = { idPaciente: 'PAC-0002', nombre: 'Luis Gil', edad: 7, habitacion: 3 };
 
@@ -34,6 +38,7 @@ describe('PacientesListaComponent', () => {
         { provide: PacienteService, useValue: servicio },
         { provide: MatDialog, useValue: dialogo },
         { provide: NotificacionService, useValue: notificaciones },
+        { provide: PermisosService, useValue: { puede: (p: Permiso) => tienePermiso(rol, p) } },
       ],
     });
     const fixture = TestBed.createComponent(PacientesListaComponent);
@@ -56,6 +61,7 @@ describe('PacientesListaComponent', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    rol = 'ADMIN';
     servicio.listar.mockReturnValue(of([ana, luis]));
   });
 
@@ -74,6 +80,26 @@ describe('PacientesListaComponent', () => {
 
     const enlace = elemento.querySelector('a[aria-label="Historial clínico de Ana Ruiz"]');
     expect(enlace?.getAttribute('href')).toBe('/pacientes/PAC-0001/historial');
+  });
+
+  it('el enfermero solo ve el historial y el cambio de habitación', async () => {
+    rol = 'ENFERMERO';
+    const { elemento, boton } = await renderizar();
+
+    expect(elemento.querySelector('.lista-encabezado button')).toBeNull();
+    expect(boton('Editar a Ana Ruiz')).toBeNull();
+    expect(boton('Eliminar a Ana Ruiz')).toBeNull();
+    expect(boton('Cambiar habitación de Ana Ruiz')).not.toBeNull();
+    expect(elemento.querySelector('a[aria-label="Historial clínico de Ana Ruiz"]')).not.toBeNull();
+  });
+
+  it('el doctor registra y edita, pero no elimina', async () => {
+    rol = 'DOCTOR';
+    const { elemento, boton } = await renderizar();
+
+    expect(elemento.querySelector('.lista-encabezado button')).not.toBeNull();
+    expect(boton('Editar a Ana Ruiz')).not.toBeNull();
+    expect(boton('Eliminar a Ana Ruiz')).toBeNull();
   });
 
   it('indica que no hay pacientes', async () => {

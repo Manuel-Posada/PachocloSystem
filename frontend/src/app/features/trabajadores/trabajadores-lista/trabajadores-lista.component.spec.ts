@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Observable, of, throwError } from 'rxjs';
+import { Permiso, PermisosService, tienePermiso } from '../../../core/permisos';
+import { Rol } from '../../../core/roles';
 import { ApiError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
 import { ConfirmacionDialogoComponent } from '../../../shared/confirmacion-dialogo/confirmacion-dialogo.component';
@@ -11,6 +13,8 @@ import { TrabajadorService } from '../trabajador.service';
 import { TrabajadoresListaComponent } from './trabajadores-lista.component';
 
 describe('TrabajadoresListaComponent', () => {
+  /** Rol de los permisos simulados; ADMIN (todo) salvo en los tests de rol. */
+  let rol: Rol = 'ADMIN';
   const doctora: Trabajador = {
     idTrabajador: 'DOC-0001',
     nombreCompleto: 'Ana Ruiz',
@@ -42,6 +46,7 @@ describe('TrabajadoresListaComponent', () => {
         { provide: TrabajadorService, useValue: servicio },
         { provide: MatDialog, useValue: dialogo },
         { provide: NotificacionService, useValue: notificaciones },
+        { provide: PermisosService, useValue: { puede: (p: Permiso) => tienePermiso(rol, p) } },
       ],
     });
     const fixture = TestBed.createComponent(TrabajadoresListaComponent);
@@ -64,6 +69,7 @@ describe('TrabajadoresListaComponent', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    rol = 'ADMIN';
     servicio.listar.mockReturnValue(of([doctora, enfermero]));
   });
 
@@ -74,6 +80,15 @@ describe('TrabajadoresListaComponent', () => {
       ['DOC-0001', 'Ana Ruiz', 'Doctor', 'Cardiología'],
       ['ENF-0001', 'Luis Gil', 'Enfermero', 'Nivel principiante'],
     ]);
+  });
+
+  it('el doctor solo consulta: sin alta ni columna de acciones', async () => {
+    rol = 'DOCTOR';
+    const { elemento, filas } = await renderizar();
+
+    expect(filas()).toHaveLength(2);
+    expect(elemento.querySelector('.lista-encabezado button')).toBeNull();
+    expect(elemento.querySelector('.celda-acciones')).toBeNull();
   });
 
   it('indica que no hay trabajadores', async () => {
