@@ -11,8 +11,10 @@ import com.pachoclosystem.pachoclosystem.repository.IUsuarioRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Reglas de negocio de los usuarios.
@@ -24,6 +26,8 @@ import java.util.List;
 public class UsuarioService {
 
     public static final int LONGITUD_MINIMA_PASSWORD = 10;
+    /** BCrypt solo admite hasta 72 bytes: con más, {@code encode} lanza una excepción (500). */
+    public static final int MAXIMO_BYTES_PASSWORD = 72;
 
     private final IUsuarioRepository repositorio;
     private final TrabajadorService trabajadorService;
@@ -39,8 +43,8 @@ public class UsuarioService {
     /**
      * Crea un usuario con la contraseña hasheada con BCrypt.
      *
-     * <p>Reglas: username válido y único (case-insensitive), contraseña de al
-     * menos 10 caracteres, los administradores no se vinculan a un trabajador y
+     * <p>Reglas: username válido y único (case-insensitive), contraseña que
+     * cumpla la política (ver {@link #validarPassword}), los administradores no se vinculan a un trabajador y
      * los doctores/enfermeros sí, a un trabajador existente del tipo correcto y
      * que todavía no tenga usuario.</p>
      */
@@ -53,10 +57,7 @@ public class UsuarioService {
             errores.add("El username debe tener entre 3 y 30 caracteres y solo puede contener "
                     + "minúsculas, dígitos, punto, guion bajo o guion.");
         }
-        if (passwordEnClaro == null || passwordEnClaro.length() < LONGITUD_MINIMA_PASSWORD) {
-            // Nunca se incluye la contraseña en el mensaje.
-            errores.add("La contraseña debe tener al menos " + LONGITUD_MINIMA_PASSWORD + " caracteres.");
-        }
+        errores.addAll(validarPassword(passwordEnClaro, usernameNormalizado));
         if (rol == null) {
             errores.add("Debe seleccionar un rol (ADMIN, DOCTOR o ENFERMERO).");
         } else if (rol == Rol.ADMIN && trabajador != null) {
@@ -85,6 +86,29 @@ public class UsuarioService {
             throw usuarioDuplicado(usernameNormalizado);
         }
         return usuario;
+    }
+
+    /**
+     * Política de contraseña: de {@value #LONGITUD_MINIMA_PASSWORD} caracteres
+     * a {@value #MAXIMO_BYTES_PASSWORD} bytes en UTF-8, y distinta del username
+     * (sin distinguir mayúsculas). Sin reglas de composición. Los mensajes
+     * nunca incluyen la contraseña.
+     */
+    static List<String> validarPassword(String passwordEnClaro, String usernameNormalizado) {
+        List<String> errores = new ArrayList<>();
+        if (passwordEnClaro == null || passwordEnClaro.length() < LONGITUD_MINIMA_PASSWORD) {
+            errores.add("La contraseña debe tener al menos " + LONGITUD_MINIMA_PASSWORD + " caracteres.");
+            return errores;
+        }
+        if (passwordEnClaro.getBytes(StandardCharsets.UTF_8).length > MAXIMO_BYTES_PASSWORD) {
+            errores.add("La contraseña no puede ocupar más de " + MAXIMO_BYTES_PASSWORD
+                    + " bytes (las letras con tilde y la ñ ocupan 2).");
+        }
+        if (usernameNormalizado != null
+                && passwordEnClaro.trim().toLowerCase(Locale.ROOT).equals(usernameNormalizado)) {
+            errores.add("La contraseña no puede ser igual al username.");
+        }
+        return errores;
     }
 
     private SolicitudInvalidaException usuarioDuplicado(String usernameNormalizado) {

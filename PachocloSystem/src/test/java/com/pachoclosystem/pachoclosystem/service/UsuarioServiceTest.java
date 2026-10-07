@@ -159,6 +159,35 @@ class UsuarioServiceTest {
     }
 
     @Test
+    void passwordDeMasDe72BytesRechazaContandoBytesNoCaracteres() {
+        // 37 eñes son 37 caracteres pero 74 bytes en UTF-8.
+        String larga = "ñ".repeat(37);
+
+        assertThatExceptionOfType(SolicitudInvalidaException.class)
+                .isThrownBy(() -> servicio.crearUsuario("ana.torres", larga, Rol.ADMIN, null))
+                .withMessage("La contraseña no puede ocupar más de 72 bytes "
+                        + "(las letras con tilde y la ñ ocupan 2).")
+                .satisfies(e -> assertThat(e.getMessage()).doesNotContain(larga));
+        assertThat(repositorio.listarTodos()).isEmpty();
+    }
+
+    @Test
+    void passwordDeExactamente72BytesEsValida() {
+        String limite = "ñ".repeat(36);
+
+        Usuario usuario = servicio.crearUsuario("ana.torres", limite, Rol.ADMIN, null);
+
+        assertThat(encoder.matches(limite, usuario.getPasswordHash())).isTrue();
+    }
+
+    @Test
+    void passwordIgualAlUsernameRechazaSinDistinguirMayusculas() {
+        assertThatExceptionOfType(SolicitudInvalidaException.class)
+                .isThrownBy(() -> servicio.crearUsuario("ana.torres.g", "Ana.Torres.G", Rol.ADMIN, null))
+                .withMessage("La contraseña no puede ser igual al username.");
+    }
+
+    @Test
     void passwordExactamenteDiezCaracteresEsValida() {
         Usuario usuario = servicio.crearUsuario("ana.torres", "1234567890", Rol.ADMIN, null);
 
