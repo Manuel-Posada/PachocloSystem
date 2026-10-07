@@ -45,6 +45,15 @@ export interface DatosRegistroDialogo {
   autor: string;
 }
 
+/** Se canceló tras un resultado incierto: el registro pudo crearse, conviene recargar la lista. */
+export const SIN_CONFIRMAR = 'sin-confirmar';
+
+/**
+ * Resultado del diálogo: el registro creado, {@link SIN_CONFIRMAR} o, si se
+ * cerró sin enviar nada, `undefined`.
+ */
+export type ResultadoRegistroDialogo = Registro | typeof SIN_CONFIRMAR;
+
 const MENSAJE_PRESION = 'La presión diastólica debe ser menor que la sistólica.';
 
 /**
@@ -130,7 +139,8 @@ function diastolicaMenorQueSistolica(grupo: AbstractControl): ValidationErrors |
 export class RegistroDialogoComponent {
   private readonly servicio = inject(HistorialService);
   private readonly medicamentos = inject(MedicamentoService);
-  private readonly dialogo = inject<MatDialogRef<RegistroDialogoComponent, Registro>>(MatDialogRef);
+  private readonly dialogo =
+    inject<MatDialogRef<RegistroDialogoComponent, ResultadoRegistroDialogo>>(MatDialogRef);
   private readonly fb = inject(NonNullableFormBuilder);
   protected readonly datos = inject<DatosRegistroDialogo>(MAT_DIALOG_DATA);
 
@@ -260,14 +270,18 @@ export class RegistroDialogoComponent {
     }
   }
 
-  /** Tras un resultado incierto: cierra sin registro y avisa de qué conviene revisar. */
+  /**
+   * Tras un resultado incierto: avisa de qué conviene revisar y cierra con
+   * {@link SIN_CONFIRMAR}, para que la lista se recargue y se vea si el registro
+   * llegó a crearse.
+   */
   protected cancelar(): void {
     if (this.enviando()) {
       return;
     }
     const conStock = this.enviada?.idMedicamento != null;
     this.notificaciones.error([conStock ? AVISO_CANCELADO_CON_STOCK : AVISO_CANCELADO]);
-    this.dialogo.close();
+    this.dialogo.close(SIN_CONFIRMAR);
   }
 
   private enviar(solicitud: RegistroRequest): void {

@@ -11,7 +11,10 @@ import { Paciente } from '../../pacientes/paciente.models';
 import { PacienteService } from '../../pacientes/paciente.service';
 import { Registro } from '../historial.models';
 import { HistorialService } from '../historial.service';
-import { RegistroDialogoComponent } from '../registro-dialogo/registro-dialogo.component';
+import {
+  RegistroDialogoComponent,
+  SIN_CONFIRMAR,
+} from '../registro-dialogo/registro-dialogo.component';
 import { HistorialPacienteComponent } from './historial-paciente.component';
 
 describe('HistorialPacienteComponent', () => {
@@ -112,6 +115,30 @@ describe('HistorialPacienteComponent', () => {
     );
     expect(notificaciones.exito).toHaveBeenCalledWith('Registro añadido al historial.');
     expect(historial.listarDePaciente).toHaveBeenCalledTimes(2);
+  });
+
+  it('al cancelar tras un resultado incierto recarga la lista, sin aviso de éxito', async () => {
+    dialogo.open.mockReturnValue({ afterClosed: () => of(SIN_CONFIRMAR) });
+    const { fixture, botonNuevo } = await renderizar();
+    expect(historial.listarDePaciente).toHaveBeenCalledTimes(1);
+
+    botonNuevo()!.click();
+    await fixture.whenStable();
+
+    // El aviso de revisar historial y stock lo da el diálogo; aquí solo se recarga.
+    expect(historial.listarDePaciente).toHaveBeenCalledTimes(2);
+    expect(notificaciones.exito).not.toHaveBeenCalled();
+  });
+
+  it('al cerrar el diálogo sin enviar nada no recarga ni avisa', async () => {
+    dialogo.open.mockReturnValue({ afterClosed: () => of(undefined) });
+    const { fixture, botonNuevo } = await renderizar();
+
+    botonNuevo()!.click();
+    await fixture.whenStable();
+
+    expect(historial.listarDePaciente).toHaveBeenCalledTimes(1);
+    expect(notificaciones.exito).not.toHaveBeenCalled();
   });
 
   it('sin trabajador vinculado (admin) queda en modo consulta y explica por qué', async () => {

@@ -15,11 +15,12 @@ import { NotificacionService } from '../../../core/notificacion.service';
 import { crearListaRemota, textoBuscado } from '../../../shared/listas';
 import { Paciente } from '../../pacientes/paciente.models';
 import { PacienteService } from '../../pacientes/paciente.service';
-import { Registro } from '../historial.models';
 import { HistorialService } from '../historial.service';
 import {
   DatosRegistroDialogo,
   RegistroDialogoComponent,
+  ResultadoRegistroDialogo,
+  SIN_CONFIRMAR,
 } from '../registro-dialogo/registro-dialogo.component';
 import { RegistrosComponent } from '../registros/registros.component';
 
@@ -124,15 +125,17 @@ export class HistorialPacienteComponent {
       return;
     }
     this.dialogo
-      .open<RegistroDialogoComponent, DatosRegistroDialogo, Registro>(RegistroDialogoComponent, {
-        data: { paciente, autor: idAutor },
-        width: '640px',
-        maxWidth: '95vw',
-      })
+      .open<RegistroDialogoComponent, DatosRegistroDialogo, ResultadoRegistroDialogo>(
+        RegistroDialogoComponent,
+        { data: { paciente, autor: idAutor }, width: '640px', maxWidth: '95vw' },
+      )
       .afterClosed()
-      .pipe(filter((creado): creado is Registro => creado !== undefined))
-      .subscribe(() => {
-        this.notificaciones.exito('Registro añadido al historial.');
+      .pipe(filter((resultado) => resultado !== undefined))
+      .subscribe((resultado) => {
+        // Sin confirmar, el diálogo ya avisó; se recarga para ver si el registro llegó a crearse.
+        if (resultado !== SIN_CONFIRMAR) {
+          this.notificaciones.exito('Registro añadido al historial.');
+        }
         this.recargar();
       });
   }

@@ -629,7 +629,7 @@ describe('RegistroDialogoComponent · medicación', () => {
 
       await pulsar('Cancelar');
 
-      expect(dialogo.close).toHaveBeenCalledWith();
+      expect(dialogo.close).toHaveBeenCalledWith('sin-confirmar');
       expect(notificaciones.error).toHaveBeenCalledWith([
         'No se confirmó el registro. Revise el historial del paciente y el stock del medicamento ' +
           'antes de volver a registrarlo.',

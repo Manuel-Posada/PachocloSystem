@@ -116,8 +116,9 @@ se le avisa antes y, al guardar, vuelve al login con un mensaje que lo explica.
   - **201 con `Idempotency-Replayed: true`:** el registro ya existía; es un alta normal, sin aviso.
   - **Resultado incierto** (503 "No se pudo confirmar…", 502, 500 u otro 5xx, sin red o un error
     no HTTP): el alta pudo hacerse o no. Los campos quedan **bloqueados** y solo se ofrece
-    **Reintentar** (misma clave y mismo cuerpo, sin riesgo) o **Cancelar**, que cierra el diálogo
-    y avisa de revisar el historial del paciente y, si se pidió descuento, el stock. Mientras se
+    **Reintentar** (misma clave y mismo cuerpo, sin riesgo) o **Cancelar**, que avisa de revisar
+    el historial del paciente y, si se pidió descuento, el stock, cierra el diálogo y recarga la
+    lista del historial para que se vea enseguida si el registro llegó a crearse. Mientras se
     envía o está bloqueado, el diálogo no se cierra con Esc ni clic fuera. Así no se puede
     reenviar con otros datos y otra clave tras un resultado incierto, lo que podría duplicar el
     registro o el descuento. Solo un alta correcta desbloquea, aunque el reintento falle de otra
