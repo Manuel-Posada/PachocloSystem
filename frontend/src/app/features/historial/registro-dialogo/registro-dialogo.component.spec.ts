@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
+import { NotificacionService } from '../../../core/notificacion.service';
 import { PermisosService } from '../../../core/permisos';
 import { Medicamento } from '../../medicamentos/medicamento.models';
 import { MedicamentoService } from '../../medicamentos/medicamento.service';
@@ -29,7 +30,8 @@ describe('RegistroDialogoComponent', () => {
   const servicio = {
     crear: vi.fn<(id: string, r: RegistroRequest, clave: string) => Observable<Registro>>(),
   };
-  const dialogo = { close: vi.fn() };
+  const dialogo: { close: ReturnType<typeof vi.fn>; disableClose?: boolean } = { close: vi.fn() };
+  const notificaciones = { exito: vi.fn(), error: vi.fn() };
 
   async function renderizar() {
     TestBed.configureTestingModule({
@@ -40,6 +42,7 @@ describe('RegistroDialogoComponent', () => {
         { provide: MatDialogRef, useValue: dialogo },
         { provide: MAT_DIALOG_DATA, useValue: datos },
         { provide: PermisosService, useValue: { puede: () => diagnostica } },
+        { provide: NotificacionService, useValue: notificaciones },
       ],
     });
     const fixture = TestBed.createComponent(RegistroDialogoComponent);
@@ -357,7 +360,8 @@ describe('RegistroDialogoComponent · medicación', () => {
   const servicio = {
     crear: vi.fn<(id: string, r: RegistroRequest, clave: string) => Observable<Registro>>(),
   };
-  const dialogo = { close: vi.fn() };
+  const dialogo: { close: ReturnType<typeof vi.fn>; disableClose?: boolean } = { close: vi.fn() };
+  const notificaciones = { exito: vi.fn(), error: vi.fn() };
   const inventario = { listar: vi.fn<() => Observable<Medicamento[]>>() };
   const dolex = {
     idMedicamento: 'MED-0001',
@@ -383,6 +387,21 @@ describe('RegistroDialogoComponent · medicación', () => {
     cantidad: null,
   };
 
+  /** Raíz del diálogo abierto por `preparar`. */
+  let raiz: HTMLElement;
+  /** Todos los campos del formulario (tipo, contenido, casilla, medicamento, cantidad). */
+  const campos = () =>
+    Array.from(
+      raiz.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        'form input, form textarea, form select',
+      ),
+    );
+  /** Textos de los botones de acción del diálogo. */
+  const botones = () =>
+    Array.from(raiz.querySelectorAll('mat-dialog-actions button')).map((b) =>
+      b.textContent?.trim(),
+    );
+
   /** Abre el diálogo con MEDICACION elegida y el contenido relleno. */
   async function preparar() {
     TestBed.configureTestingModule({
@@ -393,11 +412,13 @@ describe('RegistroDialogoComponent · medicación', () => {
         { provide: MatDialogRef, useValue: dialogo },
         { provide: MAT_DIALOG_DATA, useValue: datos },
         { provide: PermisosService, useValue: { puede: () => diagnostica } },
+        { provide: NotificacionService, useValue: notificaciones },
       ],
     });
     const fixture = TestBed.createComponent(RegistroDialogoComponent);
     await fixture.whenStable();
     const elemento = fixture.nativeElement as HTMLElement;
+    raiz = elemento;
     const estable = () => fixture.whenStable();
     const escribir = (selector: string, valor: string, evento = 'input') => {
       const campo = elemento.querySelector<HTMLInputElement>(selector)!;
@@ -427,6 +448,13 @@ describe('RegistroDialogoComponent · medicación', () => {
         elemento.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
         await estable();
       },
+      /** Pulsa el botón de acción con ese texto. */
+      pulsar: async (texto: string) => {
+        Array.from(elemento.querySelectorAll<HTMLButtonElement>('mat-dialog-actions button'))
+          .find((b) => b.textContent?.trim() === texto)!
+          .click();
+        await estable();
+      },
       erroresCampos: () =>
         Array.from(elemento.querySelectorAll('mat-error')).map((e) => e.textContent?.trim()),
       alerta: () =>
@@ -439,6 +467,7 @@ describe('RegistroDialogoComponent · medicación', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     simularClaves();
+    delete dialogo.disableClose;
     inventario.listar.mockReturnValue(of([dolex, caducado]));
   });
 
@@ -528,18 +557,113 @@ describe('RegistroDialogoComponent · medicación', () => {
       'No se guardó el registro ni se descontó stock.',
     ]);
     expect(dialogo.close).not.toHaveBeenCalled();
+    // Un fallo definitivo no bloquea: se puede corregir y volver a guardar.
+    expect(campos().every((c) => !c.disabled)).toBe(true);
+    expect(dialogo.disableClose).toBe(false);
   });
 
-  it('con 503 al descontar avisa de que el stock pudo descontarse', async () => {
-    servicio.crear.mockReturnValue(caido());
-    const { marcarDescuento, elegir, enviar, alerta } = await preparar();
+  describe('resultado incierto (503 sin confirmar, 502, 500, sin red)', () => {
+    const MENSAJE_503 = 'No se pudo confirmar; puede reintentar sin riesgo de descontar dos veces.';
+    const NOTA_INCIERTO =
+      'No se pudo confirmar si el registro se guardó. Use «Reintentar» para enviar los mismos ' +
+      'datos (no se duplicará el registro ni se descontará stock dos veces) o «Cancelar».';
+    const conDescuento = { ...sinDescuento, idMedicamento: 'MED-0001', cantidad: 2 };
+    const sinConfirmar = () => throwError(() => new ApiError(503, [MENSAJE_503]));
 
-    await marcarDescuento();
-    await elegir('MED-0001', '2');
-    await enviar();
+    async function medicacionSinConfirmar(primerFallo = sinConfirmar()) {
+      servicio.crear.mockReturnValueOnce(primerFallo);
+      const vista = await preparar();
+      await vista.marcarDescuento();
+      await vista.elegir('MED-0001', '2');
+      await vista.enviar();
+      return vista;
+    }
 
-    expect(alerta()[0]).toContain('El servicio de medicamentos no está disponible.');
-    expect(alerta()[1]).toContain('la salida de stock pudo registrarse igualmente');
+    it('503: bloquea los campos y solo ofrece Reintentar o Cancelar', async () => {
+      const { elemento, alerta } = await medicacionSinConfirmar();
+
+      expect(alerta()).toEqual([MENSAJE_503, NOTA_INCIERTO]);
+      expect(alerta().join(' ')).not.toContain('pudo registrarse igualmente');
+      expect(campos()).not.toHaveLength(0);
+      expect(campos().every((c) => c.disabled)).toBe(true);
+      expect(elemento.querySelector('button[type="submit"]')).toBeNull();
+      expect(botones()).toEqual(['Cancelar', 'Reintentar']);
+      // Tampoco se cierra con Esc ni clic fuera (se saltaría el aviso de Cancelar).
+      expect(dialogo.disableClose).toBe(true);
+      expect(dialogo.close).not.toHaveBeenCalled();
+    });
+
+    it('Reintentar repite la misma clave y el mismo cuerpo, y el alta cierra el diálogo', async () => {
+      const { pulsar } = await medicacionSinConfirmar();
+      servicio.crear.mockReturnValueOnce(of(creado));
+
+      await pulsar('Reintentar');
+
+      expect(servicio.crear).toHaveBeenCalledTimes(2);
+      expect(servicio.crear).toHaveBeenNthCalledWith(1, 'PAC-0001', conDescuento, 'clave-1');
+      expect(servicio.crear).toHaveBeenNthCalledWith(2, 'PAC-0001', conDescuento, 'clave-1');
+      expect(dialogo.close).toHaveBeenCalledWith(creado);
+    });
+
+    it('si el reintento vuelve a fallar sigue bloqueado y con la misma clave', async () => {
+      const { pulsar, alerta } = await medicacionSinConfirmar();
+      servicio.crear
+        .mockReturnValueOnce(throwError(() => new ApiError(400, ['Stock insuficiente.'])))
+        .mockReturnValueOnce(of(creado));
+
+      await pulsar('Reintentar');
+      expect(alerta()).toEqual(['Stock insuficiente.', NOTA_INCIERTO]);
+      expect(campos().every((c) => c.disabled)).toBe(true);
+      expect(botones()).toEqual(['Cancelar', 'Reintentar']);
+
+      await pulsar('Reintentar');
+      expect(servicio.crear.mock.calls.map(([, cuerpo, clave]) => [cuerpo, clave])).toEqual([
+        [conDescuento, 'clave-1'],
+        [conDescuento, 'clave-1'],
+        [conDescuento, 'clave-1'],
+      ]);
+    });
+
+    it('Cancelar cierra sin registro y avisa de revisar el historial y el stock', async () => {
+      const { pulsar } = await medicacionSinConfirmar();
+
+      await pulsar('Cancelar');
+
+      expect(dialogo.close).toHaveBeenCalledWith();
+      expect(notificaciones.error).toHaveBeenCalledWith([
+        'No se confirmó el registro. Revise el historial del paciente y el stock del medicamento ' +
+          'antes de volver a registrarlo.',
+      ]);
+      expect(servicio.crear).toHaveBeenCalledTimes(1);
+    });
+
+    it('sin descuento, Cancelar avisa solo de revisar el historial', async () => {
+      servicio.crear.mockReturnValueOnce(sinConfirmar());
+      const { enviar, pulsar } = await preparar();
+      await enviar();
+
+      await pulsar('Cancelar');
+
+      expect(notificaciones.error).toHaveBeenCalledWith([
+        'No se confirmó el registro. Revise el historial del paciente antes de volver a registrarlo.',
+      ]);
+    });
+
+    it.each([
+      ['502', new ApiError(502, ['El servicio de medicamentos respondió de forma inesperada.'])],
+      ['500', new ApiError(500, ['Se produjo un error interno. Vuelva a intentarlo más tarde.'])],
+      ['sin red (estado 0)', new ApiError(0, ['No se pudo conectar con el servidor.'])],
+      ['un error no HTTP', new Error('x')],
+    ])('%s también bloquea y el reintento usa la misma clave', async (_caso, fallo) => {
+      const { pulsar } = await medicacionSinConfirmar(throwError(() => fallo));
+      expect(campos().every((c) => c.disabled)).toBe(true);
+      servicio.crear.mockReturnValueOnce(of(creado));
+
+      await pulsar('Reintentar');
+
+      expect(servicio.crear).toHaveBeenNthCalledWith(2, 'PAC-0001', conDescuento, 'clave-1');
+      expect(dialogo.close).toHaveBeenCalledWith(creado);
+    });
   });
 
   it('un error sin descuento no añade notas sobre el stock', async () => {

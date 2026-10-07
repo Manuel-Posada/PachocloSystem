@@ -138,13 +138,15 @@
                 <p>{{ mensaje }}</p>
               }
               <p>Puede guardar la medicación sin descontar stock.</p>
-              <button
-                mat-stroked-button
-                type="button"
-                (click)="formulario.controls.descontarStock.setValue(true)"
-              >
-                Reintentar
-              </button>
+              @if (!incierto()) {
+                <button
+                  mat-stroked-button
+                  type="button"
+                  (click)="formulario.controls.descontarStock.setValue(true)"
+                >
+                  Reintentar
+                </button>
+              }
             </div>
           }
 
@@ -194,7 +196,29 @@
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
-    <button mat-button type="button" mat-dialog-close [disabled]="enviando()">Cancelar</button>
-    <button mat-flat-button type="submit" [disabled]="enviando()">Guardar registro</button>
+    @if (incierto()) {
+      <!-- Resultado incierto: solo repetir lo mismo o salir (con aviso). -->
+      <button
+        mat-button
+        type="button"
+        class="cancelar"
+        (click)="cancelar()"
+        [disabled]="enviando()"
+      >
+        Cancelar
+      </button>
+      <button
+        mat-flat-button
+        type="button"
+        class="reintentar"
+        (click)="reintentar()"
+        [disabled]="enviando()"
+      >
+        Reintentar
+      </button>
+    } @else {
+      <button mat-button type="button" mat-dialog-close [disabled]="enviando()">Cancelar</button>
+      <button mat-flat-button type="submit" [disabled]="enviando()">Guardar registro</button>
+    }
   </mat-dialog-actions>
 </form>

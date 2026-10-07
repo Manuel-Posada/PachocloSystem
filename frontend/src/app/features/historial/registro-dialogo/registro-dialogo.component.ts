@@ -14,6 +14,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
 import { merge, startWith } from 'rxjs';
+import { NotificacionService } from '../../../core/notificacion.service';
 import { PermisosService } from '../../../core/permisos';
 import { ApiError, mensajesDeError } from '../../../core/http/api-error';
 import { ErroresFormularioComponent } from '../../../shared/errores-formulario/errores-formulario.component';
@@ -50,17 +51,24 @@ const MENSAJE_PRESION = 'La presión diastólica debe ser menor que la sistólic
  * de stock antes y solo guarda si sale bien.
  */
 const NOTA_SIN_GUARDAR = 'No se guardó el registro ni se descontó stock.';
-/**
- * Con 502/503 no se puede asegurar: si MedicamentosService hizo la salida pero
- * tardó en responder, el backend lo trata igual que un servicio caído.
- */
-const NOTA_SIN_CONFIRMAR =
-  'No se guardó el registro. Si el servicio de medicamentos tardó en responder, la salida de ' +
-  'stock pudo registrarse igualmente: compruebe el stock en Medicamentos antes de volver a ' +
-  'intentarlo, o guarde la medicación sin descontar stock.';
 
 /** 409 al crear: la clave ya se usó con otra petición. Con la clave nueva se puede reenviar. */
 const NOTA_CLAVE_USADA = 'Revise los datos y vuelva a guardar el registro.';
+
+/**
+ * Tras un resultado incierto el formulario queda bloqueado: repetir la misma
+ * petición con la misma clave es seguro (el backend devuelve el registro si ya
+ * se creó y no descuenta dos veces); cambiar los datos con otra clave podría
+ * duplicar el registro o el descuento.
+ */
+const NOTA_INCIERTO =
+  'No se pudo confirmar si el registro se guardó. Use «Reintentar» para enviar los mismos ' +
+  'datos (no se duplicará el registro ni se descontará stock dos veces) o «Cancelar».';
+const AVISO_CANCELADO =
+  'No se confirmó el registro. Revise el historial del paciente antes de volver a registrarlo.';
+const AVISO_CANCELADO_CON_STOCK =
+  'No se confirmó el registro. Revise el historial del paciente y el stock del medicamento ' +
+  'antes de volver a registrarlo.';
 
 /**
  * Clave `Idempotency-Key` de un intento de registro: la misma en sus reintentos
@@ -68,6 +76,16 @@ const NOTA_CLAVE_USADA = 'Revise los datos y vuelva a guardar el registro.';
  */
 function nuevaClave(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Errores tras los que no se sabe si el alta llegó a hacerse: sin respuesta de
+ * la API (red, proxy: estado 0 o 5xx sin cuerpo), cualquier 5xx (503 sin
+ * confirmar, 502, 500) o un error que ni siquiera es HTTP. Los 4xx son
+ * definitivos: el backend no hizo nada y no consumió la clave.
+ */
+function esIncierto(error: unknown): boolean {
+  return !(error instanceof ApiError) || error.status === 0 || error.status >= 500;
 }
 
 /** Estado del inventario para elegir el medicamento a descontar; se carga al pedirlo. */
@@ -184,8 +202,13 @@ export class RegistroDialogoComponent {
   });
   protected readonly enviando = signal(false);
   protected readonly errores = signal<readonly string[]>([]);
+  /** Tras un resultado incierto: campos bloqueados; solo «Reintentar» o «Cancelar». */
+  protected readonly incierto = signal(false);
   /** Clave del intento actual: nueva al abrir el diálogo, tras un alta correcta y tras un 409. */
   private clave = nuevaClave();
+  /** Cuerpo enviado con la clave actual: «Reintentar» lo repite tal cual. */
+  private enviada: RegistroRequest | null = null;
+  private readonly notificaciones = inject(NotificacionService);
 
   /** El enfermero no crea diagnósticos (403 en el backend): ni siquiera se ofrece. */
   protected readonly tipos = TIPOS_REGISTRO.filter(
@@ -219,44 +242,77 @@ export class RegistroDialogoComponent {
   }
 
   protected guardar(): void {
-    if (this.enviando()) {
+    if (this.enviando() || this.incierto()) {
       return;
     }
     if (this.formulario.invalid) {
       this.formulario.markAllAsTouched();
       return;
     }
+    this.enviar(this.solicitud());
+  }
+
+  /** Tras un resultado incierto: la misma petición, con la misma clave y el mismo cuerpo. */
+  protected reintentar(): void {
+    if (!this.enviando() && this.incierto() && this.enviada !== null) {
+      this.enviar(this.enviada);
+    }
+  }
+
+  /** Tras un resultado incierto: cierra sin registro y avisa de qué conviene revisar. */
+  protected cancelar(): void {
+    if (this.enviando()) {
+      return;
+    }
+    const conStock = this.enviada?.idMedicamento != null;
+    this.notificaciones.error([conStock ? AVISO_CANCELADO_CON_STOCK : AVISO_CANCELADO]);
+    this.dialogo.close();
+  }
+
+  private enviar(solicitud: RegistroRequest): void {
+    this.enviada = solicitud;
     this.enviando.set(true);
+    // Mientras se envía (y si el resultado queda incierto) no se cierra con Esc ni clic fuera.
+    this.dialogo.disableClose = true;
     this.errores.set([]);
-    this.servicio.crear(this.datos.paciente.idPaciente, this.solicitud(), this.clave).subscribe({
+    this.servicio.crear(this.datos.paciente.idPaciente, solicitud, this.clave).subscribe({
       // Un 201 repetido (Idempotency-Replayed: true) es el mismo registro: un alta normal.
       next: (creado) => {
         this.clave = nuevaClave();
         this.dialogo.close(creado);
       },
       error: (error: unknown) => {
-        const claveUsada = error instanceof ApiError && error.status === 409;
-        if (claveUsada) {
-          this.clave = nuevaClave();
+        if (this.incierto() || esIncierto(error)) {
+          // Una vez incierto, sigue así aunque el reintento falle de otra forma: solo un
+          // alta correcta lo resuelve.
+          this.bloquear();
+          this.errores.set([...mensajesDeError(error), NOTA_INCIERTO]);
+        } else {
+          const claveUsada = error instanceof ApiError && error.status === 409;
+          if (claveUsada) {
+            this.clave = nuevaClave();
+          }
+          this.errores.set([
+            ...this.mensajesDeFallo(error, solicitud),
+            ...(claveUsada ? [NOTA_CLAVE_USADA] : []),
+          ]);
+          this.dialogo.disableClose = false;
         }
-        this.errores.set([
-          ...this.mensajesDeFallo(error),
-          ...(claveUsada ? [NOTA_CLAVE_USADA] : []),
-        ]);
         this.enviando.set(false);
       },
     });
   }
 
-  /** Mensajes del backend y, si se pidió descontar stock, qué pasó con el registro y el stock. */
-  private mensajesDeFallo(error: unknown): readonly string[] {
+  private bloquear(): void {
+    this.incierto.set(true);
+    this.formulario.disable({ emitEvent: false });
+    this.dialogo.disableClose = true;
+  }
+
+  /** Mensajes de un fallo definitivo (4xx) y, si se pidió descontar stock, que no se descontó. */
+  private mensajesDeFallo(error: unknown, solicitud: RegistroRequest): readonly string[] {
     const mensajes = mensajesDeError(error);
-    if (!this.formulario.controls.descontarStock.enabled || !this.descontar()) {
-      return mensajes;
-    }
-    const sinConfirmar =
-      error instanceof ApiError && (error.status === 502 || error.status === 503);
-    return [...mensajes, sinConfirmar ? NOTA_SIN_CONFIRMAR : NOTA_SIN_GUARDAR];
+    return solicitud.idMedicamento === null ? mensajes : [...mensajes, NOTA_SIN_GUARDAR];
   }
 
   private cargarInventario(): void {
@@ -302,6 +358,9 @@ export class RegistroDialogoComponent {
 
   /** Solo cuentan para la validación los campos del tipo elegido (y del descuento, si se pide). */
   private habilitarCampos(): void {
+    if (this.incierto()) {
+      return; // Bloqueado: nada vuelve a habilitar los campos.
+    }
     const {
       tipo: control,
       contenido,
