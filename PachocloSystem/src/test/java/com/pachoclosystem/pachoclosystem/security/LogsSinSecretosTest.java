@@ -142,8 +142,11 @@ class LogsSinSecretosTest extends MockMvcBaseTest {
 
     private List<Logger> loggersCapturados() {
         return List.of(
+                (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.security"),
+                (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.service"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.config.ClaveFirmaJwt"),
+                (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.config.AdminInicial"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.controller.AuthController"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.controller.UsuarioController"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.exception.GlobalExceptionHandler"));

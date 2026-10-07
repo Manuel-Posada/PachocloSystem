@@ -15,7 +15,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -386,10 +387,12 @@ class UsuarioServiceGestionTest {
                 if (!segundo.isActivo()) {
                     segundo.reactivar();
                 }
-                CountDownLatch puerta = new CountDownLatch(1);
+                // Una barrera de 2 partes por iteración fuerza el solape: ambos
+                // hilos la cruzan a la vez y entran en cambiarEstado de forma
+                // concurrente (sin el cerrojo el invariante se rompe).
+                CyclicBarrier puerta = new CyclicBarrier(2);
                 Future<?> a = pool.submit(() -> intentarDesactivar(idSegundo, idPrimero, puerta, fallos));
                 Future<?> b = pool.submit(() -> intentarDesactivar(idPrimero, idSegundo, puerta, fallos));
-                puerta.countDown();
                 a.get(30, TimeUnit.SECONDS);
                 b.get(30, TimeUnit.SECONDS);
 
@@ -407,13 +410,13 @@ class UsuarioServiceGestionTest {
         assertThat(fallos.get()).isGreaterThanOrEqualTo(iteraciones);
     }
 
-    private void intentarDesactivar(String objetivo, String actor, CountDownLatch puerta, AtomicInteger fallos) {
+    private void intentarDesactivar(String objetivo, String actor, CyclicBarrier puerta, AtomicInteger fallos) {
         try {
             puerta.await();
             servicio.cambiarEstado(objetivo, false, actor);
         } catch (SolicitudInvalidaException esperado) {
             fallos.incrementAndGet();
-        } catch (InterruptedException interrumpido) {
+        } catch (InterruptedException | BrokenBarrierException interrumpido) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(interrumpido);
         }
