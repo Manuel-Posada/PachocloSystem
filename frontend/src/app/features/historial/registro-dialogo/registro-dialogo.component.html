@@ -1,0 +1,131 @@
+<h2 mat-dialog-title>Nuevo registro</h2>
+
+<form [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+  <mat-dialog-content>
+    <p class="contexto">
+      Paciente: {{ datos.paciente.nombre }} ({{ datos.paciente.idPaciente }}) · Autor:
+      {{ datos.idAutor }}
+    </p>
+
+    <app-errores-formulario [mensajes]="errores()" />
+
+    <fieldset class="grupo">
+      <legend id="etiqueta-tipo">Tipo de registro</legend>
+      <mat-radio-group formControlName="tipo" aria-labelledby="etiqueta-tipo">
+        @for (opcion of tipos; track opcion) {
+          <mat-radio-button [value]="opcion">{{ etiquetasTipo[opcion] }}</mat-radio-button>
+        }
+      </mat-radio-group>
+      @if (formulario.controls.tipo.touched && formulario.controls.tipo.invalid) {
+        <mat-error>{{ primerError(formulario.controls.tipo) }}</mat-error>
+      }
+    </fieldset>
+
+    @if (tipo() === 'SIGNOS_VITALES') {
+      <div formGroupName="signos">
+        <div class="fila-campos">
+          <mat-form-field>
+            <mat-label>Temperatura (°C)</mat-label>
+            <input
+              matInput
+              type="number"
+              formControlName="temperatura"
+              min="30"
+              max="45"
+              step="0.1"
+            />
+            <mat-error>{{ primerError(signos.temperatura) }}</mat-error>
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>Frecuencia cardíaca (lpm)</mat-label>
+            <input
+              matInput
+              type="number"
+              formControlName="frecCardiaca"
+              min="20"
+              max="250"
+              step="1"
+            />
+            <mat-error>{{ primerError(signos.frecCardiaca) }}</mat-error>
+          </mat-form-field>
+        </div>
+        <div class="fila-campos">
+          <mat-form-field>
+            <mat-label>Presión sistólica (mmHg)</mat-label>
+            <input
+              matInput
+              type="number"
+              formControlName="presionSistolica"
+              min="50"
+              max="250"
+              step="1"
+            />
+            <mat-error>{{ primerError(signos.presionSistolica) }}</mat-error>
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>Presión diastólica (mmHg)</mat-label>
+            <input
+              matInput
+              type="number"
+              formControlName="presionDiastolica"
+              min="30"
+              max="150"
+              step="1"
+            />
+            <mat-error>{{ primerError(signos.presionDiastolica) }}</mat-error>
+          </mat-form-field>
+        </div>
+        @if (errorPresion(); as mensaje) {
+          <mat-error class="error-grupo">{{ mensaje }}</mat-error>
+        }
+        <div class="fila-campos">
+          <mat-form-field>
+            <mat-label>Frecuencia respiratoria (rpm)</mat-label>
+            <input
+              matInput
+              type="number"
+              formControlName="frecRespiratoria"
+              min="5"
+              max="60"
+              step="1"
+            />
+            <mat-error>{{ primerError(signos.frecRespiratoria) }}</mat-error>
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>Saturación de oxígeno (%)</mat-label>
+            <input matInput type="number" formControlName="saturacion" min="0" max="100" step="1" />
+            <mat-error>{{ primerError(signos.saturacion) }}</mat-error>
+          </mat-form-field>
+        </div>
+        <mat-form-field class="campo-completo">
+          <mat-label>Observaciones (opcional)</mat-label>
+          <textarea matInput formControlName="observaciones" rows="2"></textarea>
+          <mat-error>{{ primerError(signos.observaciones) }}</mat-error>
+        </mat-form-field>
+      </div>
+    } @else if (tipo()) {
+      <mat-form-field class="campo-completo">
+        <mat-label>
+          @switch (tipo()) {
+            @case ('DIAGNOSTICO') {
+              Diagnóstico
+            }
+            @case ('EVOLUCION') {
+              Evolución del paciente
+            }
+            @default {
+              Medicación: medicamento, dosis y vía
+            }
+          }
+        </mat-label>
+        <textarea matInput formControlName="contenido" rows="4" required></textarea>
+        <mat-error>{{ primerError(formulario.controls.contenido) }}</mat-error>
+      </mat-form-field>
+    }
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close [disabled]="enviando()">Cancelar</button>
+    <button mat-flat-button type="submit" [disabled]="enviando()">Guardar registro</button>
+  </mat-dialog-actions>
+</form>
