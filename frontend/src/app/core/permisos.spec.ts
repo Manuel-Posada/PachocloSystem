@@ -43,6 +43,7 @@ describe('permisos', () => {
       rol,
       idTrabajador: null,
       activo: true,
+      debeCambiarPassword: false,
     });
 
     expect(permisos.puede('usuarios.gestionar')).toBe(false);

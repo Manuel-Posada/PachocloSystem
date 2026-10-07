@@ -19,8 +19,9 @@ export interface DatosPasswordDialogo {
 
 /**
  * Restablece la contraseña de un usuario (solo ADMIN), con la política del
- * backend. El backend invalida los tokens anteriores de ese usuario: si es el
- * propio admin, se cierra su sesión explicando por qué.
+ * backend. El backend invalida los tokens anteriores de ese usuario y le obliga
+ * a cambiarla al entrar: si es el propio admin, se cierra su sesión explicando
+ * por qué.
  */
 @Component({
   selector: 'app-password-dialogo',
@@ -41,10 +42,13 @@ export interface DatosPasswordDialogo {
         @if (propio) {
           <p class="aviso" role="note">
             Es su propia contraseña: al guardarla, su sesión actual dejará de valer y tendrá que
-            iniciar sesión con la nueva.
+            iniciar sesión con la nueva y cambiarla.
           </p>
         } @else {
-          <p class="nota">Las sesiones abiertas de este usuario dejarán de valer.</p>
+          <p class="nota">
+            Las sesiones abiertas de este usuario dejarán de valer y tendrá que cambiar esta
+            contraseña al iniciar sesión.
+          </p>
         }
         <mat-form-field class="campo-completo">
           <mat-label>Nueva contraseña</mat-label>

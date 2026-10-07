@@ -40,6 +40,7 @@ describe('HistorialPacienteComponent', () => {
     rol: 'DOCTOR',
     idTrabajador: 'DOC-0001',
     activo: true,
+    debeCambiarPassword: false,
   };
   const admin: Usuario = {
     idUsuario: 'USR-0001',
@@ -47,6 +48,7 @@ describe('HistorialPacienteComponent', () => {
     rol: 'ADMIN',
     idTrabajador: null,
     activo: true,
+    debeCambiarPassword: false,
   };
 
   const historial = {

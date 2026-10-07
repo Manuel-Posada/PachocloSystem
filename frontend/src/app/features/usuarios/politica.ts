@@ -71,6 +71,17 @@ export function passwordValida(username: () => string | null): ValidatorFn {
   };
 }
 
+/**
+ * La nueva contraseña no es la actual, como `cambiarPasswordPropia` del
+ * backend. Vacía la valida `passwordValida`.
+ */
+export function distintaDe(actual: () => string): ValidatorFn {
+  return (control) =>
+    !control.value || control.value !== actual()
+      ? null
+      : { distinta: 'La nueva contraseña debe ser diferente de la actual.' };
+}
+
 /** La repetición de la contraseña coincide (comprobación solo del frontend). */
 export function repiteA(original: () => string): ValidatorFn {
   return (control) =>

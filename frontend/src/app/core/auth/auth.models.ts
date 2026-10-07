@@ -11,11 +11,20 @@ export interface LoginResponse {
   tipo: string;
   expiraEnSegundos: number;
   rol: Rol;
+  debeCambiarPassword: boolean;
+}
+
+/** `POST /api/auth/password`: cambio de la contraseña propia. */
+export interface CambiarPasswordRequest {
+  passwordActual: string;
+  passwordNueva: string;
 }
 
 /**
  * `UsuarioResponse` (`GET /api/auth/me` y `/api/usuarios`). `idTrabajador` es
  * `null` para el administrador. Nunca trae el hash de la contraseña.
+ * `debeCambiarPassword`: tras un alta o un restablecimiento, el usuario solo
+ * puede cambiar su contraseña; el backend responde 403 a todo lo demás.
  */
 export interface Usuario {
   idUsuario: string;
@@ -23,4 +32,5 @@ export interface Usuario {
   rol: Rol;
   idTrabajador: string | null;
   activo: boolean;
+  debeCambiarPassword: boolean;
 }

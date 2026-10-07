@@ -16,6 +16,7 @@ describe('UsuariosListaComponent', () => {
     rol: 'ADMIN',
     idTrabajador: null,
     activo: true,
+    debeCambiarPassword: false,
   };
   const eva: Usuario = {
     idUsuario: 'USR-0002',
@@ -23,6 +24,7 @@ describe('UsuariosListaComponent', () => {
     rol: 'DOCTOR',
     idTrabajador: 'DOC-0001',
     activo: false,
+    debeCambiarPassword: false,
   };
   const servicio = {
     listar: vi.fn<(q?: string) => Observable<Usuario[]>>(),
@@ -89,7 +91,9 @@ describe('UsuariosListaComponent', () => {
   });
 
   it('desactivar confirma en un diálogo que ejecuta la operación (y muestra sus 409)', async () => {
-    servicio.desactivar.mockReturnValue(of({ ...admin, activo: false }));
+    servicio.desactivar.mockReturnValue(
+      of({ ...admin, activo: false, debeCambiarPassword: false }),
+    );
     alCerrarDialogo(true);
     const { fixture, boton } = await renderizar();
 
@@ -106,7 +110,7 @@ describe('UsuariosListaComponent', () => {
   });
 
   it('activar usa la misma confirmación con su operación', async () => {
-    servicio.activar.mockReturnValue(of({ ...eva, activo: true }));
+    servicio.activar.mockReturnValue(of({ ...eva, activo: true, debeCambiarPassword: false }));
     alCerrarDialogo(true);
     const { fixture, boton } = await renderizar();
 

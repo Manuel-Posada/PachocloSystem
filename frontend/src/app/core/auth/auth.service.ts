@@ -2,10 +2,11 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, switchMap, tap, throwError } from 'rxjs';
-import { LoginRequest, LoginResponse, Usuario } from './auth.models';
+import { CambiarPasswordRequest, LoginRequest, LoginResponse, Usuario } from './auth.models';
 
 export const URL_LOGIN = '/api/auth/login';
 export const URL_USUARIO_ACTUAL = '/api/auth/me';
+export const URL_CAMBIAR_PASSWORD = '/api/auth/password';
 
 /** Antelación con la que se avisa de que la sesión va a expirar (no hay refresh token). */
 export const AVISO_EXPIRACION_MS = 5 * 60_000;
@@ -22,8 +23,8 @@ interface Sesion {
 /**
  * Por qué se cerró la sesión, para que el login lo explique:
  * - `expirada`: el token caducó o dejó de ser válido.
- * - `password-cambiada`: el usuario restableció su propia contraseña y el
- *   backend invalidó su token.
+ * - `password-cambiada`: el usuario cambió (o restableció, si es admin) su
+ *   propia contraseña y el backend invalidó su token.
  */
 export type MotivoCierre = 'expirada' | 'password-cambiada';
 
@@ -52,6 +53,8 @@ export class AuthService {
   readonly token = computed(() => this.sesion()?.token ?? null);
   readonly usuario = computed(() => this.sesion()?.usuario ?? null);
   readonly autenticado = computed(() => this.sesion() !== null);
+  /** El usuario debe cambiar su contraseña antes de usar la aplicación. */
+  readonly debeCambiarPassword = computed(() => this.usuario()?.debeCambiarPassword === true);
 
   constructor() {
     const sesion = this.sesion();
@@ -88,6 +91,16 @@ export class AuthService {
         }
       }),
     );
+  }
+
+  /**
+   * Cambia la contraseña propia. El backend invalida el token actual, así que
+   * al terminar se cierra la sesión explicando por qué.
+   */
+  cambiarPassword(cambio: CambiarPasswordRequest): Observable<void> {
+    return this.http
+      .post<void>(URL_CAMBIAR_PASSWORD, cambio)
+      .pipe(tap(() => this.cerrarSesion({ motivo: 'password-cambiada' })));
   }
 
   /** Borra la sesión y lleva al login. */

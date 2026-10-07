@@ -4,7 +4,13 @@ import { TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router, provideRouter } from '@angular/router';
 import { Usuario } from './auth.models';
-import { AVISO_EXPIRACION_MS, AuthService, URL_LOGIN, URL_USUARIO_ACTUAL } from './auth.service';
+import {
+  AVISO_EXPIRACION_MS,
+  AuthService,
+  URL_CAMBIAR_PASSWORD,
+  URL_LOGIN,
+  URL_USUARIO_ACTUAL,
+} from './auth.service';
 
 const CLAVE = 'pachoclosystem.sesion';
 const ADMIN: Usuario = {
@@ -13,6 +19,7 @@ const ADMIN: Usuario = {
   rol: 'ADMIN',
   idTrabajador: null,
   activo: true,
+  debeCambiarPassword: false,
 };
 
 describe('AuthService', () => {
@@ -37,9 +44,13 @@ describe('AuthService', () => {
 
   function iniciarSesion(auth: AuthService, expiraEnSegundos = 1800): void {
     auth.iniciarSesion({ username: 'admin', password: 'secreto' }).subscribe();
-    http
-      .expectOne(URL_LOGIN)
-      .flush({ token: 'tkn', tipo: 'Bearer', expiraEnSegundos, rol: 'ADMIN' });
+    http.expectOne(URL_LOGIN).flush({
+      token: 'tkn',
+      tipo: 'Bearer',
+      expiraEnSegundos,
+      rol: 'ADMIN',
+      debeCambiarPassword: false,
+    });
     http.expectOne(URL_USUARIO_ACTUAL).flush(ADMIN);
   }
 
@@ -68,6 +79,61 @@ describe('AuthService', () => {
       expiraEn: Date.now() + 1800_000,
       usuario: ADMIN,
     });
+  });
+
+  it('cambiar la contraseña propia la envía y cierra la sesión explicando el motivo', () => {
+    const auth = crear();
+    iniciarSesion(auth);
+
+    auth
+      .cambiarPassword({ passwordActual: 'actual-123456', passwordNueva: 'nueva-1234567' })
+      .subscribe();
+    const peticion = http.expectOne(URL_CAMBIAR_PASSWORD);
+    expect(peticion.request.method).toBe('POST');
+    expect(peticion.request.body).toEqual({
+      passwordActual: 'actual-123456',
+      passwordNueva: 'nueva-1234567',
+    });
+    peticion.flush(null, { status: 204, statusText: 'No Content' });
+
+    expect(auth.autenticado()).toBe(false);
+    expect(router.navigate).toHaveBeenCalledWith(['/login'], {
+      queryParams: { motivo: 'password-cambiada', returnUrl: undefined },
+    });
+  });
+
+  it('si cambiar la contraseña falla, la sesión sigue abierta', () => {
+    const auth = crear();
+    iniciarSesion(auth);
+    const error = vi.fn();
+
+    auth
+      .cambiarPassword({ passwordActual: 'mala', passwordNueva: 'nueva-1234567' })
+      .subscribe({ error });
+    http
+      .expectOne(URL_CAMBIAR_PASSWORD)
+      .flush(
+        { status: 400, error: 'Bad Request', mensajes: ['La contraseña actual no es correcta.'] },
+        { status: 400, statusText: 'Bad Request' },
+      );
+
+    expect(error).toHaveBeenCalled();
+    expect(auth.autenticado()).toBe(true);
+  });
+
+  it('expone si el usuario debe cambiar la contraseña', () => {
+    const auth = crear();
+    auth.iniciarSesion({ username: 'eva', password: 'temporal' }).subscribe();
+    http.expectOne(URL_LOGIN).flush({
+      token: 'tkn',
+      tipo: 'Bearer',
+      expiraEnSegundos: 1800,
+      rol: 'DOCTOR',
+      debeCambiarPassword: true,
+    });
+    http.expectOne(URL_USUARIO_ACTUAL).flush({ ...ADMIN, debeCambiarPassword: true });
+
+    expect(auth.debeCambiarPassword()).toBe(true);
   });
 
   it('si el login falla no queda sesión y propaga el error', () => {

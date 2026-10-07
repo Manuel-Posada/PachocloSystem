@@ -15,6 +15,7 @@ describe('PasswordDialogoComponent', () => {
     rol: 'ADMIN',
     idTrabajador: null,
     activo: true,
+    debeCambiarPassword: false,
   };
   const eva: Usuario = {
     idUsuario: 'USR-0002',
@@ -22,6 +23,7 @@ describe('PasswordDialogoComponent', () => {
     rol: 'DOCTOR',
     idTrabajador: 'DOC-0001',
     activo: true,
+    debeCambiarPassword: false,
   };
   const usuarios = { restablecerPassword: vi.fn<() => Observable<void>>() };
   const auth = { usuario: signal<Usuario | null>(admin), cerrarSesion: vi.fn() };

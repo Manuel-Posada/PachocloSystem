@@ -12,6 +12,7 @@ describe('ShellComponent', () => {
     rol: 'DOCTOR',
     idTrabajador: 'DOC-0001',
     activo: true,
+    debeCambiarPassword: false,
   };
   const usuario = signal<Usuario | null>(doctora);
   const auth = { usuario, cerrarSesion: vi.fn() };
@@ -79,7 +80,9 @@ describe('ShellComponent', () => {
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.usuario')!.click();
     await fixture.whenStable();
     // El menú se abre en un overlay fuera del componente.
-    document.querySelector<HTMLButtonElement>('[mat-menu-item]')!.click();
+    const opciones = Array.from(document.querySelectorAll<HTMLElement>('[mat-menu-item]'));
+    expect(opciones[0].getAttribute('href')).toBe('/cambiar-password');
+    opciones.find((o) => o.textContent?.includes('Cerrar sesión'))!.click();
 
     expect(auth.cerrarSesion).toHaveBeenCalled();
   });

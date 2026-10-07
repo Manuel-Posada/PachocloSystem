@@ -21,3 +21,7 @@
   background-color: var(--mat-sys-surface-container-highest);
   color: var(--mat-sys-on-surface-variant);
 }
+
+.insignia + .insignia {
+  margin-left: 4px;
+}

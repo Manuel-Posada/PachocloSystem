@@ -41,7 +41,7 @@ src/app/
 ├── core/       sesión (AuthService, interceptores, guards), errores de la API (ApiError), roles y notificaciones
 ├── shared/     piezas reutilizables (validadores, errores de formulario, diálogo de confirmación)
 ├── layout/     marco de la app autenticada (barra superior y menú lateral)
-└── features/   pantallas: login, 404 y módulos (pacientes, trabajadores, ...)
+└── features/   pantallas: login, cambio de contraseña, 404 y módulos (pacientes, trabajadores, ...)
 ```
 
 Convención: nombres de dominio en español y sufijos de Angular en inglés
@@ -76,7 +76,7 @@ para ocultar lo que el rol no puede hacer:
 
 - **Menú y rutas:** Trabajadores (`trabajadores.leer`) y Usuarios (`usuarios.gestionar`) solo
   aparecen a quien puede abrirlas, y sus rutas tienen `permisoGuard`, que lleva al inicio.
-- **Acciones:** alta, edición y borrado de pacientes, escrituras de trabajadores y de medicamentos
+- **Acciones:** alta, edición y baja de pacientes, escrituras de trabajadores y de medicamentos
   (el enfermero solo ve las salidas de stock) y el tipo `DIAGNOSTICO` del historial.
 
 Quien decide es el backend: si algo se escapa, su 403 se muestra como cualquier otro error. Si la
@@ -91,6 +91,23 @@ contraseña (de 10 caracteres a 72 bytes UTF-8 y distinta del username). Los 400
 dentro del formulario o del diálogo de confirmación, incluidos los de desactivarse a uno mismo o
 al último administrador. Si el admin restablece su propia contraseña, el backend invalida su token:
 se le avisa antes y, al guardar, vuelve al login con un mensaje que lo explica.
+
+El alta y el restablecimiento dejan una **contraseña temporal**: el usuario la cambia al entrar
+(ver [Cambio de contraseña](#cambio-de-contraseña)) y la lista lo marca con "Contraseña
+pendiente". El cambio de rol de un usuario (`PATCH /api/usuarios/{id}/rol`) existe en el backend,
+pero esta pantalla aún no lo ofrece.
+
+## Cambio de contraseña
+
+`/cambiar-password` (`features/cambiar-password`) cambia la contraseña propia con la actual, la
+nueva (misma política que el alta y distinta de la actual) y su repetición.
+
+- **Obligatorio:** si `/me` trae `debeCambiarPassword: true`, `authGuard` lleva aquí desde
+  cualquier ruta de la app, porque el backend respondería 403 a todo lo demás. Solo se puede
+  cambiarla o cerrar sesión.
+- **Voluntario:** desde el menú de usuario ("Cambiar contraseña"), con opción de cancelar.
+- Al guardarla, el backend invalida el token: se vuelve al login con el aviso de contraseña
+  cambiada y se entra con la nueva.
 
 ## Historial clínico
 
@@ -150,5 +167,8 @@ UTC y en UTC-5 mostraría el día anterior.
 - Todo error HTTP llega a los componentes como `ApiError` (`status` y `mensajes`, los del
   `ErrorResponse` del backend). Sin ese cuerpo, por ejemplo con el backend apagado, el mensaje
   es "No se pudo conectar con el servidor". Un 401 fuera del login cierra la sesión.
+- Tras 5 intentos fallidos el login responde 429 durante 15 minutos (por usuario y por IP); el
+  formulario muestra el mensaje del backend. Con el proxy de desarrollo todas las peticiones
+  llegan al backend con la misma IP, así que el bloqueo por IP afecta a todos los usuarios.
 - Si MedicamentosService no responde, el backend devuelve 503 (o 502). Medicamentos lo muestra
   como aviso dentro del módulo y el resto de la app sigue funcionando.

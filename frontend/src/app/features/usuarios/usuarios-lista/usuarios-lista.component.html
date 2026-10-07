@@ -52,6 +52,9 @@
           <span class="insignia" [class.insignia-inactivo]="!u.activo">
             {{ u.activo ? 'Activo' : 'Inactivo' }}
           </span>
+          @if (u.debeCambiarPassword) {
+            <span class="insignia insignia-inactivo">Contraseña pendiente</span>
+          }
         </td>
       </ng-container>
 
