@@ -1,6 +1,5 @@
 import { ComponentType } from '@angular/cdk/portal';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -10,23 +9,11 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import {
-  EMPTY,
-  Subject,
-  catchError,
-  debounceTime,
-  distinctUntilChanged,
-  filter,
-  map,
-  merge,
-  startWith,
-  switchMap,
-  tap,
-} from 'rxjs';
+import { filter, switchMap } from 'rxjs';
 import { mensajesDeError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
 import { confirmar } from '../../../shared/confirmacion-dialogo/confirmacion-dialogo.component';
-import { ESPERA_BUSQUEDA_MS } from '../../../shared/listas';
+import { crearListaRemota, textoBuscado } from '../../../shared/listas';
 import { HabitacionDialogoComponent } from '../habitacion-dialogo/habitacion-dialogo.component';
 import { PacienteDialogoComponent } from '../paciente-dialogo/paciente-dialogo.component';
 import { Paciente } from '../paciente.models';
@@ -56,52 +43,22 @@ export class PacientesListaComponent {
   private readonly servicio = inject(PacienteService);
   private readonly dialogo = inject(MatDialog);
   private readonly notificaciones = inject(NotificacionService);
-  private readonly recargas = new Subject<void>();
 
   protected readonly columnas = ['idPaciente', 'nombre', 'edad', 'habitacion', 'acciones'];
   protected readonly busqueda = new FormControl('', { nonNullable: true });
-  protected readonly pacientes = signal<readonly Paciente[]>([]);
-  protected readonly cargando = signal(true);
-  protected readonly errores = signal<readonly string[]>([]);
+  private readonly lista = crearListaRemota({
+    inicial: '',
+    cambios: textoBuscado(this.busqueda),
+    cargar: (texto: string) => this.servicio.listar(texto),
+  });
+  protected readonly pacientes = this.lista.elementos;
+  protected readonly cargando = this.lista.cargando;
+  protected readonly errores = this.lista.errores;
   /** Filtro de la última carga, para el mensaje de lista vacía. */
-  protected readonly filtro = signal('');
-
-  constructor() {
-    merge(
-      this.busqueda.valueChanges.pipe(
-        debounceTime(ESPERA_BUSQUEDA_MS),
-        map((texto) => texto.trim()),
-        distinctUntilChanged(),
-      ),
-      this.recargas.pipe(map(() => this.busqueda.value.trim())),
-    )
-      .pipe(
-        startWith(''),
-        tap(() => this.cargando.set(true)),
-        switchMap((texto) =>
-          this.servicio.listar(texto).pipe(
-            tap({
-              next: (pacientes) => {
-                this.pacientes.set(pacientes);
-                this.filtro.set(texto);
-                this.errores.set([]);
-                this.cargando.set(false);
-              },
-              error: (error: unknown) => {
-                this.errores.set(mensajesDeError(error));
-                this.cargando.set(false);
-              },
-            }),
-            catchError(() => EMPTY),
-          ),
-        ),
-        takeUntilDestroyed(),
-      )
-      .subscribe();
-  }
+  protected readonly filtro = this.lista.consulta;
 
   protected recargar(): void {
-    this.recargas.next();
+    this.lista.recargar();
   }
 
   protected nuevo(): void {
