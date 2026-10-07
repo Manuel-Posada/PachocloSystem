@@ -46,11 +46,14 @@ public class AuthService {
         }
         // Se evalúa la contraseña siempre (incluso si el usuario está inactivo)
         // para que las tres causas de 401 tarden lo mismo.
-        boolean passwordCorrecta = passwordEncoder.matches(passwordEnClaro, usuario.getPasswordHash());
+        // Una sola lectura de las credenciales: el token lleva la marca del hash
+        // comprobado, así un restablecimiento simultáneo no deja pasar la anterior.
+        Usuario.Credenciales credenciales = usuario.getCredenciales();
+        boolean passwordCorrecta = passwordEncoder.matches(passwordEnClaro, credenciales.hash());
         if (!passwordCorrecta || !usuario.isActivo()) {
             throw new CredencialesInvalidasException();
         }
-        String token = tokenService.generarToken(usuario);
+        String token = tokenService.generarToken(usuario, credenciales);
         return new LoginResponse(token, "Bearer", tokenService.expiraEnSegundos(),
                 usuario.getRol().name());
     }

@@ -188,16 +188,16 @@ Modelo de usuarios (`Rol`: `ADMIN`, `DOCTOR`, `ENFERMERO`; entidad `Usuario`,
 repositorio en memoria, servicio con reglas de negocio) y creación de un
 administrador inicial al arrancar. La autenticación es **stateless con JWT**:
 todos los endpoints de `/api/**`, salvo el login, exigen un token bearer
-válido. Aún **no hay autorización por rol ni endpoints de administración de
-usuarios**: cualquier usuario autenticado (o el admin) puede usar los
-endpoints, y los usuarios se crean vía `UsuarioService` (no por HTTP).
+válido. La gestión de usuarios (`/api/usuarios`) es **solo para ADMIN**; el
+resto de endpoints aún **no tiene autorización por rol**: cualquier usuario
+autenticado puede usarlos.
 
 ### Autenticación (JWT)
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | POST | `/api/auth/login` | Público. `{ "username", "password" }` → JWT bearer |
-| GET | `/api/auth/me` | Autenticado. Devuelve `{ idUsuario, username, rol, idTrabajador }` |
+| GET | `/api/auth/me` | Autenticado. Devuelve `{ idUsuario, username, rol, idTrabajador, activo }` |
 
 Login correcto:
 
@@ -230,10 +230,53 @@ curl http://localhost:8080/api/pacientes -H "Authorization: Bearer eyJhbGciOiJIU
   uniforme junto con `WWW-Authenticate: Bearer`; nunca se exponen detalles
   internos del token. El 403 responde `"No tiene permisos para realizar esta
   operación."`.
-- El token (HS256) contiene `sub`, `username`, `rol` e `idTrabajador` (si
-  aplica), pero la autorización **se relee del repositorio en cada petición**:
-  si el usuario se desactiva (por ejemplo, al eliminar su trabajador), su token
-  deja de valer de inmediato.
+- El token (HS256) contiene `sub`, `username`, `rol`, `idTrabajador` (si
+  aplica) y `credenciales` (marca de la contraseña con la que se emitió), pero
+  la autorización **se relee del repositorio en cada petición**: si el usuario
+  se desactiva (por ejemplo, al eliminar su trabajador) o se restablece su
+  contraseña, su token deja de valer de inmediato. La marca registra el momento
+  del cambio al milisegundo y se compara por igualdad, no con `iat` (que solo
+  tiene segundos), así que tampoco vale un token emitido en el mismo segundo
+  justo antes del cambio.
+
+### Gestión de usuarios — `/api/usuarios` (solo ADMIN)
+
+| Método | Ruta | Descripción | Respuestas |
+|---|---|---|---|
+| POST | `/api/usuarios` | Crea `{username, password, rol, idTrabajador?}` | 201 / 400 / 404 / 409 |
+| GET | `/api/usuarios?q=` | Lista activos e inactivos; `q` filtra por ID, username o trabajador | 200 |
+| PATCH | `/api/usuarios/{id}/desactivar` | Desactiva (idempotente) | 200 / 404 / 409 |
+| PATCH | `/api/usuarios/{id}/activar` | Reactiva (idempotente) | 200 / 404 / 409 |
+| PATCH | `/api/usuarios/{id}/password` | Restablece la contraseña `{password}` | 204 / 400 / 404 |
+
+Las respuestas son `{ idUsuario, username, rol, idTrabajador, activo }` y **nunca
+incluyen el hash** de la contraseña. Un usuario que no es ADMIN recibe `403` y
+una petición sin token, `401`, ambos con el cuerpo de error uniforme.
+
+```bash
+curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <token-de-admin>" -H "Content-Type: application/json"   -d '{"username":"eva.mora","password":"<contraseña>","rol":"DOCTOR","idTrabajador":"DOC-0001"}'
+```
+
+- **Rol y vínculo:** `ADMIN` no se vincula a ningún trabajador; `DOCTOR` y
+  `ENFERMERO` se vinculan a un trabajador existente de su tipo (si no existe,
+  `404`; si es de otro tipo, `400`). Un trabajador solo puede tener un usuario,
+  aunque esté desactivado.
+- **Conflictos (`409`):** username ya usado (sin distinguir mayúsculas) o
+  trabajador que ya tiene usuario.
+- **Desactivar:** el usuario pierde el acceso en su siguiente petición (los
+  tokens emitidos dejan de valer). `409` si un admin intenta desactivarse a sí
+  mismo o desactivar al último administrador activo. Eliminar un trabajador
+  sigue desactivando su usuario.
+- **Activar:** un doctor o enfermero solo se reactiva si su trabajador sigue
+  existiendo, es de su tipo y sigue vinculado a él; si no, `409`.
+- **Restablecer contraseña:** el ADMIN fija una nueva para cualquier usuario
+  (activo o no), con la misma política. **Todos los tokens emitidos antes del
+  cambio dejan de valer** (`401`): el usuario debe volver a iniciar sesión. Esto
+  incluye al propio ADMIN si restablece su contraseña: la petición se completa,
+  pero su token deja de valer en la siguiente y debe iniciar sesión con la nueva.
+  Cambiar la propia contraseña (con la actual) aún no existe.
+- Los usuarios viven **en memoria**: al reiniciar solo se recrea el
+  administrador inicial.
 
 ### Variables de entorno del administrador inicial
 
@@ -243,8 +286,9 @@ curl http://localhost:8080/api/pacientes -H "Authorization: Bearer eyJhbGciOiJIU
 | `ADMIN_PASSWORD` | `app.admin.password` | *(sin valor en el repo)* | Contraseña en claro del administrador. |
 
 - Si `ADMIN_PASSWORD` **está definida**, se usa tal cual y **nunca se escribe en
-  el log**. Si tiene menos de 10 caracteres, la aplicación **no arranca** y
-  muestra un mensaje claro con la política.
+  el log**. Si no cumple la política de contraseña (menos de 10 caracteres, más
+  de 72 bytes o igual al username), la aplicación **no arranca** y muestra un
+  mensaje claro con la regla incumplida.
 - Si `ADMIN_PASSWORD` **no está definida**, se genera una contraseña aleatoria
   de 20 caracteres (alfanumérico sin caracteres ambiguos) con `SecureRandom` y se
   escribe **una sola vez** en el log a nivel `WARN`, indicando que es temporal y
@@ -252,13 +296,14 @@ curl http://localhost:8080/api/pacientes -H "Authorization: Bearer eyJhbGciOiJIU
 
 ### Política de contraseña
 
-- Mínimo **10 caracteres**; no se exige ningún requisito de composición. El
-  mensaje de error nunca incluye la contraseña.
+- De **10 caracteres** a **72 bytes en UTF-8** (el límite de BCrypt; las letras
+  con tilde y la ñ ocupan 2 bytes), y **distinta del username** (sin distinguir
+  mayúsculas). No se exige ningún requisito de composición. El mensaje de error
+  nunca incluye la contraseña.
 - Solo se almacena el **hash BCrypt**: la contraseña en claro no se guarda ni
   aparece en `toString()`, en la serialización JSON ni en los logs.
-- Un trabajador solo puede tener un usuario; los doctores y enfermeros deben
-  estar vinculados a un trabajador existente de su tipo, y los administradores no
-  se vinculan a ninguno.
+- Se aplica igual al crear usuarios, al restablecer contraseñas y a
+  `ADMIN_PASSWORD`.
 
 ### Clave de firma JWT
 
