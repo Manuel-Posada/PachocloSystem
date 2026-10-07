@@ -42,46 +42,57 @@ src/main/java/com/pachoclosystem/pachoclosystem/
 
 ### Pacientes — `/api/pacientes`
 
-| Método | Ruta | Descripción | Respuestas |
-|---|---|---|---|
-| GET | `/api/pacientes?q=` | Lista pacientes; `q` filtra por id o nombre | 200 |
-| GET | `/api/pacientes/{id}` | Obtiene un paciente | 200 / 404 |
-| POST | `/api/pacientes` | Registra un paciente `{nombre, edad, habitacion}` | 201 / 400 |
-| PUT | `/api/pacientes/{id}` | Edita nombre, edad y habitación | 200 / 400 / 404 |
-| PATCH | `/api/pacientes/{id}/habitacion` | Cambia solo la habitación `{habitacion}` | 200 / 400 / 404 |
-| DELETE | `/api/pacientes/{id}` | Elimina un paciente | 204 / 404 |
+| Método | Ruta | Descripción | Rol | Respuestas |
+|---|---|---|---|---|
+| GET | `/api/pacientes?q=` | Lista pacientes; `q` filtra por id o nombre | Cualquiera | 200 |
+| GET | `/api/pacientes/{id}` | Obtiene un paciente | Cualquiera | 200 / 404 |
+| POST | `/api/pacientes` | Registra un paciente `{nombre, edad, habitacion}` | DOCTOR | 201 / 400 / 403 |
+| PUT | `/api/pacientes/{id}` | Edita nombre, edad y habitación | DOCTOR | 200 / 400 / 403 / 404 |
+| PATCH | `/api/pacientes/{id}/habitacion` | Cambia solo la habitación `{habitacion}` | DOCTOR | 200 / 400 / 403 / 404 |
+| DELETE | `/api/pacientes/{id}` | Baja lógica de un paciente (ver abajo) | ADMIN | 204 / 403 / 404 |
+
+**Baja lógica de pacientes.** `DELETE /api/pacientes/{id}` marca al paciente
+como inactivo en lugar de borrarlo: el objeto y su historial clínico se
+conservan en memoria. A partir de ahí el paciente se comporta como
+inexistente (404 en `GET`/`PUT`/`PATCH`/historial y en un segundo `DELETE`) y
+no se reactiva. Las bajas dobles devuelven 404.
 
 ### Trabajadores — `/api/trabajadores`
 
-| Método | Ruta | Descripción | Respuestas |
-|---|---|---|---|
-| GET | `/api/trabajadores?q=` | Lista trabajadores; `q` filtra por id o nombre | 200 |
-| GET | `/api/trabajadores/{id}` | Obtiene un trabajador | 200 / 404 |
-| POST | `/api/trabajadores` | Registra `{nombre, rol: "Doctor"\|"Enfermero", especialidad?, nivelExperiencia?}` | 201 / 400 |
-| PUT | `/api/trabajadores/{id}` | Edita un trabajador (el rol no puede cambiar) | 200 / 400 / 404 |
-| DELETE | `/api/trabajadores/{id}` | Elimina un trabajador | 204 / 404 |
+| Método | Ruta | Descripción | Rol | Respuestas |
+|---|---|---|---|---|
+| GET | `/api/trabajadores?q=` | Lista trabajadores; `q` filtra por id o nombre | Cualquiera | 200 |
+| GET | `/api/trabajadores/{id}` | Obtiene un trabajador | Cualquiera | 200 / 404 |
+| POST | `/api/trabajadores` | Registra `{nombre, rol: "Doctor"\|"Enfermero", especialidad?, nivelExperiencia?}` | ADMIN | 201 / 400 / 403 |
+| PUT | `/api/trabajadores/{id}` | Edita un trabajador (el rol no puede cambiar) | ADMIN | 200 / 400 / 403 / 404 |
+| DELETE | `/api/trabajadores/{id}` | Elimina un trabajador | ADMIN | 204 / 403 / 404 |
 
 Un Doctor requiere `especialidad`; un Enfermero requiere `nivelExperiencia` (`NOVATO`, `PRINCIPIANTE`, `AVANZADO`).
 
 ### Historial clínico
 
-| Método | Ruta | Descripción | Respuestas |
-|---|---|---|---|
-| GET | `/api/historial?filtro=&q=` | Todos los registros ordenados por fecha. `filtro`: `todos` (defecto), `paciente` o `autor` | 200 / 400 |
-| GET | `/api/pacientes/{id}/historial?q=` | Registros de un paciente; `q` filtra por autor | 200 / 404 |
-| POST | `/api/pacientes/{id}/historial` | Agrega un registro | 201 / 400 / 404 |
+| Método | Ruta | Descripción | Rol | Respuestas |
+|---|---|---|---|---|
+| GET | `/api/historial?filtro=&q=` | Todos los registros ordenados por fecha. `filtro`: `todos` (defecto), `paciente` o `autor` | Cualquiera | 200 / 400 |
+| GET | `/api/pacientes/{id}/historial?q=` | Registros de un paciente; `q` filtra por autor | Cualquiera | 200 / 404 |
+| POST | `/api/pacientes/{id}/historial` | Agrega un registro (ver abajo) | DOCTOR / ENFERMERO | 201 / 400 / 403 / 404 |
 
 Cuerpo de `POST /api/pacientes/{id}/historial`:
 
 ```json
-{ "tipo": "DIAGNOSTICO", "idAutor": "DOC-0001", "contenido": "Hipertensión leve" }
+{ "tipo": "DIAGNOSTICO", "contenido": "Hipertensión leve" }
 ```
+
+**El autor nunca se envía en el cuerpo.** El `autor` del registro es el usuario
+autenticado que hace la petición, cuyo `idTrabajador` se relee del repositorio
+(bajo ninguna circunstancia se toman los claims del token). Una propiedad
+`idAutor` en el cuerpo se ignora.
 
 `tipo` puede ser `DIAGNOSTICO`, `EVOLUCION`, `MEDICACION` o `SIGNOS_VITALES`. Para `SIGNOS_VITALES` se envía `signosVitales` en lugar de `contenido`:
 
 ```json
 {
-  "tipo": "SIGNOS_VITALES", "idAutor": "ENF-0001",
+  "tipo": "SIGNOS_VITALES",
   "signosVitales": {
     "temperatura": 36.5, "frecCardiaca": 80,
     "presionSistolica": 120, "presionDiastolica": 80,
@@ -89,6 +100,11 @@ Cuerpo de `POST /api/pacientes/{id}/historial`:
   }
 }
 ```
+
+Regla por rol: un **DOCTOR** puede registrar cualquier tipo; un **ENFERMERO**
+solo `SIGNOS_VITALES` (para el resto recibe 403 con el cuerpo de error
+uniforme, y esa comprobación precede a la validación del contenido y a la
+búsqueda del paciente); un **ADMIN** no puede registrar historial (403 de ruta).
 
 ## Errores
 
@@ -104,9 +120,34 @@ Modelo de usuarios (`Rol`: `ADMIN`, `DOCTOR`, `ENFERMERO`; entidad `Usuario`,
 repositorio en memoria, servicio con reglas de negocio) y creación de un
 administrador inicial al arrancar. La autenticación es **stateless con JWT**:
 todos los endpoints de `/api/**`, salvo el login, exigen un token bearer
-válido. Aún **no hay autorización por rol ni endpoints de administración de
-usuarios**: cualquier usuario autenticado (o el admin) puede usar los
-endpoints, y los usuarios se crean vía `UsuarioService` (no por HTTP).
+válido y autorización por rol (ver la matriz más abajo). Aún **no hay CRUD de
+usuarios por HTTP**: los usuarios se crean vía `UsuarioService`, que valida la
+política de contraseña y el vínculo con trabajadores.
+
+### Autorización por rol
+
+Cada petición se autentica con el JWT y se autoriza según el rol del usuario.
+Una operación no permitida responde **403** con el mismo cuerpo de error
+uniforme (`"No tiene permisos para realizar esta operación."`); sin token válido
+la respuesta es **401**.
+
+| Operación | ADMIN | DOCTOR | ENFERMERO |
+|---|:---:|:---:|:---:|
+| `POST /api/auth/login` (público) | ✔ | ✔ | ✔ |
+| `GET /api/auth/me` | ✔ | ✔ | ✔ |
+| `GET` pacientes / trabajadores / historial | ✔ | ✔ | ✔ |
+| `POST` / `PUT` / `PATCH` pacientes | ✘ | ✔ | ✘ |
+| `DELETE` paciente (baja lógica) | ✔ | ✘ | ✘ |
+| `POST` / `PUT` / `DELETE` trabajadores | ✔ | ✘ | ✘ |
+| `POST` historial — `SIGNOS_VITALES` | ✘ | ✔ | ✔ |
+| `POST` historial — otros tipos | ✘ | ✔ | ✘ |
+
+La lectura (identidad, pacientes, historial y trabajadores) está disponible para
+cualquier usuario autenticado. Los 403 de ruta se producen **antes** de validar
+el cuerpo o buscar el recurso; el 403 del ENFERMERO ante un tipo no permitido lo
+emite el servicio, también antes de validar el contenido y de buscar al
+paciente. Todas las respuestas de error usan el cuerpo uniforme, sin trazas ni
+nombres de clases internas.
 
 ### Autenticación (JWT)
 
