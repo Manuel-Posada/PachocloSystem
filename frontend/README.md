@@ -1,59 +1,56 @@
-# Frontend
+# Frontend de PachocloSystem
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.1.
+SPA en Angular 22 (standalone, zoneless, signals) con Angular Material.
+Consume **solo** la API de PachocloSystem (`/api/**`, puerto 8080); nunca llama a MedicamentosService.
+Plan completo y decisiones: [`docs/plan-frontend.md`](../docs/plan-frontend.md).
 
-## Development server
+## Requisitos
 
-To start a local development server, run:
+- **Node** `^22.22.3`, `^24.15.0` o `>=26` (lo exige Angular 22).
+- El backend PachocloSystem corriendo en `http://localhost:8080` (ver su README).
+  MedicamentosService (8081) solo hace falta para el módulo de medicamentos.
 
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## Cómo arrancar
 
 ```bash
-ng generate component component-name
+npm install
+npm start          # http://localhost:4200
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+En desarrollo, `proxy.conf.json` reenvía `/api` a `localhost:8080`, así que el navegador ve un
+único origen y el backend **no necesita CORS**. En producción la SPA se sirve en el mismo origen
+que la API.
+
+Para entrar se usa el administrador inicial del backend (`ADMIN_USERNAME` / `ADMIN_PASSWORD`). Si
+se arranca con `JWT_SECRET` fijo, la sesión sobrevive a reinicios del backend.
+
+## Comandos
 
 ```bash
-ng generate --help
+npm test                # tests unitarios (Vitest)
+npm run lint            # ESLint (angular-eslint)
+npm run format:check    # Prettier (npm run format para corregir)
+npm run build           # build de producción en dist/frontend
 ```
 
-## Building
+## Estructura
 
-To build the project run:
-
-```bash
-ng build
+```
+src/app/
+├── core/       sesión (AuthService, interceptores, guards) y errores de la API (ApiError)
+├── shared/     piezas reutilizables (validadores)
+├── layout/     marco de la app autenticada (barra superior y menú lateral)
+└── features/   pantallas: login, 404 y módulos (pacientes, trabajadores, ...)
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+Convención: nombres de dominio en español y sufijos de Angular en inglés
+(`LoginComponent`, `AuthService`, `authGuard`).
 
-## Running unit tests
+## Sesión y errores
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+- El token JWT vive en memoria y se copia en `sessionStorage`: aguanta una recarga y se pierde
+  al cerrar la pestaña.
+- Dura 30 minutos y no se renueva: se avisa 5 minutos antes y al expirar se vuelve al login,
+  recordando la ruta en la que se estaba.
+- Todo error HTTP llega a los componentes como `ApiError` (`status` y `mensajes`, los del
+  `ErrorResponse` del backend). Un 401 fuera del login cierra la sesión.
