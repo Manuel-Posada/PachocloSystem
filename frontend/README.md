@@ -102,9 +102,32 @@ se le avisa antes y, al guardar, vuelve al login con un mensaje que lo explica.
   no lleva `idAutor`. Un usuario sin trabajador vinculado (el admin) ve el historial en modo
   consulta, con un mensaje que explica por qué. El enfermero no ve el tipo `DIAGNOSTICO`.
 - **Descuento de stock (MEDICACION):** el backend hace primero la salida en MedicamentosService y
-  solo guarda el registro si sale bien. Si falla, no se guarda nada y el formulario lo indica.
-  Con 502/503 el formulario avisa de que la salida pudo registrarse igualmente, porque el backend
-  no distingue un tiempo de espera de un servicio caído. Pendiente de corregir en el backend.
+  solo guarda el registro si sale bien. Si falla con un 4xx (stock insuficiente, vencido...), no
+  se guarda nada y el formulario lo indica.
+- **Altas idempotentes (`Idempotency-Key`):** cada alta lleva una clave `crypto.randomUUID()` en
+  la cabecera `Idempotency-Key`, solo en `POST /api/pacientes/{id}/historial` (contrato en el
+  README del backend, "Registros idempotentes"). Repetir con la misma clave y el mismo cuerpo
+  devuelve el mismo registro sin crear otro ni descontar dos veces.
+  - **Una clave por intento de registro:** nueva al abrir el diálogo, tras un alta correcta y tras
+    un 409. Se reutiliza en los reintentos, y un doble clic mientras se envía no manda otra
+    petición.
+  - **201 con `Idempotency-Replayed: true`:** el registro ya existía; es un alta normal, sin aviso.
+  - **Resultado incierto** (503 "No se pudo confirmar…", 502, 500 u otro 5xx, sin red o un error
+    no HTTP): el alta pudo hacerse o no. Los campos quedan **bloqueados** y solo se ofrece
+    **Reintentar** (misma clave y mismo cuerpo, sin riesgo) o **Cancelar**, que cierra el diálogo
+    y avisa de revisar el historial del paciente y, si se pidió descuento, el stock. Mientras se
+    envía o está bloqueado, el diálogo no se cierra con Esc ni clic fuera. Así no se puede
+    reenviar con otros datos y otra clave tras un resultado incierto, lo que podría duplicar el
+    registro o el descuento. Solo un alta correcta desbloquea, aunque el reintento falle de otra
+    forma.
+  - **409 (clave ya usada con otra petición):** se genera una clave nueva y se deja revisar y
+    reenviar.
+  - **Otros 4xx (400, 403, 404):** el backend no hizo nada ni consumió la clave. Se puede corregir
+    y reenviar con la misma clave.
+  - **Límites:** `crypto.randomUUID()` solo existe en contextos seguros (HTTPS o `localhost`;
+    `ng serve` lo es). Las claves viven en el diálogo: si se recarga la página tras un resultado
+    incierto, el siguiente intento lleva otra clave, así que conviene revisar el historial y el
+    stock antes de repetirlo.
 - **Signos vitales:** se envían estructurados, pero el backend los guarda como texto en `contenido`
   y así se muestran.
 
