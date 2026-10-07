@@ -47,6 +47,8 @@ public class GlobalExceptionHandler {
     private static final String MENSAJE_ERROR_INTERNO =
             "Se produjo un error interno. Vuelva a intentarlo más tarde.";
     private static final String MENSAJE_CREDENCIALES_INVALIDAS = "Credenciales inválidas.";
+    private static final String MENSAJE_DEMASIADOS_INTENTOS =
+            "Demasiados intentos fallidos. Inténtelo de nuevo más tarde.";
     private static final String MENSAJE_ACCESO_DENEGADO =
             "No tiene permisos para realizar esta operación.";
 
@@ -54,6 +56,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CredencialesInvalidasException.class)
     public ResponseEntity<ErrorResponse> credencialesInvalidas(CredencialesInvalidasException ex) {
         return respuesta(HttpStatus.UNAUTHORIZED, List.of(MENSAJE_CREDENCIALES_INVALIDAS));
+    }
+
+    /**
+     * 429: bloqueo temporal del login por demasiados intentos fallidos (por
+     * usuario o por IP). La cabecera {@code Retry-After} lleva los segundos
+     * restantes del bloqueo y el cuerpo es el {@code ErrorResponse} uniforme,
+     * sin revelar si el usuario existe.
+     */
+    @ExceptionHandler(DemasiadosIntentosException.class)
+    public ResponseEntity<ErrorResponse> demasiadosIntentos(DemasiadosIntentosException ex) {
+        HttpHeaders cabeceras = new HttpHeaders();
+        cabeceras.set(HttpHeaders.RETRY_AFTER, Long.toString(ex.getSegundosRestantes()));
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .headers(cabeceras)
+                .body(new ErrorResponse(429, HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase(),
+                        List.of(MENSAJE_DEMASIADOS_INTENTOS)));
     }
 
     /**

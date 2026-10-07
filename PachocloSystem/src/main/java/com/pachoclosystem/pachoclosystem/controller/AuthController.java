@@ -7,6 +7,7 @@ import com.pachoclosystem.pachoclosystem.dto.UsuarioResponse;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.security.AuthService;
 import com.pachoclosystem.pachoclosystem.service.UsuarioService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -36,8 +37,14 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest solicitud) {
-        return authService.iniciarSesion(solicitud.username(), solicitud.password());
+    public LoginResponse login(@Valid @RequestBody LoginRequest solicitud, HttpServletRequest peticionHttp) {
+        // La IP sale SOLO de HttpServletRequest.getRemoteAddr(). No se leen las
+        // cabeceras X-Forwarded-For ni similares: no hay ningún proxy inverso de
+        // confianza delante de la aplicación y confiar en ellas permitiría a un
+        // cliente falsificar su IP de origen para esquivar (o provocar) el
+        // bloqueo de terceros.
+        return authService.iniciarSesion(solicitud.username(), solicitud.password(),
+                peticionHttp.getRemoteAddr());
     }
 
     @GetMapping("/me")

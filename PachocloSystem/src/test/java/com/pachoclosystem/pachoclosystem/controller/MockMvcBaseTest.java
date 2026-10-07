@@ -8,6 +8,7 @@ import com.pachoclosystem.pachoclosystem.repository.IPacienteRepository;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
 import com.pachoclosystem.pachoclosystem.repository.IUsuarioRepository;
 import com.pachoclosystem.pachoclosystem.security.JwtTokenService;
+import com.pachoclosystem.pachoclosystem.security.LimitadorIntentosLogin;
 import com.pachoclosystem.pachoclosystem.service.UsuarioService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,6 +68,9 @@ public abstract class MockMvcBaseTest {
     @Autowired
     protected UsuarioService servicioUsuarios;
 
+    @Autowired
+    protected LimitadorIntentosLogin limitadorIntentos;
+
     /** Token de apoyo por rol (uno por test, creado bajo demanda). */
     private final Map<Rol, String> tokensPorRol = new EnumMap<>(Rol.class);
 
@@ -79,6 +83,18 @@ public abstract class MockMvcBaseTest {
                 .forEach(paciente -> repositorioPacientes.eliminar(paciente.getIdPaciente()));
         repositorioTrabajadores.obtenerTodos()
                 .forEach(trabajador -> repositorioTrabajadores.eliminarTrabajador(trabajador.getIdTrabajador()));
+    }
+
+    /**
+     * Fontanería de aislamiento: el limitador de intentos de login es un bean
+     * único con estado (espacios usuario/IP) y TODOS los tests MockMvc comparten
+     * la IP por defecto {@code 127.0.0.1}; sin este reinicio, los fallos
+     * acumulados por una prueba contaminarían las siguientes y el orden de
+     * ejecución decidiría el resultado.
+     */
+    @BeforeEach
+    void reiniciarLimitadorDeIntentos() {
+        limitadorIntentos.reiniciar();
     }
 
     /**
