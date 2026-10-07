@@ -438,7 +438,7 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
 |---|---|---|---|
 | `JWT_SECRET` | `app.jwt.secret` | *(sin valor en el repo)* | Clave simétrica de firma HS256, mín. **32 bytes** codificados en UTF-8. |
 | — | `app.jwt.emisor` | `pachoclosystem` | `iss` esperado en los tokens. |
-| — | `app.jwt.expiracion` | `30m` | Duración de validez del token (`PT30M`, `30m`, `1800s`, …). |
+| — | `app.jwt.expiracion-minutos` | `30` | Validez del token, en minutos (número entero). |
 
 - Si `JWT_SECRET` **no está definida**, se genera una clave aleatoria de 32
   bytes con `SecureRandom` solo para desarrollo y se escribe **un único WARN**
