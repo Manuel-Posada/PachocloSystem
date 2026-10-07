@@ -67,11 +67,26 @@ El backend usa dos formatos: `'ADMIN' | 'DOCTOR' | 'ENFERMERO'` para usuarios (l
 `'Doctor' | 'Enfermero'` para trabajadores. `core/roles.ts` es el único sitio que los convierte
 (`rolDeUsuario`, `rolDeTrabajador`) y les pone etiqueta (`etiquetaRol`).
 
+## Historial clínico
+
+- `/historial` muestra todos los registros (solo consulta) y `/pacientes/:id/historial` los de un
+  paciente, con acceso desde la lista de pacientes.
+- **Autor:** los registros se firman con `me.idTrabajador`. Regla provisional hasta que el backend
+  tome el autor del token (B3). Un usuario sin trabajador vinculado (el admin) ve el historial en
+  modo consulta, con un mensaje que explica por qué.
+- **Descuento de stock (MEDICACION):** el backend hace primero la salida en MedicamentosService y
+  solo guarda el registro si sale bien. Si falla, no se guarda nada y el formulario lo indica.
+  Con 502/503 el formulario avisa de que la salida pudo registrarse igualmente, porque el backend
+  no distingue un tiempo de espera de un servicio caído. Pendiente de corregir en el backend.
+- **Signos vitales:** se envían estructurados, pero el backend los guarda como texto en `contenido`
+  y así se muestran.
+
 ## Fechas
 
-Las fechas sin hora del backend (`LocalDate`, p. ej. `fechaVencimiento: "2027-01-31"`) se manejan
-siempre como texto: se editan con `<input type="date">`, que ya da `AAAA-MM-DD`, y se muestran con
-`formatearFecha()` de `shared/fechas.ts`. Nunca se pasan por `Date`: lo interpretaría como medianoche
+Las fechas sin zona del backend (`LocalDate`, p. ej. `fechaVencimiento: "2027-01-31"`, y
+`LocalDateTime`, p. ej. la `fecha` de un registro) se manejan siempre como texto. La fecha se edita
+con `<input type="date">`, que ya da `AAAA-MM-DD`, y se muestra con `formatearFecha()` o
+`formatearFechaHora()` de `shared/fechas.ts`. Nunca se pasan por `Date`: lo interpretaría como medianoche
 UTC y en UTC-5 mostraría el día anterior.
 
 ## Sesión y errores
