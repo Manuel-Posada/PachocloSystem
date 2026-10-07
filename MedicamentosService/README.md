@@ -35,7 +35,7 @@ Otros comandos útiles:
 ```
 src/main/java/com/pachoclosystem/medicamentos/
 ├── controller/   endpoints REST
-├── service/      lógica de negocio (stock, vencimientos, duplicados)
+├── service/      lógica de negocio (stock, vencimientos, duplicados, idempotencia de salidas)
 ├── repository/   IMedicamentoRepository + implementación en memoria
 ├── model/        Medicamento, DatosMedicamento, Presentacion
 ├── dto/          requests y responses (records con Bean Validation)
@@ -77,7 +77,7 @@ No puede haber dos medicamentos con el mismo **nombre + concentración + present
 | PUT | `/api/medicamentos/{id}` | Edita los datos (todo menos el stock) | 200 / 400 / 404 / 409 |
 | DELETE | `/api/medicamentos/{id}` | Elimina un medicamento | 204 / 404 |
 | POST | `/api/medicamentos/{id}/entradas` | Suma `{cantidad}` al stock | 200 / 400 / 404 |
-| POST | `/api/medicamentos/{id}/salidas` | Resta `{cantidad}` del stock | 200 / 400 / 404 |
+| POST | `/api/medicamentos/{id}/salidas` | Resta `{cantidad}` del stock. Cabecera opcional `Idempotency-Key` (ver abajo) | 200 / 400 / 404 / 409 |
 | GET | `/api/medicamentos/stock-bajo` | Medicamentos con stock ≤ stock mínimo | 200 |
 | GET | `/api/medicamentos/por-vencer?dias=30` | No vencidos que vencen entre hoy y hoy + `dias` (1–365, por defecto 30), del más próximo al más lejano | 200 / 400 |
 | GET | `/api/medicamentos/vencidos` | Medicamentos ya vencidos | 200 |
@@ -89,6 +89,42 @@ Reglas:
 - Una **salida** devuelve `400` si la cantidad supera el stock disponible o si el medicamento está
   vencido; en ambos casos el stock no cambia.
 - `cantidad` en entradas y salidas debe ser un entero entre 1 y 1 000 000.
+
+### Salidas idempotentes (`Idempotency-Key`)
+
+Si una salida llega a hacerse pero la respuesta se pierde (por ejemplo, PachocloSystem deja de
+esperar), reintentarla descontaría dos veces. Con la cabecera opcional `Idempotency-Key`, el
+reintento es seguro:
+
+```bash
+curl -X POST localhost:8081/api/medicamentos/MED-0001/salidas \
+  -H "Content-Type: application/json" -H "Idempotency-Key: 8f14e45f-ceea-4672-a5b1-7a0c3c9e2f01" \
+  -d '{"cantidad":2}'
+```
+
+- **Misma clave y mismos datos** (medicamento y cantidad): se devuelve la misma respuesta que la
+  primera vez, con la cabecera `Idempotency-Replayed: true`, **sin volver a descontar**. La respuesta
+  es la de entonces aunque el stock haya cambiado después.
+- **Misma clave con otro medicamento u otra cantidad:** `409`.
+- **Clave mal formada:** `400`. Debe tener de 16 a 100 caracteres: letras sin tilde, dígitos, guion o
+  guion bajo (un UUID sirve).
+- **Peticiones simultáneas con la misma clave:** se atienden de una en una; solo una descuenta y
+  todas reciben la misma respuesta.
+- **Solo se guardan las salidas que salen bien.** Una salida que falla (stock insuficiente, vencido,
+  medicamento inexistente) no ha cambiado nada, así que su reintento se vuelve a evaluar: puede salir
+  bien si entre tanto entró stock, o volver a fallar.
+- **Sin la cabecera**, la salida funciona exactamente como siempre.
+
+Las claves se guardan **en memoria** (como el resto de datos: al reiniciar se pierden junto con el
+stock):
+
+| Propiedad | Por defecto | Para qué |
+|---|---|---|
+| `medicamentos.idempotencia.caducidad` | `24h` | Cuánto tiempo se recuerda cada clave |
+| `medicamentos.idempotencia.max-entradas` | `10000` | Cuántas claves como máximo; al pasarse se descartan las caducadas y luego las más antiguas |
+
+Una clave caducada o descartada se trata como nueva: un reintento después de ese plazo volvería a
+descontar.
 
 ### Ejemplos
 
@@ -175,10 +211,10 @@ Todas las respuestas de error tienen el mismo formato, sin trazas ni detalles in
 
 | Código | Cuándo |
 |---|---|
-| 400 | Validación de campos, JSON malformado, stock insuficiente, salida de un vencido, `dias` fuera de rango |
+| 400 | Validación de campos, JSON malformado, stock insuficiente, salida de un vencido, `dias` fuera de rango, `Idempotency-Key` mal formada |
 | 401 | Falta la cabecera `X-Api-Key` o no coincide (solo si `MEDICAMENTOS_API_KEY` está definida) |
 | 404 | Medicamento o ruta inexistente |
 | 405 | Método HTTP no permitido en la ruta (incluye cabecera `Allow`) |
-| 409 | Ya existe un medicamento con el mismo nombre, concentración, presentación y lote |
+| 409 | Ya existe un medicamento con el mismo nombre, concentración, presentación y lote; o una `Idempotency-Key` ya usada con otra salida |
 | 415 | `Content-Type` no soportado |
 | 500 | Error inesperado (el detalle solo va al log del servidor) |
