@@ -21,8 +21,9 @@ En desarrollo, `proxy.conf.json` reenvía `/api` a `localhost:8080`, así que el
 único origen y el backend **no necesita CORS**. En producción la SPA se sirve en el mismo origen
 que la API.
 
-Para entrar se usa el administrador inicial del backend (`ADMIN_USERNAME` / `ADMIN_PASSWORD`). Si
-se arranca con `JWT_SECRET` fijo, la sesión sobrevive a reinicios del backend.
+Para entrar se usa el administrador inicial del backend (`ADMIN_USERNAME` / `ADMIN_PASSWORD`).
+Desde **Usuarios** el admin crea los usuarios de doctores y enfermeros. Si se arranca con
+`JWT_SECRET` fijo, la sesión sobrevive a reinicios del backend.
 
 ## Comandos
 
@@ -67,13 +68,39 @@ El backend usa dos formatos: `'ADMIN' | 'DOCTOR' | 'ENFERMERO'` para usuarios (l
 `'Doctor' | 'Enfermero'` para trabajadores. `core/roles.ts` es el único sitio que los convierte
 (`rolDeUsuario`, `rolDeTrabajador`) y les pone etiqueta (`etiquetaRol`).
 
+## Permisos por rol
+
+`core/permisos.ts` es copia de la tabla "Permisos por rol" del README del backend
+(`tienePermiso(rol, permiso)` y `PermisosService.puede(permiso)` para el usuario actual). Se usa
+para ocultar lo que el rol no puede hacer:
+
+- **Menú y rutas:** Trabajadores (`trabajadores.leer`) y Usuarios (`usuarios.gestionar`) solo
+  aparecen a quien puede abrirlas, y sus rutas tienen `permisoGuard`, que lleva al inicio.
+- **Acciones:** alta, edición y borrado de pacientes, escrituras de trabajadores y de medicamentos
+  (el enfermero solo ve las salidas de stock) y el tipo `DIAGNOSTICO` del historial.
+
+Quien decide es el backend: si algo se escapa, su 403 se muestra como cualquier otro error. Si la
+tabla del backend cambia, hay que cambiar `core/permisos.ts` (su test la recorre fila a fila).
+
+## Usuarios (solo ADMIN)
+
+`/usuarios`: lista con búsqueda, alta (username, contraseña repetida, rol y, para doctor o
+enfermero, un trabajador de su tipo sin usuario), restablecer contraseña y activar o desactivar.
+`features/usuarios/politica.ts` copia del backend el formato del username y la política de
+contraseña (de 10 caracteres a 72 bytes UTF-8 y distinta del username). Los 400 y 409 se muestran
+dentro del formulario o del diálogo de confirmación, incluidos los de desactivarse a uno mismo o
+al último administrador. Si el admin restablece su propia contraseña, el backend invalida su token:
+se le avisa antes y, al guardar, vuelve al login con un mensaje que lo explica.
+
 ## Historial clínico
 
 - `/historial` muestra todos los registros (solo consulta) y `/pacientes/:id/historial` los de un
   paciente, con acceso desde la lista de pacientes.
-- **Autor:** los registros se firman con `me.idTrabajador`. Regla provisional hasta que el backend
-  tome el autor del token (B3). Un usuario sin trabajador vinculado (el admin) ve el historial en
-  modo consulta, con un mensaje que explica por qué.
+- Los registros se muestran **del más reciente al más antiguo** (el backend los devuelve al
+  revés; `HistorialService` los ordena por fecha como texto).
+- **Autor:** el backend firma cada registro con el trabajador del usuario autenticado; la petición
+  no lleva `idAutor`. Un usuario sin trabajador vinculado (el admin) ve el historial en modo
+  consulta, con un mensaje que explica por qué. El enfermero no ve el tipo `DIAGNOSTICO`.
 - **Descuento de stock (MEDICACION):** el backend hace primero la salida en MedicamentosService y
   solo guarda el registro si sale bien. Si falla, no se guarda nada y el formulario lo indica.
   Con 502/503 el formulario avisa de que la salida pudo registrarse igualmente, porque el backend
