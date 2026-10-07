@@ -14,18 +14,33 @@ describe('ApiError.desde', () => {
     expect(error.mensajes).toEqual(['A.', 'B.']);
   });
 
-  it('traduce el estado 0 a un mensaje de falta de conexión', () => {
-    const error = ApiError.desde(new HttpErrorResponse({ status: 0 }));
+  it.each([502, 503])('conserva los mensajes del backend también en un %i', (status) => {
+    const error = ApiError.desde(
+      new HttpErrorResponse({
+        status,
+        error: {
+          status,
+          error: 'x',
+          mensajes: ['El servicio de medicamentos no está disponible.'],
+        },
+      }),
+    );
 
-    expect(error.status).toBe(0);
-    expect(error.mensajes[0]).toContain('No se pudo conectar con el servidor');
+    expect(error.status).toBe(status);
+    expect(error.mensajes).toEqual(['El servicio de medicamentos no está disponible.']);
   });
 
-  it('usa un mensaje genérico si el cuerpo no es un ErrorResponse', () => {
-    const error = ApiError.desde(new HttpErrorResponse({ status: 504, error: '<html>' }));
+  it.each([
+    ['estado 0 (sin red)', 0, null],
+    ['502 vacío del proxy con el backend apagado', 502, null],
+    ['504 con HTML de un intermediario', 504, '<html>Gateway Timeout</html>'],
+    ['cuerpo con mensajes vacíos', 500, { status: 500, error: 'x', mensajes: [] }],
+  ])('sin el cuerpo uniforme (%s) indica que no se pudo conectar', (_caso, status, cuerpo) => {
+    const error = ApiError.desde(new HttpErrorResponse({ status, error: cuerpo }));
 
+    expect(error.status).toBe(status);
     expect(error.mensajes).toEqual([
-      'Se produjo un error inesperado (código 504). Vuelva a intentarlo más tarde.',
+      'No se pudo conectar con el servidor. Compruebe su conexión y vuelva a intentarlo.',
     ]);
   });
 });

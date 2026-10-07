@@ -7,6 +7,7 @@ export interface ErrorResponse {
   mensajes: string[];
 }
 
+const MENSAJE_INESPERADO = 'Se produjo un error inesperado. Vuelva a intentarlo más tarde.';
 const MENSAJE_SIN_CONEXION =
   'No se pudo conectar con el servidor. Compruebe su conexión y vuelva a intentarlo.';
 
@@ -24,28 +25,26 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 
+  /**
+   * El backend responde siempre con el `ErrorResponse` uniforme (incluso en
+   * 502/503): sus mensajes se conservan tal cual. Sin ese cuerpo (estado 0,
+   * o un 502/504 vacío del proxy de desarrollo con el backend apagado) la
+   * respuesta no viene de la API, así que no se pudo conectar con ella.
+   */
   static desde(respuesta: HttpErrorResponse): ApiError {
-    if (respuesta.status === 0) {
-      return new ApiError(0, [MENSAJE_SIN_CONEXION]);
-    }
     if (esErrorResponse(respuesta.error) && respuesta.error.mensajes.length > 0) {
       return new ApiError(respuesta.status, respuesta.error.mensajes);
     }
-    return new ApiError(respuesta.status, [mensajeGenerico(respuesta.status)]);
+    return new ApiError(respuesta.status, [MENSAJE_SIN_CONEXION]);
   }
 }
 
 /** Mensajes para mostrar de cualquier error recibido en un `subscribe`. */
 export function mensajesDeError(error: unknown): readonly string[] {
-  return error instanceof ApiError ? error.mensajes : [mensajeGenerico(undefined)];
+  return error instanceof ApiError ? error.mensajes : [MENSAJE_INESPERADO];
 }
 
 function esErrorResponse(cuerpo: unknown): cuerpo is ErrorResponse {
   const mensajes = (cuerpo as Partial<ErrorResponse> | null)?.mensajes;
   return Array.isArray(mensajes) && mensajes.every((m) => typeof m === 'string');
-}
-
-function mensajeGenerico(status: number | undefined): string {
-  const codigo = status === undefined ? '' : ` (código ${status})`;
-  return `Se produjo un error inesperado${codigo}. Vuelva a intentarlo más tarde.`;
 }
