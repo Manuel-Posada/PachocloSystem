@@ -36,13 +36,18 @@ public class Usuario {
     private volatile int versionToken;
 
     public Usuario(String idUsuario, String username, String passwordHash, Rol rol, String idTrabajador) {
+        this(idUsuario, username, passwordHash, rol, idTrabajador, false);
+    }
+
+    public Usuario(String idUsuario, String username, String passwordHash, Rol rol, String idTrabajador,
+                   boolean debeCambiarPassword) {
         this.idUsuario = idUsuario;
         this.username = normalizarUsername(username);
         this.passwordHash = passwordHash;
         this.rol = rol;
         this.idTrabajador = idTrabajador;
         this.activo = true;
-        this.debeCambiarPassword = false;
+        this.debeCambiarPassword = debeCambiarPassword;
         this.versionToken = 0;
     }
 
