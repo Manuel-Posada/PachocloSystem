@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.config;
 
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -23,15 +24,25 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  * Cadena de filtros de seguridad stateless con tokens JWT (HS256) y resource
  * server de OAuth2 (Nimbus).
  *
- * <p>Solo {@code POST /api/auth/login} es público; {@code /api/usuarios/**}
- * exige el rol ADMIN y el resto de {@code /api/**} solo estar autenticado (las
- * reglas por rol del resto llegan con B3). Todo el estado de
+ * <p>Solo {@code POST /api/auth/login} es público; el resto exige un token y
+ * cada ruta, un rol (tabla de permisos en el README y en
+ * {@code AutorizacionPorRolTest}). Las rutas concretas van antes que las
+ * generales: Spring aplica la primera regla que coincide. Cada recurso termina
+ * en una regla solo-ADMIN, de modo que un endpoint nuevo sin regla propia queda
+ * cerrado para los demás roles. Las reglas que dependen del cuerpo (el tipo de
+ * registro del historial y el autor) están en {@code HistorialClinicoService}.
+ * Todo el estado de
  * autenticación vive en el token <em>bearer</em>: sin sesiones HTTP, sin login
  * por formulario, sin Basic auth.</p>
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    private static final String ADMIN = Rol.ADMIN.name();
+    private static final String DOCTOR = Rol.DOCTOR.name();
+    private static final String ENFERMERO = Rol.ENFERMERO.name();
+    private static final String[] TODOS = {ADMIN, DOCTOR, ENFERMERO};
 
     @Bean
     JwtEncoder jwtEncoder(ClaveFirmaJwt firma) {
@@ -68,7 +79,28 @@ public class SecurityConfig {
                 .logout(cierre -> cierre.disable())
                 .authorizeHttpRequests(peticiones -> peticiones
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        .requestMatchers("/api/usuarios/**").hasRole("ADMIN")
+                        .requestMatchers("/api/auth/me").authenticated()
+                        .requestMatchers("/api/usuarios/**").hasRole(ADMIN)
+                        // Pacientes e historial clínico.
+                        .requestMatchers(HttpMethod.GET, "/api/pacientes/**", "/api/historial")
+                        .hasAnyRole(TODOS)
+                        .requestMatchers(HttpMethod.PATCH, "/api/pacientes/*/habitacion").hasAnyRole(TODOS)
+                        // Autor y tipo de registro los decide HistorialClinicoService (403 al ADMIN,
+                        // que no tiene trabajador, y al enfermero en DIAGNOSTICO).
+                        .requestMatchers(HttpMethod.POST, "/api/pacientes/*/historial").hasAnyRole(TODOS)
+                        .requestMatchers(HttpMethod.POST, "/api/pacientes").hasAnyRole(ADMIN, DOCTOR)
+                        .requestMatchers(HttpMethod.PUT, "/api/pacientes/*").hasAnyRole(ADMIN, DOCTOR)
+                        // DELETE (borra también el historial) y cualquier ruta sin regla propia.
+                        .requestMatchers("/api/pacientes/**", "/api/historial/**").hasRole(ADMIN)
+                        // Trabajadores.
+                        .requestMatchers(HttpMethod.GET, "/api/trabajadores/**").hasAnyRole(ADMIN, DOCTOR)
+                        .requestMatchers("/api/trabajadores/**").hasRole(ADMIN)
+                        // Medicamentos. El descuento de stock de un registro de MEDICACION no pasa
+                        // por aquí: lo hace el cliente interno contra MedicamentosService.
+                        .requestMatchers(HttpMethod.GET, "/api/medicamentos/**").hasAnyRole(TODOS)
+                        .requestMatchers(HttpMethod.POST, "/api/medicamentos/*/salidas")
+                        .hasAnyRole(ADMIN, ENFERMERO)
+                        .requestMatchers("/api/medicamentos/**").hasRole(ADMIN)
                         .anyRequest().authenticated())
                 // 401 y 403 con el cuerpo de error uniforme de la API
                 // (ErrorResponse, sin trazas ni detalles internos).
