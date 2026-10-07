@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
+import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
@@ -29,6 +30,7 @@ describe('PacientesListaComponent', () => {
     TestBed.configureTestingModule({
       imports: [PacientesListaComponent],
       providers: [
+        provideRouter([]),
         { provide: PacienteService, useValue: servicio },
         { provide: MatDialog, useValue: dialogo },
         { provide: NotificacionService, useValue: notificaciones },
@@ -65,6 +67,13 @@ describe('PacientesListaComponent', () => {
       ['PAC-0001', 'Ana Ruiz', '40', '12'],
       ['PAC-0002', 'Luis Gil', '7', '3'],
     ]);
+  });
+
+  it('enlaza al historial clínico de cada paciente', async () => {
+    const { elemento } = await renderizar();
+
+    const enlace = elemento.querySelector('a[aria-label="Historial clínico de Ana Ruiz"]');
+    expect(enlace?.getAttribute('href')).toBe('/pacientes/PAC-0001/historial');
   });
 
   it('indica que no hay pacientes', async () => {

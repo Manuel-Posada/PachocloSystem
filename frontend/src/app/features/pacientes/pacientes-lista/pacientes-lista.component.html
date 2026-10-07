@@ -51,6 +51,14 @@
       <ng-container matColumnDef="acciones">
         <th mat-header-cell *matHeaderCellDef><span class="solo-lectores">Acciones</span></th>
         <td mat-cell *matCellDef="let p" class="celda-acciones">
+          <a
+            mat-icon-button
+            [routerLink]="['/pacientes', p.idPaciente, 'historial']"
+            matTooltip="Historial clínico"
+            [attr.aria-label]="'Historial clínico de ' + p.nombre"
+          >
+            <mat-icon>history_edu</mat-icon>
+          </a>
           <button
             mat-icon-button
             type="button"

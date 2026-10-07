@@ -9,6 +9,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { RouterLink } from '@angular/router';
 import { filter, switchMap } from 'rxjs';
 import { mensajesDeError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
@@ -28,6 +29,7 @@ import { PacienteService } from '../paciente.service';
   selector: 'app-pacientes-lista',
   imports: [
     ReactiveFormsModule,
+    RouterLink,
     MatTableModule,
     MatButtonModule,
     MatIconModule,

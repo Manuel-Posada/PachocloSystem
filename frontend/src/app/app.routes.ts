@@ -23,6 +23,14 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'pacientes/:id/historial',
+        title: 'Historial del paciente · PachocloSystem',
+        loadComponent: () =>
+          import('./features/historial/historial-paciente/historial-paciente.component').then(
+            (m) => m.HistorialPacienteComponent,
+          ),
+      },
+      {
         path: 'trabajadores',
         title: 'Trabajadores · PachocloSystem',
         loadComponent: () =>
