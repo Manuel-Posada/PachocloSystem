@@ -1,11 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard, invitadoGuard } from './core/auth/auth.guard';
 
-const enConstruccion = () =>
-  import('./features/en-construccion/en-construccion.component').then(
-    (m) => m.EnConstruccionComponent,
-  );
-
 export const routes: Routes = [
   {
     path: 'login',
@@ -46,8 +41,10 @@ export const routes: Routes = [
       {
         path: 'historial',
         title: 'Historial clínico · PachocloSystem',
-        loadComponent: enConstruccion,
-        data: { titulo: 'Historial clínico' },
+        loadComponent: () =>
+          import('./features/historial/historial-general/historial-general.component').then(
+            (m) => m.HistorialGeneralComponent,
+          ),
       },
     ],
   },
