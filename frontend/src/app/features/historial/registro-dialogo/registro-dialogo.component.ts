@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
@@ -7,12 +7,14 @@ import {
   ValidationErrors,
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
-import { startWith } from 'rxjs';
-import { mensajesDeError } from '../../../core/http/api-error';
+import { merge, startWith } from 'rxjs';
+import { ApiError, mensajesDeError } from '../../../core/http/api-error';
 import { ErroresFormularioComponent } from '../../../shared/errores-formulario/errores-formulario.component';
 import {
   contieneLetra,
@@ -22,6 +24,8 @@ import {
   obligatorio,
   primerError,
 } from '../../../shared/validadores';
+import { Medicamento } from '../../medicamentos/medicamento.models';
+import { MedicamentoService } from '../../medicamentos/medicamento.service';
 import { Paciente } from '../../pacientes/paciente.models';
 import {
   ETIQUETAS_TIPO,
@@ -39,6 +43,26 @@ export interface DatosRegistroDialogo {
 }
 
 const MENSAJE_PRESION = 'La presión diastólica debe ser menor que la sistólica.';
+
+/**
+ * Si falla un registro con descuento, el backend no lo guarda: hace la salida
+ * de stock antes y solo guarda si sale bien.
+ */
+const NOTA_SIN_GUARDAR = 'No se guardó el registro ni se descontó stock.';
+/**
+ * Con 502/503 no se puede asegurar: si MedicamentosService hizo la salida pero
+ * tardó en responder, el backend lo trata igual que un servicio caído.
+ */
+const NOTA_SIN_CONFIRMAR =
+  'No se guardó el registro. Si el servicio de medicamentos tardó en responder, la salida de ' +
+  'stock pudo registrarse igualmente: compruebe el stock en Medicamentos antes de volver a ' +
+  'intentarlo, o guarde la medicación sin descontar stock.';
+
+/** Estado del inventario para elegir el medicamento a descontar; se carga al pedirlo. */
+type Inventario =
+  | { estado: 'sin-cargar' | 'cargando' }
+  | { estado: 'listo'; medicamentos: readonly Medicamento[] }
+  | { estado: 'error'; mensajes: readonly string[] };
 
 /** Como `HistorialClinicoService`: la diastólica debe ser menor que la sistólica. */
 function diastolicaMenorQueSistolica(grupo: AbstractControl): ValidationErrors | null {
@@ -63,6 +87,8 @@ function diastolicaMenorQueSistolica(grupo: AbstractControl): ValidationErrors |
     MatFormFieldModule,
     MatInputModule,
     MatRadioModule,
+    MatCheckboxModule,
+    MatProgressBarModule,
     MatButtonModule,
     ErroresFormularioComponent,
   ],
@@ -72,6 +98,7 @@ function diastolicaMenorQueSistolica(grupo: AbstractControl): ValidationErrors |
 })
 export class RegistroDialogoComponent {
   private readonly servicio = inject(HistorialService);
+  private readonly medicamentos = inject(MedicamentoService);
   private readonly dialogo = inject<MatDialogRef<RegistroDialogoComponent, Registro>>(MatDialogRef);
   private readonly fb = inject(NonNullableFormBuilder);
   protected readonly datos = inject<DatosRegistroDialogo>(MAT_DIALOG_DATA);
@@ -119,11 +146,30 @@ export class RegistroDialogoComponent {
       },
       { validators: diastolicaMenorQueSistolica },
     ),
+    /** Solo MEDICACION: si se marca, se envían medicamento y cantidad (los dos o ninguno). */
+    descontarStock: [false],
+    idMedicamento: ['', obligatorio('Seleccione el medicamento administrado.')],
+    cantidad: this.fb.control<number | null>(null, [
+      obligatorio('La cantidad administrada es obligatoria.'),
+      enteroEntre(1, 1_000_000, 'La cantidad administrada debe ser un entero entre 1 y 1000000.'),
+    ]),
   });
   protected readonly tipo = toSignal(
     this.formulario.controls.tipo.valueChanges.pipe(startWith(this.formulario.controls.tipo.value)),
     { requireSync: true },
   );
+  protected readonly descontar = toSignal(this.formulario.controls.descontarStock.valueChanges, {
+    initialValue: false,
+  });
+  protected readonly inventario = signal<Inventario>({ estado: 'sin-cargar' });
+  protected readonly medicamentosInventario = computed(() => {
+    const inventario = this.inventario();
+    return inventario.estado === 'listo' ? inventario.medicamentos : [];
+  });
+  protected readonly erroresInventario = computed(() => {
+    const inventario = this.inventario();
+    return inventario.estado === 'error' ? inventario.mensajes : [];
+  });
   protected readonly enviando = signal(false);
   protected readonly errores = signal<readonly string[]>([]);
 
@@ -133,9 +179,19 @@ export class RegistroDialogoComponent {
   protected readonly signos = this.formulario.controls.signos.controls;
 
   constructor() {
-    this.formulario.controls.tipo.valueChanges
-      .pipe(startWith(this.formulario.controls.tipo.value), takeUntilDestroyed())
-      .subscribe((tipo) => this.habilitarCamposDeTipo(tipo));
+    const { tipo, descontarStock } = this.formulario.controls;
+    merge(tipo.valueChanges, descontarStock.valueChanges)
+      .pipe(startWith(null), takeUntilDestroyed())
+      .subscribe(() => this.habilitarCampos());
+    descontarStock.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((descontar) => descontar && this.cargarInventario());
+  }
+
+  /** Stock del medicamento elegido, para orientar al elegir la cantidad. */
+  protected stockElegido(): number | null {
+    const id = this.formulario.controls.idMedicamento.value;
+    return this.medicamentosInventario().find((m) => m.idMedicamento === id)?.cantidadStock ?? null;
   }
 
   /** Error de presión del grupo, cuando ya se tocó alguna de las dos. */
@@ -155,8 +211,35 @@ export class RegistroDialogoComponent {
     this.servicio.crear(this.datos.paciente.idPaciente, this.solicitud()).subscribe({
       next: (creado) => this.dialogo.close(creado),
       error: (error: unknown) => {
-        this.errores.set(mensajesDeError(error));
+        this.errores.set(this.mensajesDeFallo(error));
         this.enviando.set(false);
+      },
+    });
+  }
+
+  /** Mensajes del backend y, si se pidió descontar stock, qué pasó con el registro y el stock. */
+  private mensajesDeFallo(error: unknown): readonly string[] {
+    const mensajes = mensajesDeError(error);
+    if (!this.formulario.controls.descontarStock.enabled || !this.descontar()) {
+      return mensajes;
+    }
+    const sinConfirmar =
+      error instanceof ApiError && (error.status === 502 || error.status === 503);
+    return [...mensajes, sinConfirmar ? NOTA_SIN_CONFIRMAR : NOTA_SIN_GUARDAR];
+  }
+
+  private cargarInventario(): void {
+    const estado = this.inventario().estado;
+    if (estado === 'cargando' || estado === 'listo') {
+      return;
+    }
+    this.inventario.set({ estado: 'cargando' });
+    this.medicamentos.listar().subscribe({
+      next: (medicamentos) => this.inventario.set({ estado: 'listo', medicamentos }),
+      error: (error: unknown) => {
+        // Sin inventario no se puede descontar, pero la medicación se puede guardar igual.
+        this.inventario.set({ estado: 'error', mensajes: mensajesDeError(error) });
+        this.formulario.controls.descontarStock.setValue(false);
       },
     });
   }
@@ -166,6 +249,7 @@ export class RegistroDialogoComponent {
     const tipo = v.tipo!;
     const esSignos = tipo === 'SIGNOS_VITALES';
     const observaciones = v.signos.observaciones.trim();
+    const descuenta = tipo === 'MEDICACION' && v.descontarStock;
     return {
       tipo,
       idAutor: this.datos.idAutor,
@@ -181,15 +265,35 @@ export class RegistroDialogoComponent {
             observaciones: observaciones || null,
           }
         : null,
-      idMedicamento: null,
-      cantidad: null,
+      idMedicamento: descuenta ? v.idMedicamento : null,
+      cantidad: descuenta ? v.cantidad : null,
     };
   }
 
-  /** Solo cuentan para la validación los campos del tipo elegido. */
-  private habilitarCamposDeTipo(tipo: TipoRegistro | null): void {
-    const { contenido, signos } = this.formulario.controls;
+  /** Solo cuentan para la validación los campos del tipo elegido (y del descuento, si se pide). */
+  private habilitarCampos(): void {
+    const {
+      tipo: control,
+      contenido,
+      signos,
+      descontarStock,
+      idMedicamento,
+      cantidad,
+    } = this.formulario.controls;
+    const tipo = control.value;
     const opciones = { emitEvent: false };
+    const esMedicacion = tipo === 'MEDICACION';
+    for (const [campo, habilitado] of [
+      [descontarStock, esMedicacion],
+      [idMedicamento, esMedicacion && descontarStock.value],
+      [cantidad, esMedicacion && descontarStock.value],
+    ] as const) {
+      if (habilitado) {
+        campo.enable(opciones);
+      } else {
+        campo.disable(opciones);
+      }
+    }
     if (tipo !== null && tipo !== 'SIGNOS_VITALES') {
       contenido.enable(opciones);
     } else {

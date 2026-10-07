@@ -27,3 +27,29 @@ mat-error.error-grupo,
   margin: -8px 0 16px;
   font: var(--mat-sys-body-small);
 }
+
+.descuento {
+  margin-bottom: 8px;
+
+  .nota {
+    margin: 8px 0;
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .fila-campos {
+    margin-top: 8px;
+  }
+}
+
+.aviso-inventario {
+  margin: 8px 0;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+
+  p {
+    margin: 4px 0;
+  }
+}

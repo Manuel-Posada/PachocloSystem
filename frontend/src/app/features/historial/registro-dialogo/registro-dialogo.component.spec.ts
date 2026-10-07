@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Observable, of, throwError } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
+import { Medicamento } from '../../medicamentos/medicamento.models';
+import { MedicamentoService } from '../../medicamentos/medicamento.service';
 import { Registro, RegistroRequest } from '../historial.models';
 import { HistorialService } from '../historial.service';
 import { DatosRegistroDialogo, RegistroDialogoComponent } from './registro-dialogo.component';
@@ -20,6 +22,7 @@ describe('RegistroDialogoComponent', () => {
       imports: [RegistroDialogoComponent],
       providers: [
         { provide: HistorialService, useValue: servicio },
+        { provide: MedicamentoService, useValue: { listar: vi.fn() } },
         { provide: MatDialogRef, useValue: dialogo },
         { provide: MAT_DIALOG_DATA, useValue: datos },
       ],
@@ -193,5 +196,202 @@ describe('RegistroDialogoComponent', () => {
     );
     expect(mensajes).toEqual(['Mensaje uno.', 'Mensaje dos.']);
     expect(dialogo.close).not.toHaveBeenCalled();
+  });
+});
+
+describe('RegistroDialogoComponent · medicación', () => {
+  const datos: DatosRegistroDialogo = {
+    paciente: { idPaciente: 'PAC-0001', nombre: 'Ana Ruiz', edad: 40, habitacion: 12 },
+    idAutor: 'DOC-0001',
+  };
+  const creado = { idRegistro: 'r1' } as Registro;
+  const servicio = { crear: vi.fn<(id: string, r: RegistroRequest) => Observable<Registro>>() };
+  const dialogo = { close: vi.fn() };
+  const inventario = { listar: vi.fn<() => Observable<Medicamento[]>>() };
+  const dolex = {
+    idMedicamento: 'MED-0001',
+    nombre: 'Dolex',
+    concentracion: '500 mg',
+    lote: 'L-1',
+    cantidadStock: 15,
+    vencido: false,
+  } as Medicamento;
+  const caducado = { ...dolex, idMedicamento: 'MED-0002', nombre: 'Amoxil', vencido: true };
+  const caido = () =>
+    throwError(
+      () =>
+        new ApiError(503, [
+          'El servicio de medicamentos no está disponible. Vuelva a intentarlo más tarde.',
+        ]),
+    );
+  const sinDescuento: RegistroRequest = {
+    tipo: 'MEDICACION',
+    idAutor: 'DOC-0001',
+    contenido: 'Paracetamol 500 mg vía oral',
+    signosVitales: null,
+    idMedicamento: null,
+    cantidad: null,
+  };
+
+  /** Abre el diálogo con MEDICACION elegida y el contenido relleno. */
+  async function preparar() {
+    TestBed.configureTestingModule({
+      imports: [RegistroDialogoComponent],
+      providers: [
+        { provide: HistorialService, useValue: servicio },
+        { provide: MedicamentoService, useValue: inventario },
+        { provide: MatDialogRef, useValue: dialogo },
+        { provide: MAT_DIALOG_DATA, useValue: datos },
+      ],
+    });
+    const fixture = TestBed.createComponent(RegistroDialogoComponent);
+    await fixture.whenStable();
+    const elemento = fixture.nativeElement as HTMLElement;
+    const estable = () => fixture.whenStable();
+    const escribir = (selector: string, valor: string, evento = 'input') => {
+      const campo = elemento.querySelector<HTMLInputElement>(selector)!;
+      campo.value = valor;
+      campo.dispatchEvent(new Event(evento));
+    };
+    Array.from(elemento.querySelectorAll('mat-radio-button'))
+      .find((r) => r.textContent?.trim() === 'Medicación')!
+      .querySelector('input')!
+      .click();
+    await estable();
+    escribir('[formControlName="contenido"]', 'Paracetamol 500 mg vía oral');
+    await estable();
+    return {
+      elemento,
+      casilla: () => elemento.querySelector<HTMLInputElement>('mat-checkbox input')!,
+      marcarDescuento: async () => {
+        elemento.querySelector<HTMLInputElement>('mat-checkbox input')!.click();
+        await estable();
+      },
+      elegir: async (id: string, cantidad: string) => {
+        escribir('[formControlName="idMedicamento"]', id, 'change');
+        escribir('[formControlName="cantidad"]', cantidad);
+        await estable();
+      },
+      enviar: async () => {
+        elemento.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+        await estable();
+      },
+      erroresCampos: () =>
+        Array.from(elemento.querySelectorAll('mat-error')).map((e) => e.textContent?.trim()),
+      alerta: () =>
+        Array.from(elemento.querySelectorAll('app-errores-formulario [role="alert"] p')).map(
+          (p) => p.textContent,
+        ),
+    };
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    inventario.listar.mockReturnValue(of([dolex, caducado]));
+  });
+
+  it('sin descuento no envía medicamento ni cantidad y no carga el inventario', async () => {
+    servicio.crear.mockReturnValue(of(creado));
+    const { enviar } = await preparar();
+
+    await enviar();
+
+    expect(inventario.listar).not.toHaveBeenCalled();
+    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', sinDescuento);
+  });
+
+  it('con descuento exige medicamento y cantidad, y envía los dos', async () => {
+    servicio.crear.mockReturnValue(of(creado));
+    const { elemento, marcarDescuento, elegir, enviar, erroresCampos } = await preparar();
+
+    await marcarDescuento();
+    expect(inventario.listar).toHaveBeenCalledTimes(1);
+    const vencido = elemento.querySelector<HTMLOptionElement>('option[value="MED-0002"]');
+    expect(vencido?.disabled).toBe(true);
+
+    await enviar();
+    expect(servicio.crear).not.toHaveBeenCalled();
+    expect(erroresCampos()).toEqual([
+      'Seleccione el medicamento administrado.',
+      'La cantidad administrada es obligatoria.',
+    ]);
+
+    await elegir('MED-0001', '2');
+    expect(elemento.querySelector('mat-hint')?.textContent).toContain('Disponible: 15');
+    await enviar();
+
+    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', {
+      ...sinDescuento,
+      idMedicamento: 'MED-0001',
+      cantidad: 2,
+    });
+  });
+
+  it('si el inventario no carga, avisa y deja guardar la medicación sin descuento', async () => {
+    inventario.listar.mockReturnValueOnce(caido()).mockReturnValueOnce(of([dolex]));
+    servicio.crear.mockReturnValue(of(creado));
+    const { elemento, casilla, marcarDescuento, enviar } = await preparar();
+
+    await marcarDescuento();
+
+    const aviso = elemento.querySelector('.aviso-inventario')!;
+    expect(aviso.textContent).toContain('El servicio de medicamentos no está disponible.');
+    expect(aviso.textContent).toContain('Puede guardar la medicación sin descontar stock.');
+    expect(casilla().checked).toBe(false);
+
+    await enviar();
+    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', sinDescuento);
+  });
+
+  it('desde el aviso se puede reintentar la carga del inventario', async () => {
+    inventario.listar.mockReturnValueOnce(caido()).mockReturnValueOnce(of([dolex]));
+    const { elemento, casilla, marcarDescuento } = await preparar();
+    await marcarDescuento();
+
+    elemento.querySelector<HTMLButtonElement>('.aviso-inventario button')!.click();
+    await new Promise((r) => setTimeout(r));
+
+    expect(inventario.listar).toHaveBeenCalledTimes(2);
+    expect(casilla().checked).toBe(true);
+    expect(elemento.querySelector('.aviso-inventario')).toBeNull();
+    expect(elemento.querySelector('option[value="MED-0001"]')).not.toBeNull();
+  });
+
+  it('si el descuento falla (stock insuficiente) explica que no se guardó nada', async () => {
+    servicio.crear.mockReturnValue(
+      throwError(() => new ApiError(400, ['Stock insuficiente: disponible 15, solicitado 20.'])),
+    );
+    const { marcarDescuento, elegir, enviar, alerta } = await preparar();
+
+    await marcarDescuento();
+    await elegir('MED-0001', '20');
+    await enviar();
+
+    expect(alerta()).toEqual([
+      'Stock insuficiente: disponible 15, solicitado 20.',
+      'No se guardó el registro ni se descontó stock.',
+    ]);
+    expect(dialogo.close).not.toHaveBeenCalled();
+  });
+
+  it('con 503 al descontar avisa de que el stock pudo descontarse', async () => {
+    servicio.crear.mockReturnValue(caido());
+    const { marcarDescuento, elegir, enviar, alerta } = await preparar();
+
+    await marcarDescuento();
+    await elegir('MED-0001', '2');
+    await enviar();
+
+    expect(alerta()[0]).toContain('El servicio de medicamentos no está disponible.');
+    expect(alerta()[1]).toContain('la salida de stock pudo registrarse igualmente');
+  });
+
+  it('un error sin descuento no añade notas sobre el stock', async () => {
+    servicio.crear.mockReturnValue(throwError(() => new ApiError(400, ['Mensaje.'])));
+    const { enviar, alerta } = await preparar();
+
+    await enviar();
+
+    expect(alerta()).toEqual(['Mensaje.']);
   });
 });

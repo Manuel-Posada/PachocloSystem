@@ -121,6 +121,75 @@
         <textarea matInput formControlName="contenido" rows="4" required></textarea>
         <mat-error>{{ primerError(formulario.controls.contenido) }}</mat-error>
       </mat-form-field>
+
+      @if (tipo() === 'MEDICACION') {
+        <section class="descuento" aria-label="Descuento de stock">
+          <mat-checkbox formControlName="descontarStock">
+            Descontar del inventario de medicamentos
+          </mat-checkbox>
+
+          @if (inventario().estado === 'cargando') {
+            <mat-progress-bar mode="indeterminate" aria-label="Cargando el inventario" />
+          }
+
+          @if (erroresInventario().length > 0) {
+            <div class="aviso-inventario" role="alert">
+              @for (mensaje of erroresInventario(); track $index) {
+                <p>{{ mensaje }}</p>
+              }
+              <p>Puede guardar la medicación sin descontar stock.</p>
+              <button
+                mat-stroked-button
+                type="button"
+                (click)="formulario.controls.descontarStock.setValue(true)"
+              >
+                Reintentar
+              </button>
+            </div>
+          }
+
+          @if (descontar() && inventario().estado === 'listo') {
+            <p class="nota">
+              El stock se descuenta antes de guardar el registro. Si el descuento falla (stock
+              insuficiente, medicamento vencido...), el registro no se guarda.
+            </p>
+            <div class="fila-campos">
+              <mat-form-field>
+                <mat-label>Medicamento</mat-label>
+                <select matNativeControl formControlName="idMedicamento" required>
+                  <option value="" disabled>Seleccione…</option>
+                  @for (m of medicamentosInventario(); track m.idMedicamento) {
+                    <option
+                      [value]="m.idMedicamento"
+                      [disabled]="m.vencido || m.cantidadStock === 0"
+                    >
+                      {{ m.nombre }} {{ m.concentracion }} · lote {{ m.lote }} ·
+                      {{ m.vencido ? 'vencido' : 'stock ' + m.cantidadStock }}
+                    </option>
+                  }
+                </select>
+                <mat-error>{{ primerError(formulario.controls.idMedicamento) }}</mat-error>
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Cantidad administrada</mat-label>
+                <input
+                  matInput
+                  type="number"
+                  formControlName="cantidad"
+                  min="1"
+                  max="1000000"
+                  step="1"
+                  required
+                />
+                @if (stockElegido() !== null) {
+                  <mat-hint>Disponible: {{ stockElegido() }}</mat-hint>
+                }
+                <mat-error>{{ primerError(formulario.controls.cantidad) }}</mat-error>
+              </mat-form-field>
+            </div>
+          }
+        </section>
+      }
     }
   </mat-dialog-content>
 
