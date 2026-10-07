@@ -33,6 +33,12 @@ public class UsuarioService {
     private final IUsuarioRepository repositorio;
     private final TrabajadorService trabajadorService;
     private final PasswordEncoder passwordEncoder;
+    /**
+     * Serializa los cambios de estado (activar/desactivar): sin él, dos
+     * administradores podrían desactivarse a la vez el uno al otro y dejar el
+     * sistema sin ninguno.
+     */
+    private final Object cerrojoEstados = new Object();
 
     public UsuarioService(IUsuarioRepository repositorio, TrabajadorService trabajadorService,
                           PasswordEncoder passwordEncoder) {
@@ -116,6 +122,114 @@ public class UsuarioService {
     private ConflictoException usuarioDuplicado(String usernameNormalizado) {
         return new ConflictoException(
                 "Ya existe un usuario con el username " + usernameNormalizado + ".");
+    }
+
+    /** Usuarios activos e inactivos, por ID; {@code texto} filtra por ID, username o trabajador. */
+    public List<Usuario> listar(String texto) {
+        String filtro = texto == null ? "" : texto.trim().toLowerCase(Locale.ROOT);
+        return repositorio.listarTodos().stream()
+                .filter(u -> filtro.isEmpty()
+                        || u.getIdUsuario().toLowerCase(Locale.ROOT).contains(filtro)
+                        || u.getUsername().contains(filtro)
+                        || (u.getIdTrabajador() != null
+                        && u.getIdTrabajador().toLowerCase(Locale.ROOT).contains(filtro)))
+                .toList();
+    }
+
+    /** Devuelve el usuario; si no existe lanza {@link NotFoundException}. */
+    public Usuario obtener(String idUsuario) {
+        Usuario usuario = repositorio.buscarPorId(idUsuario);
+        if (usuario == null) {
+            throw new NotFoundException("No se encontró el usuario " + idUsuario + ".");
+        }
+        return usuario;
+    }
+
+    /**
+     * Desactiva un usuario (idempotente). 409 si es el propio usuario que lo
+     * pide o el último administrador activo. Sus tokens dejan de valer en la
+     * siguiente petición: la autenticación relee el usuario cada vez.
+     */
+    public Usuario desactivar(String idUsuario, String usernameSolicitante) {
+        Usuario usuario = obtener(idUsuario);
+        synchronized (cerrojoEstados) {
+            if (!usuario.isActivo()) {
+                return usuario;
+            }
+            if (usuario.getUsername().equals(Usuario.normalizarUsername(usernameSolicitante))) {
+                throw new ConflictoException("No puede desactivar su propio usuario.");
+            }
+            if (usuario.getRol() == Rol.ADMIN && contarAdministradoresActivos() <= 1) {
+                throw new ConflictoException("No se puede desactivar al último administrador activo.");
+            }
+            usuario.desactivar();
+            return usuario;
+        }
+    }
+
+    /**
+     * Reactiva un usuario (idempotente) con las comprobaciones de consistencia
+     * del alta: un doctor o enfermero necesita que su trabajador siga existiendo,
+     * sea de su tipo y siga vinculado a él. Si no, 409.
+     */
+    public Usuario activar(String idUsuario) {
+        Usuario usuario = obtener(idUsuario);
+        synchronized (cerrojoEstados) {
+            if (usuario.isActivo()) {
+                return usuario;
+            }
+            if (usuario.getRol() != Rol.ADMIN) {
+                comprobarTrabajadorVigente(usuario);
+            }
+            usuario.activar();
+            return usuario;
+        }
+    }
+
+    /**
+     * Sustituye la contraseña de un usuario (activo o no) por una nueva que
+     * cumpla la política. La contraseña en claro no se guarda ni aparece en
+     * los mensajes.
+     */
+    public Usuario restablecerPassword(String idUsuario, String nuevaPasswordEnClaro) {
+        Usuario usuario = obtener(idUsuario);
+        List<String> errores = validarPassword(nuevaPasswordEnClaro, usuario.getUsername());
+        if (!errores.isEmpty()) {
+            throw new SolicitudInvalidaException(errores);
+        }
+        usuario.cambiarPasswordHash(passwordEncoder.encode(nuevaPasswordEnClaro));
+        return usuario;
+    }
+
+    private long contarAdministradoresActivos() {
+        return repositorio.listarTodos().stream()
+                .filter(u -> u.getRol() == Rol.ADMIN && u.isActivo())
+                .count();
+    }
+
+    private void comprobarTrabajadorVigente(Usuario usuario) {
+        String idTrabajador = usuario.getIdTrabajador();
+        String motivo = null;
+        TrabajadorHospital trabajador = null;
+        try {
+            trabajador = trabajadorService.obtenerTrabajador(idTrabajador);
+        } catch (NotFoundException noExiste) {
+            motivo = "su trabajador " + idTrabajador + " ya no existe";
+        }
+        if (trabajador != null) {
+            boolean tipoCorrecto = usuario.getRol() == Rol.DOCTOR
+                    ? trabajador instanceof Doctor
+                    : trabajador instanceof Enfermero;
+            if (!tipoCorrecto) {
+                motivo = "su trabajador " + idTrabajador + " ya no es de su rol";
+            } else if (repositorio.buscarPorIdTrabajador(idTrabajador) != usuario) {
+                motivo = "su trabajador " + idTrabajador + " está vinculado a otro usuario";
+            }
+        }
+        if (motivo != null) {
+            throw new ConflictoException(
+                    "No se puede activar el usuario " + usuario.getUsername() + ": " + motivo + ".");
+        }
     }
 
     /** Devuelve el usuario; si no existe lanza {@link NotFoundException}. */

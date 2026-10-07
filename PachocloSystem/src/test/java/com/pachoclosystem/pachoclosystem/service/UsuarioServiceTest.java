@@ -336,4 +336,190 @@ class UsuarioServiceTest {
                 .isThrownBy(() -> servicio.buscarPorUsername("Nadie"))
                 .withMessage("No se encontró el usuario nadie.");
     }
+    // ------------------------------------------------------------ listar y obtener
+
+    @Test
+    void listarDevuelveActivosEInactivosYFiltraPorIdUsernameOTrabajador() {
+        Doctor doctor = (Doctor) trabajadorService.registrarTrabajador(
+                "Carlos Mena", "Doctor", "Cardiologia", null);
+        Usuario admin = servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+        Usuario medico = servicio.crearUsuario("carlos.mena", PASSWORD_VALIDA, Rol.DOCTOR,
+                doctor.getIdTrabajador());
+        servicio.crearUsuario("admin.dos", PASSWORD_VALIDA, Rol.ADMIN, null);
+        servicio.desactivar(medico.getIdUsuario(), "admin.uno");
+
+        assertThat(servicio.listar(null)).hasSize(3);
+        assertThat(servicio.listar("  CARLOS ")).containsExactly(medico);
+        assertThat(servicio.listar("doc-0001")).containsExactly(medico);
+        assertThat(servicio.listar(admin.getIdUsuario())).containsExactly(admin);
+    }
+
+    @Test
+    void obtenerUnUsuarioInexistenteLanzaNotFound() {
+        assertThatExceptionOfType(NotFoundException.class)
+                .isThrownBy(() -> servicio.obtener("USR-0099"))
+                .withMessage("No se encontró el usuario USR-0099.");
+    }
+
+    // -------------------------------------------------------------- desactivar
+
+    @Test
+    void desactivarEsIdempotente() {
+        servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+        Usuario otro = servicio.crearUsuario("admin.dos", PASSWORD_VALIDA, Rol.ADMIN, null);
+
+        servicio.desactivar(otro.getIdUsuario(), "admin.uno");
+        Usuario otraVez = servicio.desactivar(otro.getIdUsuario(), "admin.uno");
+
+        assertThat(otraVez.isActivo()).isFalse();
+    }
+
+    @Test
+    void nadiePuedeDesactivarseASiMismo() {
+        Usuario admin = servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+        servicio.crearUsuario("admin.dos", PASSWORD_VALIDA, Rol.ADMIN, null);
+
+        assertThatExceptionOfType(ConflictoException.class)
+                .isThrownBy(() -> servicio.desactivar(admin.getIdUsuario(), "ADMIN.UNO"))
+                .withMessage("No puede desactivar su propio usuario.");
+        assertThat(admin.isActivo()).isTrue();
+    }
+
+    @Test
+    void noSePuedeDesactivarAlUltimoAdministradorActivo() {
+        Usuario uno = servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+        Usuario dos = servicio.crearUsuario("admin.dos", PASSWORD_VALIDA, Rol.ADMIN, null);
+        Usuario tres = servicio.crearUsuario("admin.tres", PASSWORD_VALIDA, Rol.ADMIN, null);
+        servicio.desactivar(dos.getIdUsuario(), "admin.uno");
+        servicio.desactivar(tres.getIdUsuario(), "admin.uno");
+
+        // admin.uno es el último activo: nadie (ni otro solicitante) puede desactivarlo.
+        assertThatExceptionOfType(ConflictoException.class)
+                .isThrownBy(() -> servicio.desactivar(uno.getIdUsuario(), "admin.dos"))
+                .withMessage("No se puede desactivar al último administrador activo.");
+        assertThat(uno.isActivo()).isTrue();
+    }
+
+    @Test
+    void dosAdministradoresQueSeDesactivanALaVezNoDejanElSistemaSinAdministradores()
+            throws Exception {
+        for (int ronda = 0; ronda < 50; ronda++) {
+            UsuarioService servicioRonda = new UsuarioService(
+                    new UsuarioRepositoryImpl(), trabajadorService, new BCryptPasswordEncoder(4));
+            Usuario uno = servicioRonda.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+            Usuario dos = servicioRonda.crearUsuario("admin.dos", PASSWORD_VALIDA, Rol.ADMIN, null);
+            CountDownLatch salida = new CountDownLatch(1);
+            ExecutorService ejecutor = Executors.newFixedThreadPool(2);
+            try {
+                Future<?> a = ejecutor.submit(() -> desactivarIgnorandoConflicto(
+                        servicioRonda, salida, dos.getIdUsuario(), "admin.uno"));
+                Future<?> b = ejecutor.submit(() -> desactivarIgnorandoConflicto(
+                        servicioRonda, salida, uno.getIdUsuario(), "admin.dos"));
+                salida.countDown();
+                a.get(10, TimeUnit.SECONDS);
+                b.get(10, TimeUnit.SECONDS);
+            } finally {
+                ejecutor.shutdownNow();
+            }
+            assertThat(uno.isActivo() || dos.isActivo()).isTrue();
+        }
+    }
+
+    @Test
+    void desactivarUnUsuarioInexistenteLanzaNotFound() {
+        assertThatExceptionOfType(NotFoundException.class)
+                .isThrownBy(() -> servicio.desactivar("USR-0099", "admin"));
+    }
+
+    // ----------------------------------------------------------------- activar
+
+    @Test
+    void activarEsIdempotenteYReactivaAUnDoctorConSuTrabajadorVigente() {
+        Doctor doctor = (Doctor) trabajadorService.registrarTrabajador(
+                "Carlos Mena", "Doctor", "Cardiologia", null);
+        servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+        Usuario medico = servicio.crearUsuario("carlos.mena", PASSWORD_VALIDA, Rol.DOCTOR,
+                doctor.getIdTrabajador());
+
+        assertThat(servicio.activar(medico.getIdUsuario()).isActivo()).isTrue();
+        servicio.desactivar(medico.getIdUsuario(), "admin.uno");
+        assertThat(servicio.activar(medico.getIdUsuario()).isActivo()).isTrue();
+    }
+
+    @Test
+    void noSeReactivaAUnUsuarioCuyoTrabajadorYaNoExiste() {
+        Doctor doctor = (Doctor) trabajadorService.registrarTrabajador(
+                "Carlos Mena", "Doctor", "Cardiologia", null);
+        servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+        Usuario medico = servicio.crearUsuario("carlos.mena", PASSWORD_VALIDA, Rol.DOCTOR,
+                doctor.getIdTrabajador());
+        servicio.desactivar(medico.getIdUsuario(), "admin.uno");
+        trabajadorService.eliminarTrabajador(doctor.getIdTrabajador());
+
+        assertThatExceptionOfType(ConflictoException.class)
+                .isThrownBy(() -> servicio.activar(medico.getIdUsuario()))
+                .withMessage("No se puede activar el usuario carlos.mena: su trabajador DOC-0001 "
+                        + "ya no existe.");
+        assertThat(medico.isActivo()).isFalse();
+    }
+
+    @Test
+    void unAdministradorSeReactivaSinComprobarTrabajador() {
+        servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+        Usuario dos = servicio.crearUsuario("admin.dos", PASSWORD_VALIDA, Rol.ADMIN, null);
+        servicio.desactivar(dos.getIdUsuario(), "admin.uno");
+
+        assertThat(servicio.activar(dos.getIdUsuario()).isActivo()).isTrue();
+    }
+
+    // ------------------------------------------------------ restablecer contraseña
+
+    @Test
+    void restablecerPasswordSustituyeElHashYLaAnteriorDejaDeValer() {
+        Usuario admin = servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+        String hashAnterior = admin.getPasswordHash();
+
+        servicio.restablecerPassword(admin.getIdUsuario(), "nueva-clave-segura");
+
+        assertThat(admin.getPasswordHash()).startsWith("$2").isNotEqualTo(hashAnterior);
+        assertThat(encoder.matches("nueva-clave-segura", admin.getPasswordHash())).isTrue();
+        assertThat(encoder.matches(PASSWORD_VALIDA, admin.getPasswordHash())).isFalse();
+    }
+
+    @Test
+    void restablecerPasswordAplicaLaPoliticaSinRevelarLaPassword() {
+        Usuario admin = servicio.crearUsuario("admin.principal", PASSWORD_VALIDA, Rol.ADMIN, null);
+        String hashAnterior = admin.getPasswordHash();
+
+        assertThatExceptionOfType(SolicitudInvalidaException.class)
+                .isThrownBy(() -> servicio.restablecerPassword(admin.getIdUsuario(), "corta-123"))
+                .withMessage("La contraseña debe tener al menos 10 caracteres.")
+                .satisfies(e -> assertThat(e.getMessage()).doesNotContain("corta-123"));
+        assertThatExceptionOfType(SolicitudInvalidaException.class)
+                .isThrownBy(() -> servicio.restablecerPassword(admin.getIdUsuario(), "ñ".repeat(37)))
+                .withMessageContaining("72 bytes");
+        assertThatExceptionOfType(SolicitudInvalidaException.class)
+                .isThrownBy(() -> servicio.restablecerPassword(admin.getIdUsuario(), "ADMIN.PRINCIPAL"))
+                .withMessage("La contraseña no puede ser igual al username.");
+        assertThat(admin.getPasswordHash()).isEqualTo(hashAnterior);
+    }
+
+    @Test
+    void restablecerPasswordDeUnUsuarioInexistenteLanzaNotFound() {
+        assertThatExceptionOfType(NotFoundException.class)
+                .isThrownBy(() -> servicio.restablecerPassword("USR-0099", "nueva-clave-segura"));
+    }
+
+    private static void desactivarIgnorandoConflicto(UsuarioService servicioRonda,
+                                                     CountDownLatch salida, String id,
+                                                     String solicitante) {
+        try {
+            salida.await();
+            servicioRonda.desactivar(id, solicitante);
+        } catch (ConflictoException esperado) {
+            // Uno de los dos debe perder: es lo que se comprueba.
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }

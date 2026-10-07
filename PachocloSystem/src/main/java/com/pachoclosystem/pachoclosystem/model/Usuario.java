@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * Usuario de acceso a la API (fase 1: solo modelo, sin autenticación).
+ * Usuario de acceso a la API.
  *
  * <p>Guarda <strong>únicamente</strong> el hash BCrypt de la contraseña; la
  * contraseña en claro nunca se almacena ni se muestra. Ni {@code toString()}
@@ -20,7 +20,8 @@ public class Usuario {
 
     private final String idUsuario;
     private final String username;
-    private final String passwordHash;
+    /** Cambia solo al restablecer la contraseña. */
+    private volatile String passwordHash;
     private final Rol rol;
     private final String idTrabajador;
     private volatile boolean activo;
@@ -70,9 +71,22 @@ public class Usuario {
         return activo;
     }
 
-    /** Único cambio de estado permitido: desactivar el usuario. */
+    /**
+     * Desactivar y activar son los únicos cambios de estado. Las reglas (no
+     * autodesactivarse, no dejar sin administradores, trabajador vigente al
+     * activar) las aplica {@code UsuarioService}.
+     */
     public void desactivar() {
         this.activo = false;
+    }
+
+    public void activar() {
+        this.activo = true;
+    }
+
+    /** Sustituye el hash BCrypt (restablecer contraseña). Nunca recibe la contraseña en claro. */
+    public void cambiarPasswordHash(String nuevoHash) {
+        this.passwordHash = Objects.requireNonNull(nuevoHash);
     }
 
     @Override
