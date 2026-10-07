@@ -50,6 +50,8 @@ public class GlobalExceptionHandler {
             "El servicio de medicamentos no está disponible. Vuelva a intentarlo más tarde.";
     private static final String MENSAJE_RESPUESTA_SERVICIO_INVALIDA =
             "El servicio de medicamentos respondió de forma inesperada.";
+    private static final String MENSAJE_SALIDA_NO_CONFIRMADA =
+            "No se pudo confirmar; puede reintentar sin riesgo de descontar dos veces.";
 
     /** 401: credenciales incorrectas en el login (usuario inexistente, contraseña mala o desactivado). */
     @ExceptionHandler(CredencialesInvalidasException.class)
@@ -81,6 +83,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> servicioNoDisponible(ServicioNoDisponibleException ex) {
         LOG.warn("Servicio externo no disponible: {}", ex.getMessage());
         return respuesta(HttpStatus.SERVICE_UNAVAILABLE, List.of(MENSAJE_SERVICIO_NO_DISPONIBLE));
+    }
+
+    /**
+     * 503: una salida de stock con clave de idempotencia no respondió ni al
+     * reintento. Repetir la petición con la misma clave es seguro.
+     */
+    @ExceptionHandler(SalidaNoConfirmadaException.class)
+    public ResponseEntity<ErrorResponse> salidaNoConfirmada(SalidaNoConfirmadaException ex) {
+        LOG.warn("Salida de stock sin confirmar: {}", ex.getMessage());
+        return respuesta(HttpStatus.SERVICE_UNAVAILABLE, List.of(MENSAJE_SALIDA_NO_CONFIRMADA));
     }
 
     /** 502: el servicio de medicamentos respondió algo que no se puede trasladar al cliente. */

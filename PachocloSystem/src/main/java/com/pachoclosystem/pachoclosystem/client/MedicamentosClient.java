@@ -7,8 +7,11 @@ import com.pachoclosystem.pachoclosystem.dto.MedicamentoResponse;
 import com.pachoclosystem.pachoclosystem.exception.ConflictoException;
 import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.exception.RespuestaServicioInvalidaException;
+import com.pachoclosystem.pachoclosystem.exception.SalidaNoConfirmadaException;
 import com.pachoclosystem.pachoclosystem.exception.ServicioNoDisponibleException;
 import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpRequest;
@@ -38,11 +41,18 @@ import java.util.function.Supplier;
  *       configurada) o un cuerpo ilegible → {@link RespuestaServicioInvalidaException} (502).</li>
  *   <li>Conexión rechazada o timeout → {@link ServicioNoDisponibleException} (503).</li>
  * </ul>
+ *
+ * <p>Las salidas con clave de idempotencia ({@link #registrarSalida(String, int, String)})
+ * se reintentan una vez si no responden; si tampoco responde el reintento,
+ * {@link SalidaNoConfirmadaException} (503, se puede reintentar).</p>
  */
 @Component
 public class MedicamentosClient {
 
+    private static final Logger LOG = LoggerFactory.getLogger(MedicamentosClient.class);
     private static final String RUTA = "/api/medicamentos";
+    /** Cabecera de MedicamentosService para que repetir una salida no vuelva a descontar. */
+    private static final String CABECERA_IDEMPOTENCIA = "Idempotency-Key";
     private static final ParameterizedTypeReference<List<MedicamentoResponse>> LISTA =
             new ParameterizedTypeReference<>() {
             };
@@ -99,11 +109,65 @@ public class MedicamentosClient {
     }
 
     public MedicamentoResponse registrarEntrada(String id, int cantidad) {
-        return movimiento(id, "entradas", cantidad);
+        return movimiento(id, "entradas", cantidad, null);
     }
 
     public MedicamentoResponse registrarSalida(String id, int cantidad) {
-        return movimiento(id, "salidas", cantidad);
+        return movimiento(id, "salidas", cantidad, null);
+    }
+
+    /**
+     * Salida con {@code Idempotency-Key}: MedicamentosService no descuenta dos
+     * veces con la misma clave, así que si no responde (timeout o error de E/S)
+     * se reintenta una vez con la misma clave. Si el reintento tampoco responde,
+     * no se sabe si se descontó: {@link SalidaNoConfirmadaException}. Las
+     * respuestas de error (400, 404, 409, 5xx) y los cuerpos mal formados no se
+     * reintentan.
+     */
+    public MedicamentoResponse registrarSalida(String id, int cantidad, String claveIdempotencia) {
+        try {
+            return salidaConClave(id, cantidad, claveIdempotencia);
+        } catch (ServicioNoDisponibleException primerFallo) {
+            LOG.warn("Salida de stock sin respuesta; se reintenta una vez con la misma clave: {}",
+                    primerFallo.getMessage());
+        }
+        try {
+            return salidaConClave(id, cantidad, claveIdempotencia);
+        } catch (ServicioNoDisponibleException segundoFallo) {
+            throw new SalidaNoConfirmadaException("Salida de stock sin respuesta tras reintentar: "
+                    + segundoFallo.getMessage(), segundoFallo);
+        }
+    }
+
+    /**
+     * Una salida con clave. Si el tiempo se agota (o la conexión se corta) cuando
+     * ya llegaron las cabeceras pero no el cuerpo, Spring no lo da como error de
+     * E/S sino como error al leer la respuesta: aquí, si la causa es de E/S, se
+     * trata como un timeout. Un cuerpo mal formado no tiene causa de E/S y sigue
+     * siendo respuesta inválida (502). Sin clave no se hace esta distinción.
+     */
+    private MedicamentoResponse salidaConClave(String id, int cantidad, String claveIdempotencia) {
+        try {
+            return movimiento(id, "salidas", cantidad, claveIdempotencia);
+        } catch (RespuestaServicioInvalidaException fallo) {
+            if (fallo.getCause() != null && tieneCausaDeEntradaSalida(fallo.getCause())) {
+                throw new ServicioNoDisponibleException(
+                        "MedicamentosService no terminó de responder: " + fallo.getMessage(), fallo);
+            }
+            throw fallo;
+        }
+    }
+
+    private static boolean tieneCausaDeEntradaSalida(Throwable fallo) {
+        for (Throwable causa = fallo; causa != null; causa = causa.getCause()) {
+            if (causa instanceof IOException) {
+                return true;
+            }
+            if (causa.getCause() == causa) {
+                break;
+            }
+        }
+        return false;
     }
 
     public List<MedicamentoResponse> listarStockBajo() {
@@ -124,14 +188,20 @@ public class MedicamentosClient {
         return consulta("/vencidos");
     }
 
-    private MedicamentoResponse movimiento(String id, String tipo, int cantidad) {
-        return ejecutar(() -> http.post()
-                .uri(RUTA + "/{id}/" + tipo, id)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of("cantidad", cantidad))
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, this::traducirError)
-                .body(MedicamentoResponse.class));
+    /** {@code claveIdempotencia} nula = sin cabecera {@code Idempotency-Key}. */
+    private MedicamentoResponse movimiento(String id, String tipo, int cantidad, String claveIdempotencia) {
+        return ejecutar(() -> {
+            RestClient.RequestBodySpec peticion = http.post()
+                    .uri(RUTA + "/{id}/" + tipo, id)
+                    .contentType(MediaType.APPLICATION_JSON);
+            if (claveIdempotencia != null) {
+                peticion.header(CABECERA_IDEMPOTENCIA, claveIdempotencia);
+            }
+            return peticion.body(Map.of("cantidad", cantidad))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, this::traducirError)
+                    .body(MedicamentoResponse.class);
+        });
     }
 
     private List<MedicamentoResponse> consulta(String subruta) {

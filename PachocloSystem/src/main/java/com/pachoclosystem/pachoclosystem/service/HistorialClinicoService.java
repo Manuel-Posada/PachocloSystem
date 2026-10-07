@@ -80,6 +80,21 @@ public class HistorialClinicoService {
                                                 TipoRegistro tipo, String contenido,
                                                 SignosVitalesRequest signos, String idMedicamento,
                                                 Integer cantidad) {
+        return agregarRegistroComo(usuario, idPaciente, idAutorDeclarado, tipo, contenido, signos,
+                idMedicamento, cantidad, null);
+    }
+
+    /**
+     * Como {@link #agregarRegistroComo(Usuario, String, String, TipoRegistro, String,
+     * SignosVitalesRequest, String, Integer)}, pero si hay descuento de stock la
+     * salida se pide con {@code claveIdempotencia} (ver
+     * {@link MedicamentosClient#registrarSalida(String, int, String)}). Clave nula =
+     * la salida de siempre.
+     */
+    public RegistroResponse agregarRegistroComo(Usuario usuario, String idPaciente, String idAutorDeclarado,
+                                                TipoRegistro tipo, String contenido,
+                                                SignosVitalesRequest signos, String idMedicamento,
+                                                Integer cantidad, String claveIdempotencia) {
         String idAutor = usuario.getIdTrabajador();
         if (idAutor == null) {
             throw new AccesoDenegadoException(
@@ -93,7 +108,8 @@ public class HistorialClinicoService {
         if (tipo != null && !TIPOS_POR_ROL.getOrDefault(usuario.getRol(), Set.of()).contains(tipo)) {
             throw new AccesoDenegadoException("Su rol no puede crear registros de tipo " + tipo + ".");
         }
-        return agregarRegistroPaciente(idPaciente, idAutor, tipo, contenido, signos, idMedicamento, cantidad);
+        return agregarRegistroPaciente(idPaciente, idAutor, tipo, contenido, signos, idMedicamento, cantidad,
+                claveIdempotencia);
     }
 
     public RegistroResponse agregarRegistroPaciente(String idPaciente, String idAutor, TipoRegistro tipo,
@@ -110,6 +126,18 @@ public class HistorialClinicoService {
     public RegistroResponse agregarRegistroPaciente(String idPaciente, String idAutor, TipoRegistro tipo,
                                                     String contenido, SignosVitalesRequest signos,
                                                     String idMedicamento, Integer cantidad) {
+        return agregarRegistroPaciente(idPaciente, idAutor, tipo, contenido, signos, idMedicamento, cantidad,
+                null);
+    }
+
+    /**
+     * Con {@code claveIdempotencia}, la salida de stock se pide con esa clave y se
+     * reintenta una vez si no responde; sin ella (null), la salida de siempre.
+     */
+    private RegistroResponse agregarRegistroPaciente(String idPaciente, String idAutor, TipoRegistro tipo,
+                                                     String contenido, SignosVitalesRequest signos,
+                                                     String idMedicamento, Integer cantidad,
+                                                     String claveIdempotencia) {
         validarMedicacion(tipo, idMedicamento, cantidad);
         String contenidoFinal = construirContenido(tipo, contenido, signos);
 
@@ -127,7 +155,11 @@ public class HistorialClinicoService {
             if (clienteMedicamentos == null) {
                 throw new IllegalStateException("No hay cliente de medicamentos configurado.");
             }
-            clienteMedicamentos.registrarSalida(medicamento, cantidad);
+            if (claveIdempotencia == null) {
+                clienteMedicamentos.registrarSalida(medicamento, cantidad);
+            } else {
+                clienteMedicamentos.registrarSalida(medicamento, cantidad, claveIdempotencia);
+            }
         }
 
         RegistroClinico registro = new RegistroClinico(tipo, contenidoFinal, autor, medicamento, cantidad);
