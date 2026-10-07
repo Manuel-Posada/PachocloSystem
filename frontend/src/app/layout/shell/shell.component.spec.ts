@@ -57,6 +57,15 @@ describe('ShellComponent', () => {
     ]);
   });
 
+  it('el administrador ve además Usuarios', async () => {
+    usuario.set({ ...doctora, rol: 'ADMIN', idTrabajador: null });
+
+    const elemento = await renderizar();
+
+    const enlaces = Array.from(elemento.querySelectorAll('mat-nav-list a'));
+    expect(enlaces.map((a) => a.getAttribute('href'))).toContain('/usuarios');
+  });
+
   it('muestra el usuario y su rol', async () => {
     const elemento = await renderizar();
 

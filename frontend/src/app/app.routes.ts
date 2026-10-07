@@ -40,6 +40,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'usuarios',
+        title: 'Usuarios · PachocloSystem',
+        canActivate: [permisoGuard('usuarios.gestionar')],
+        loadComponent: () =>
+          import('./features/usuarios/usuarios-lista/usuarios-lista.component').then(
+            (m) => m.UsuariosListaComponent,
+          ),
+      },
+      {
         path: 'medicamentos',
         title: 'Medicamentos · PachocloSystem',
         loadComponent: () =>

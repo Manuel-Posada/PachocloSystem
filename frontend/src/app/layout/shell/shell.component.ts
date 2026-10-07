@@ -26,6 +26,12 @@ const SECCIONES: readonly Seccion[] = [
   { ruta: '/trabajadores', etiqueta: 'Trabajadores', icono: 'badge', permiso: 'trabajadores.leer' },
   { ruta: '/medicamentos', etiqueta: 'Medicamentos', icono: 'medication' },
   { ruta: '/historial', etiqueta: 'Historial clínico', icono: 'history_edu' },
+  {
+    ruta: '/usuarios',
+    etiqueta: 'Usuarios',
+    icono: 'manage_accounts',
+    permiso: 'usuarios.gestionar',
+  },
 ];
 
 /** Marco de la aplicación autenticada: barra superior, menú lateral y contenido. */
