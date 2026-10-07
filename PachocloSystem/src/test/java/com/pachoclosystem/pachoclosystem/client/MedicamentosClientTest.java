@@ -351,6 +351,17 @@ class MedicamentosClientTest {
     }
 
     @Test
+    void unCuerpoMalFormadoConClaveSigueSiendoRespuestaInvalidaSinReintento() {
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andExpect(header("Idempotency-Key", CLAVE))
+                .andRespond(withSuccess("esto no es json", MediaType.APPLICATION_JSON));
+
+        assertThatExceptionOfType(RespuestaServicioInvalidaException.class)
+                .isThrownBy(() -> cliente.registrarSalida("MED-0001", 2, CLAVE));
+        servidor.verify();
+    }
+
+    @Test
     void unConflictoDeClaveEnMedicamentosLlegaComo409() {
         servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
                 .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)

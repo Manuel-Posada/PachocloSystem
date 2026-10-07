@@ -121,21 +121,53 @@ public class MedicamentosClient {
      * veces con la misma clave, así que si no responde (timeout o error de E/S)
      * se reintenta una vez con la misma clave. Si el reintento tampoco responde,
      * no se sabe si se descontó: {@link SalidaNoConfirmadaException}. Las
-     * respuestas de error (400, 404, 409, 5xx) no se reintentan.
+     * respuestas de error (400, 404, 409, 5xx) y los cuerpos mal formados no se
+     * reintentan.
      */
     public MedicamentoResponse registrarSalida(String id, int cantidad, String claveIdempotencia) {
         try {
-            return movimiento(id, "salidas", cantidad, claveIdempotencia);
+            return salidaConClave(id, cantidad, claveIdempotencia);
         } catch (ServicioNoDisponibleException primerFallo) {
             LOG.warn("Salida de stock sin respuesta; se reintenta una vez con la misma clave: {}",
                     primerFallo.getMessage());
         }
         try {
-            return movimiento(id, "salidas", cantidad, claveIdempotencia);
+            return salidaConClave(id, cantidad, claveIdempotencia);
         } catch (ServicioNoDisponibleException segundoFallo) {
             throw new SalidaNoConfirmadaException("Salida de stock sin respuesta tras reintentar: "
                     + segundoFallo.getMessage(), segundoFallo);
         }
+    }
+
+    /**
+     * Una salida con clave. Si el tiempo se agota (o la conexión se corta) cuando
+     * ya llegaron las cabeceras pero no el cuerpo, Spring no lo da como error de
+     * E/S sino como error al leer la respuesta: aquí, si la causa es de E/S, se
+     * trata como un timeout. Un cuerpo mal formado no tiene causa de E/S y sigue
+     * siendo respuesta inválida (502). Sin clave no se hace esta distinción.
+     */
+    private MedicamentoResponse salidaConClave(String id, int cantidad, String claveIdempotencia) {
+        try {
+            return movimiento(id, "salidas", cantidad, claveIdempotencia);
+        } catch (RespuestaServicioInvalidaException fallo) {
+            if (fallo.getCause() != null && tieneCausaDeEntradaSalida(fallo.getCause())) {
+                throw new ServicioNoDisponibleException(
+                        "MedicamentosService no terminó de responder: " + fallo.getMessage(), fallo);
+            }
+            throw fallo;
+        }
+    }
+
+    private static boolean tieneCausaDeEntradaSalida(Throwable fallo) {
+        for (Throwable causa = fallo; causa != null; causa = causa.getCause()) {
+            if (causa instanceof IOException) {
+                return true;
+            }
+            if (causa.getCause() == causa) {
+                break;
+            }
+        }
+        return false;
     }
 
     public List<MedicamentoResponse> listarStockBajo() {

@@ -51,6 +51,8 @@ class HistorialSalidaLentaHttpTest extends MockMvcBaseTest {
             "No se pudo confirmar; puede reintentar sin riesgo de descontar dos veces.";
     private static final String MENSAJE_NO_DISPONIBLE =
             "El servicio de medicamentos no está disponible. Vuelva a intentarlo más tarde.";
+    private static final String MENSAJE_RESPUESTA_INESPERADA =
+            "El servicio de medicamentos respondió de forma inesperada.";
 
     private static final StubMedicamentos STUB = StubMedicamentos.arrancar();
 
@@ -153,19 +155,96 @@ class HistorialSalidaLentaHttpTest extends MockMvcBaseTest {
         registrosDe(paciente, 0);
     }
 
+    // --- Tiempo agotado leyendo el cuerpo, y cuerpo corrupto ---------------
+
+    @Test
+    void cabecerasATiempoYCuerpoTardioConClaveSeReintentaYAcabaEn503() throws Exception {
+        String paciente = registrarPaciente("Ana Torres", 30, 101);
+        String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
+        String clave = UUID.randomUUID().toString();
+        STUB.retrasarCuerpo(MAS_QUE_LA_LECTURA, MAS_QUE_LA_LECTURA);
+
+        registrar(doctor, paciente, clave)
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.mensajes", contains(MENSAJE_NO_CONFIRMADA)));
+
+        // Se trató como timeout: un reintento con la misma clave y un solo descuento.
+        assertThat(STUB.clavesRecibidas()).containsExactly(clave, clave);
+        assertThat(STUB.stock()).isEqualTo(98);
+        registrosDe(paciente, 0);
+
+        // Repetir la petición termina con un registro y sin segundo descuento.
+        registrar(doctor, paciente, clave).andExpect(status().isCreated());
+        assertThat(STUB.stock()).isEqualTo(98);
+        registrosDe(paciente, 1);
+    }
+
+    @Test
+    void cuerpoTardioSoloEnElPrimerIntentoConClaveCreaElRegistro() throws Exception {
+        String paciente = registrarPaciente("Ana Torres", 30, 101);
+        String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
+        String clave = UUID.randomUUID().toString();
+        STUB.retrasarCuerpo(MAS_QUE_LA_LECTURA);
+
+        registrar(doctor, paciente, clave)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.medicacion.cantidad").value(2));
+
+        assertThat(STUB.clavesRecibidas()).containsExactly(clave, clave);
+        assertThat(STUB.stock()).isEqualTo(98);
+        registrosDe(paciente, 1);
+    }
+
+    @Test
+    void cuerpoCorruptoConClaveSigueSiendo502SinReintento() throws Exception {
+        String paciente = registrarPaciente("Ana Torres", 30, 101);
+        String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
+        String clave = UUID.randomUUID().toString();
+        STUB.corromper();
+
+        registrar(doctor, paciente, clave)
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.mensajes", contains(MENSAJE_RESPUESTA_INESPERADA)));
+
+        assertThat(STUB.clavesRecibidas()).containsExactly(clave);
+        assertThat(STUB.stock()).isEqualTo(98);
+        registrosDe(paciente, 0);
+    }
+
+    @Test
+    void sinCabeceraElCuerpoTardioSigueSiendo502SinReintento() throws Exception {
+        String paciente = registrarPaciente("Ana Torres", 30, 101);
+        String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
+        STUB.retrasarCuerpo(MAS_QUE_LA_LECTURA);
+
+        // Límite conocido sin clave: igual que antes de B4b.
+        registrar(doctor, paciente, null)
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.mensajes", contains(MENSAJE_RESPUESTA_INESPERADA)));
+
+        assertThat(STUB.clavesRecibidas()).containsExactly((String) null);
+        assertThat(STUB.stock()).isEqualTo(98);
+        registrosDe(paciente, 0);
+    }
+
     /**
      * Stub de {@code POST /api/medicamentos/{id}/salidas} con la semántica de
      * MedicamentosService: con una clave ya usada devuelve la respuesta guardada
-     * sin descontar. Cada petición puede tardar lo que diga {@link #retrasar}
-     * <em>después</em> de aplicar la salida.
+     * sin descontar. Cada petición se comporta como diga la cola
+     * ({@link #retrasar}, {@link #retrasarCuerpo}, {@link #corromper}), siempre
+     * <em>después</em> de aplicar la salida; sin indicación, responde enseguida.
      */
     private static final class StubMedicamentos {
 
         private static final Pattern CANTIDAD = Pattern.compile("\"cantidad\"\\s*:\\s*(\\d+)");
 
+        /** Espera antes de las cabeceras, espera entre cabeceras y cuerpo, y si el cuerpo no es JSON. */
+        private record Comportamiento(Duration antesDeCabeceras, Duration antesDelCuerpo, boolean corrupto) {
+        }
+
         private final HttpServer servidor;
         private final ExecutorService hilos = Executors.newCachedThreadPool();
-        private final Queue<Duration> retrasos = new ConcurrentLinkedQueue<>();
+        private final Queue<Comportamiento> comportamientos = new ConcurrentLinkedQueue<>();
         private final List<String> claves = new ArrayList<>();
         private final Map<String, String> respuestas = new HashMap<>();
         private int stock;
@@ -192,14 +271,29 @@ class HistorialSalidaLentaHttpTest extends MockMvcBaseTest {
         }
 
         synchronized void reiniciar(int stockInicial) {
-            retrasos.clear();
+            comportamientos.clear();
             claves.clear();
             respuestas.clear();
             stock = stockInicial;
         }
 
+        /** Las siguientes peticiones tardan eso antes de enviar nada. */
         void retrasar(Duration... porPeticion) {
-            retrasos.addAll(List.of(porPeticion));
+            for (Duration retraso : porPeticion) {
+                comportamientos.add(new Comportamiento(retraso, Duration.ZERO, false));
+            }
+        }
+
+        /** Las siguientes peticiones envían las cabeceras enseguida y tardan eso en enviar el cuerpo. */
+        void retrasarCuerpo(Duration... porPeticion) {
+            for (Duration retraso : porPeticion) {
+                comportamientos.add(new Comportamiento(Duration.ZERO, retraso, false));
+            }
+        }
+
+        /** La siguiente petición responde 200 con un cuerpo que no es JSON. */
+        void corromper() {
+            comportamientos.add(new Comportamiento(Duration.ZERO, Duration.ZERO, true));
         }
 
         synchronized List<String> clavesRecibidas() {
@@ -237,15 +331,19 @@ class HistorialSalidaLentaHttpTest extends MockMvcBaseTest {
                     }
                 }
             }
-            Duration retraso = retrasos.poll();
+            Comportamiento comportamiento = comportamientos.poll();
+            if (comportamiento == null) {
+                comportamiento = new Comportamiento(Duration.ZERO, Duration.ZERO, false);
+            }
             try {
-                if (retraso != null) {
-                    Thread.sleep(retraso);
-                }
-                byte[] bytes = respuesta.getBytes(StandardCharsets.UTF_8);
+                Thread.sleep(comportamiento.antesDeCabeceras());
+                byte[] bytes = (comportamiento.corrupto() ? "esto no es json" : respuesta)
+                        .getBytes(StandardCharsets.UTF_8);
                 intercambio.getResponseHeaders().add("Content-Type", "application/json");
                 intercambio.sendResponseHeaders(200, bytes.length);
                 try (OutputStream salida = intercambio.getResponseBody()) {
+                    salida.flush();
+                    Thread.sleep(comportamiento.antesDelCuerpo());
                     salida.write(bytes);
                 }
             } catch (InterruptedException e) {
