@@ -1,0 +1,40 @@
+<mat-toolbar class="barra">
+  @if (esMovil()) {
+    <button mat-icon-button type="button" aria-label="Abrir menú" (click)="menu.toggle()">
+      <mat-icon>menu</mat-icon>
+    </button>
+  }
+  <a class="marca" routerLink="/">PachocloSystem</a>
+</mat-toolbar>
+
+<mat-sidenav-container class="contenedor">
+  <mat-sidenav
+    #menu
+    class="menu"
+    [mode]="esMovil() ? 'over' : 'side'"
+    [opened]="!esMovil()"
+    [attr.role]="esMovil() ? 'dialog' : 'navigation'"
+  >
+    <mat-nav-list aria-label="Secciones">
+      @for (seccion of secciones; track seccion.ruta) {
+        <a
+          mat-list-item
+          [routerLink]="seccion.ruta"
+          routerLinkActive
+          #enlace="routerLinkActive"
+          [activated]="enlace.isActive"
+          (click)="esMovil() && menu.close()"
+        >
+          <mat-icon matListItemIcon>{{ seccion.icono }}</mat-icon>
+          <span matListItemTitle>{{ seccion.etiqueta }}</span>
+        </a>
+      }
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <main class="contenido">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

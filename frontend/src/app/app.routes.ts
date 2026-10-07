@@ -1,3 +1,48 @@
 import { Routes } from '@angular/router';
 
-export const routes: Routes = [];
+const enConstruccion = () =>
+  import('./features/en-construccion/en-construccion.component').then(
+    (m) => m.EnConstruccionComponent,
+  );
+
+export const routes: Routes = [
+  {
+    path: '',
+    loadComponent: () => import('./layout/shell/shell.component').then((m) => m.ShellComponent),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'pacientes' },
+      {
+        path: 'pacientes',
+        title: 'Pacientes · PachocloSystem',
+        loadComponent: enConstruccion,
+        data: { titulo: 'Pacientes' },
+      },
+      {
+        path: 'trabajadores',
+        title: 'Trabajadores · PachocloSystem',
+        loadComponent: enConstruccion,
+        data: { titulo: 'Trabajadores' },
+      },
+      {
+        path: 'medicamentos',
+        title: 'Medicamentos · PachocloSystem',
+        loadComponent: enConstruccion,
+        data: { titulo: 'Medicamentos' },
+      },
+      {
+        path: 'historial',
+        title: 'Historial clínico · PachocloSystem',
+        loadComponent: enConstruccion,
+        data: { titulo: 'Historial clínico' },
+      },
+    ],
+  },
+  {
+    path: '**',
+    title: 'Página no encontrada · PachocloSystem',
+    loadComponent: () =>
+      import('./features/no-encontrado/no-encontrado.component').then(
+        (m) => m.NoEncontradoComponent,
+      ),
+  },
+];
