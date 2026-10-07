@@ -3,12 +3,15 @@ package com.pachoclosystem.pachoclosystem.service;
 import com.pachoclosystem.pachoclosystem.client.MedicamentosClient;
 import com.pachoclosystem.pachoclosystem.dto.RegistroResponse;
 import com.pachoclosystem.pachoclosystem.dto.SignosVitalesRequest;
+import com.pachoclosystem.pachoclosystem.exception.AccesoDenegadoException;
 import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
 import com.pachoclosystem.pachoclosystem.model.Paciente;
 import com.pachoclosystem.pachoclosystem.model.RegistroClinico;
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
+import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.IPacienteRepository;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,12 +19,24 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Service
 public class HistorialClinicoService {
+
+    /**
+     * Tipos de registro que puede crear cada rol. El ADMIN no está: no tiene
+     * trabajador vinculado y no puede firmar registros.
+     */
+    private static final Map<Rol, Set<TipoRegistro>> TIPOS_POR_ROL = Map.of(
+            Rol.DOCTOR, EnumSet.allOf(TipoRegistro.class),
+            Rol.ENFERMERO, EnumSet.of(TipoRegistro.EVOLUCION, TipoRegistro.SIGNOS_VITALES,
+                    TipoRegistro.MEDICACION));
 
     private static final Pattern PATRON_CONTIENE_TEXTO = Pattern.compile(".*[A-Za-zÁÉÍÓÚÑÜáéíóúñü].*");
 
@@ -42,6 +57,43 @@ public class HistorialClinicoService {
         this.repositorioPacientes = repositorioPacientes;
         this.repositorioTrabajadores = repositorioTrabajadores;
         this.clienteMedicamentos = clienteMedicamentos;
+    }
+
+    /**
+     * Crea un registro firmado por el usuario autenticado: el autor es su
+     * trabajador vinculado, nunca un dato de la petición ni de los claims.
+     *
+     * <ul>
+     *   <li>Sin trabajador vinculado (el ADMIN): 403.</li>
+     *   <li>{@code idAutorDeclarado} es opcional; si viene y no es su
+     *       trabajador: 400.</li>
+     *   <li>El rol limita el tipo de registro ({@link #TIPOS_POR_ROL}): 403.</li>
+     * </ul>
+     *
+     * <p>El descuento de stock de MEDICACION lo hace este servicio con el
+     * cliente interno de MedicamentosService (una llamada saliente que no pasa
+     * por la cadena de seguridad de esta API), así que lo puede pedir cualquiera
+     * que pueda crear el registro, aunque no tenga acceso a las rutas de salidas
+     * de stock.</p>
+     */
+    public RegistroResponse agregarRegistroComo(Usuario usuario, String idPaciente, String idAutorDeclarado,
+                                                TipoRegistro tipo, String contenido,
+                                                SignosVitalesRequest signos, String idMedicamento,
+                                                Integer cantidad) {
+        String idAutor = usuario.getIdTrabajador();
+        if (idAutor == null) {
+            throw new AccesoDenegadoException(
+                    "Solo un usuario vinculado a un trabajador puede crear registros.");
+        }
+        if (idAutorDeclarado != null && !idAutorDeclarado.isBlank()
+                && !idAutorDeclarado.trim().equals(idAutor)) {
+            throw new SolicitudInvalidaException("El idAutor enviado no coincide con el trabajador de su "
+                    + "usuario: el autor de un registro es siempre quien inicia sesión.");
+        }
+        if (tipo != null && !TIPOS_POR_ROL.getOrDefault(usuario.getRol(), Set.of()).contains(tipo)) {
+            throw new AccesoDenegadoException("Su rol no puede crear registros de tipo " + tipo + ".");
+        }
+        return agregarRegistroPaciente(idPaciente, idAutor, tipo, contenido, signos, idMedicamento, cantidad);
     }
 
     public RegistroResponse agregarRegistroPaciente(String idPaciente, String idAutor, TipoRegistro tipo,

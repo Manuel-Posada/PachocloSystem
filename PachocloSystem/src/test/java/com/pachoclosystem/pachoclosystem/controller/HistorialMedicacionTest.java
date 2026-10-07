@@ -36,9 +36,7 @@ class HistorialMedicacionTest extends MockMvcBaseTest {
     private MedicamentosClient cliente;
 
     private ResultActions registrar(String paciente, String cuerpo) throws Exception {
-        return perform(post("/api/pacientes/{id}/historial", paciente)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(cuerpo));
+        return postHistorial(paciente, cuerpo);
     }
 
     private static String medicacion(String autor, String idMedicamento, Integer cantidad) {
