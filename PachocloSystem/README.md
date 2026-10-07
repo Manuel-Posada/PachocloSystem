@@ -120,9 +120,11 @@ Modelo de usuarios (`Rol`: `ADMIN`, `DOCTOR`, `ENFERMERO`; entidad `Usuario`,
 repositorio en memoria, servicio con reglas de negocio) y creación de un
 administrador inicial al arrancar. La autenticación es **stateless con JWT**:
 todos los endpoints de `/api/**`, salvo el login, exigen un token bearer
-válido y autorización por rol (ver la matriz más abajo). Aún **no hay CRUD de
-usuarios por HTTP**: los usuarios se crean vía `UsuarioService`, que valida la
-política de contraseña y el vínculo con trabajadores.
+válido y autorización por rol (ver la matriz más abajo). La gestión de
+usuarios está expuesta por HTTP bajo `/api/usuarios` (solo ADMIN) y cada
+usuario puede cambiar su propia contraseña en `POST /api/auth/password`; todas
+las operaciones pasan por `UsuarioService`, que valida la política de
+contraseña y el vínculo con trabajadores.
 
 ### Autorización por rol
 
@@ -135,12 +137,14 @@ la respuesta es **401**.
 |---|:---:|:---:|:---:|
 | `POST /api/auth/login` (público) | ✔ | ✔ | ✔ |
 | `GET /api/auth/me` | ✔ | ✔ | ✔ |
+| `POST /api/auth/password` (cambio propio) | ✔ | ✔ | ✔ |
 | `GET` pacientes / trabajadores / historial | ✔ | ✔ | ✔ |
 | `POST` / `PUT` / `PATCH` pacientes | ✘ | ✔ | ✘ |
 | `DELETE` paciente (baja lógica) | ✔ | ✘ | ✘ |
 | `POST` / `PUT` / `DELETE` trabajadores | ✔ | ✘ | ✘ |
 | `POST` historial — `SIGNOS_VITALES` | ✘ | ✔ | ✔ |
 | `POST` historial — otros tipos | ✘ | ✔ | ✘ |
+| `GET` / `POST` / `PATCH` `/api/usuarios*` | ✔ | ✘ | ✘ |
 
 La lectura (identidad, pacientes, historial y trabajadores) está disponible para
 cualquier usuario autenticado. Los 403 de ruta se producen **antes** de validar
@@ -149,12 +153,18 @@ emite el servicio, también antes de validar el contenido y de buscar al
 paciente. Todas las respuestas de error usan el cuerpo uniforme, sin trazas ni
 nombres de clases internas.
 
+Quien **aún debe cambiar su contraseña** (alta por API, reset administrativo o
+admin inicial con contraseña aleatoria) solo puede llamar a `GET /api/auth/me`
+y a `POST /api/auth/password`: cualquier otra ruta de negocio responde **403**
+con `"Debe cambiar su contraseña antes de continuar."` hasta completar el cambio.
+
 ### Autenticación (JWT)
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | POST | `/api/auth/login` | Público. `{ "username", "password" }` → JWT bearer |
-| GET | `/api/auth/me` | Autenticado. Devuelve `{ idUsuario, username, rol, idTrabajador }` |
+| GET | `/api/auth/me` | Autenticado. Devuelve `{ idUsuario, username, rol, idTrabajador, activo, debeCambiarPassword, versionToken }` |
+| POST | `/api/auth/password` | Autenticado. Cambia la contraseña del propio usuario: `{ "passwordActual", "passwordNueva" }` → `204`. El token usado queda revocado de inmediato y hay que volver a iniciar sesión. |
 
 Login correcto:
 
@@ -169,7 +179,8 @@ curl -X POST http://localhost:8080/api/auth/login \
   "token": "eyJhbGciOiJIUzI1NiJ9.…",
   "tipo": "Bearer",
   "expiraEnSegundos": 1800,
-  "rol": "ADMIN"
+  "rol": "ADMIN",
+  "debeCambiarPassword": false
 }
 ```
 
@@ -183,14 +194,54 @@ curl http://localhost:8080/api/pacientes -H "Authorization: Bearer eyJhbGciOiJIU
   cuando el usuario no existe, la contraseña es incorrecta o el usuario está
   desactivado (las tres causas se evalúan con el mismo coste de BCrypt).
 - El 401 de una petición sin token válido (ausente, malformado, expirado, con
-  firma inválida o de un usuario desactivado) responde el cuerpo de error
-  uniforme junto con `WWW-Authenticate: Bearer`; nunca se exponen detalles
-  internos del token. El 403 responde `"No tiene permisos para realizar esta
-  operación."`.
-- El token (HS256) contiene `sub`, `username`, `rol` e `idTrabajador` (si
-  aplica), pero la autorización **se relee del repositorio en cada petición**:
-  si el usuario se desactiva (por ejemplo, al eliminar su trabajador), su token
-  deja de valer de inmediato.
+  firma inválida, de un usuario desactivado o con la versión de token obsoleta)
+  responde el cuerpo de error uniforme junto con `WWW-Authenticate: Bearer`;
+  nunca se exponen detalles internos del token. El 403 responde `"No tiene
+  permisos para realizar esta operación."`.
+- El token (HS256) contiene `sub`, `username`, `rol`, `ver` e `idTrabajador`
+  (si aplica), pero la autorización **se relee del repositorio en cada
+  petición**: si el usuario se desactiva (por ejemplo, al eliminar su
+  trabajador), su token deja de valer de inmediato.
+- El claim `ver` es la **versión del token**: se incrementa con cada cambio de
+  contraseña (propio o reset administrativo). El conversor de JWT comprueba en
+  cada petición que `ver` coincida con la versión actual del usuario, de modo
+  que un token emitido antes del cambio queda **revocado de inmediato** (401).
+
+### Gestión de usuarios — `/api/usuarios` (solo ADMIN)
+
+| Método | Ruta | Descripción | Respuestas |
+|---|---|---|---|
+| GET | `/api/usuarios` | Lista todos los usuarios | 200 / 401 / 403 |
+| GET | `/api/usuarios/{id}` | Obtiene un usuario | 200 / 401 / 403 / 404 |
+| POST | `/api/usuarios` | Alta `{ username, password, rol, idTrabajador? }`; el usuario nace con el cambio de contraseña obligatorio | 201 / 400 / 401 / 403 / 404 |
+| PATCH | `/api/usuarios/{id}/rol` | Cambia rol y trabajador vinculado `{ rol, idTrabajador? }` | 200 / 400 / 401 / 403 / 404 |
+| PATCH | `/api/usuarios/{id}/estado` | Activa o desactiva `{ activo }` | 200 / 400 / 401 / 403 / 404 |
+| POST | `/api/usuarios/{id}/password-reset` | Reset administrativo `{ password }`: nueva contraseña temporal (cambio obligatorio) y revocación de los tokens existentes | 200 / 400 / 401 / 403 / 404 |
+
+`GET /api/auth/me` devuelve el mismo `UsuarioResponse` que la gestión de
+usuarios: `{ idUsuario, username, rol, idTrabajador, activo,
+debeCambiarPassword, versionToken }`. Ninguna respuesta nunca incluye la
+contraseña ni su hash.
+
+Reglas de negocio (aplicadas por `UsuarioService`):
+
+- **Unicidad del username**: único sin distinguir mayúsculas, debe cumplir
+  `^[a-z0-9._-]{3,30}$` y se normaliza a minúsculas.
+- **Vínculo con trabajadores**: los administradores no se vinculan a ningún
+  trabajador; los doctores y enfermeros deben vincularse a un trabajador
+  existente de su tipo y que aún no tenga usuario. Cambiar de rol libera el
+  trabajador anterior.
+- **Alta y reset administrativo**: la cuenta nace con `debeCambiarPassword`
+  `true`; el usuario entra con la contraseña temporal, se ve a sí mismo
+  (`/api/auth/me`) y la cambia (`POST /api/auth/password`), pero ninguna otra
+  ruta le responde hasta completar el cambio (403 con `"Debe cambiar su
+  contraseña antes de continuar."`).
+- **Cambio propio**: exige la contraseña actual, que la nueva sea distinta y
+  cumpla la política; al completarse el token usado queda revocado (la versión
+  `ver` se incrementa) y `debeCambiarPassword` pasa a `false`.
+- **Estado**: un ADMIN no puede desactivarse a sí mismo y no se puede dejar al
+  sistema sin ningún ADMIN activo. Desactivar una cuenta revoca sus tokens de
+  inmediato; reactivar la cuenta de un trabajador ya eliminado se rechaza.
 
 ### Variables de entorno del administrador inicial
 
@@ -201,21 +252,27 @@ curl http://localhost:8080/api/pacientes -H "Authorization: Bearer eyJhbGciOiJIU
 
 - Si `ADMIN_PASSWORD` **está definida**, se usa tal cual y **nunca se escribe en
   el log**. Si tiene menos de 10 caracteres, la aplicación **no arranca** y
-  muestra un mensaje claro con la política.
+  muestra un mensaje claro con la política. La cuenta nace operativa (sin cambio
+  de contraseña obligatorio).
 - Si `ADMIN_PASSWORD` **no está definida**, se genera una contraseña aleatoria
   de 20 caracteres (alfanumérico sin caracteres ambiguos) con `SecureRandom` y se
-  escribe **una sola vez** en el log a nivel `WARN`, indicando que es temporal y
-  que debe cambiarse.
+  escribe **una sola vez** en el log a nivel `WARN`. Como esa contraseña ha
+  quedado escrita en el log, la cuenta nace **bloqueada**: el cambio de
+  contraseña es obligatorio en el primer acceso antes de poder operar.
 
 ### Política de contraseña
 
-- Mínimo **10 caracteres**; no se exige ningún requisito de composición. El
-  mensaje de error nunca incluye la contraseña.
+- Entre **10 caracteres** y **72 bytes UTF-8**; no se exige ningún requisito de
+  composición. El mensaje de error nunca incluye la contraseña.
+- En el cambio de la contraseña propia, la nueva debe ser **diferente de la
+  actual**.
 - Solo se almacena el **hash BCrypt**: la contraseña en claro no se guarda ni
   aparece en `toString()`, en la serialización JSON ni en los logs.
 - Un trabajador solo puede tener un usuario; los doctores y enfermeros deben
   estar vinculados a un trabajador existente de su tipo, y los administradores no
   se vinculan a ninguno.
+- El alta por API y el reset administrativo crean contraseñas **temporales**: el
+  usuario debe cambiarla en su primer acceso antes de poder operar (ver arriba).
 
 ### Clave de firma JWT
 
