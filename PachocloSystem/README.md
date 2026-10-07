@@ -294,6 +294,61 @@ Reglas de negocio (aplicadas por `UsuarioService`):
 > los `toString()`. Los tokens se validan contra el repositorio en cada petición:
 > no hay sesiones en servidor ni tokens de refresco.
 
+## Límite de intentos de login
+
+Protección contra fuerza bruta en `POST /api/auth/login`: un
+`LimitadorIntentosLogin` en memoria mantiene contadores **independientes por
+usuario y por IP**, ambos con la misma ventana de bloqueo temporal.
+
+| Variable | Propiedad | Por defecto | Descripción |
+|---|---|---|---|
+| `APP_LOGIN_MAX_INTENTOS` | `app.login.max-intentos` | `5` | Fallos consecutivos que bloquean la cuenta y la IP. |
+| `APP_LOGIN_BLOQUEO_MINUTOS` | `app.login.bloqueo-minutos` | `15` | Duración de la ventana de bloqueo. |
+| `APP_LOGIN_MAX_ENTRADAS` | `app.login.max-entradas` | `10000` | Tope de entradas del mapa (purga defensiva del límite de memoria). |
+
+Comportamiento:
+
+- Tras **5 fallos**, el 6º intento (contra ese usuario o desde esa IP) responde
+  **`429 Too Many Requests`** con el cuerpo de error uniforme y la cabecera
+  `Retry-After` en segundos. El bloqueo se comprueba **antes** de evaluar las
+  credenciales, de modo que durante el bloqueo una contraseña correcta también
+  responde 429.
+- Un **acierto reinicia solo el contador del usuario**; el contador de la IP
+  nunca se reinicia. La IP se bloquea con 5 fallos de usuarios distintos, y la
+  **IP de origen es exclusivamente `getRemoteAddr()`**: la cabecera
+  `X-Forwarded-For` se ignora (no se confía en ella para el bloqueo).
+- Un **429 no registra un fallo**: los intentos durante el bloqueo no extienden
+  la cuenta atrás, y la IP/usuario se desbloquean en solitario al agotarse la
+  ventana. Un **400 por body inválido no cuenta ni comprueba el bloqueo**.
+- El fallo se registra en las tres causas de 401 (usuario inexistente,
+  contraseña incorrecta, usuario inactivo) y el 429 es **idéntico** exista o no
+  el usuario (sin revelar su existencia). El username del log se normaliza a
+  minúsculas, se truncan los caracteres de control y se limita a 30 caracteres;
+  ninguna contraseña, hash ni token se escribe en el log.
+
+## CORS
+
+| Variable | Propiedad | Por defecto | Descripción |
+|---|---|---|---|
+| `CORS_ORIGENES` | `app.cors.origenes` | *(vacío)* | Lista de orígenes permitidos separada por comas. |
+
+Comportamiento:
+
+- Con el valor por defecto (vacío) el CORS está **desactivado**: ninguna
+  respuesta lleva cabeceras `Access-Control-Allow-*`.
+- Cada origen debe ser una **URL absoluta `http(s)`, sin barra final y sin
+  comodines**: un `*`, una URL con barra final o una URL no http(s) abortan el
+  arranque con un mensaje claro.
+- La configuración se aplica en la cadena de seguridad mediante
+  `http.cors(...)`: los métodos permitidos son `GET`, `POST`, `PUT`, `PATCH`,
+  `DELETE` y `OPTIONS`; las cabeceras permitidas `Authorization` y
+  `Content-Type`; las expuestas `Retry-After`, `Location`. Nunca se usan
+  credenciales (`allowCredentials=false`) y `maxAge` es de 1 hora.
+- La **preflight OPTIONS de un origen permitido** se responde con 200 y sus
+  cabeceras **sin exigir token**; la de un origen no permitido no recibe
+  cabeceras CORS. Las respuestas (incluidos los 401/403/429) de un origen
+  permitido llevan `Access-Control-Allow-Origin`.
+
 ### Advertencia
 
 > Los usuarios se guardan **en memoria**: se pierden al reiniciar la aplicación.
