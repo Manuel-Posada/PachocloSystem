@@ -7,9 +7,9 @@
 
     <mat-card-content>
       <app-errores-formulario [mensajes]="errores()" />
-      @if (errores().length === 0 && sesionExpirada) {
+      @if (errores().length === 0 && avisoCierre) {
         <div class="aviso" role="status">
-          <p>Su sesión expiró o ya no es válida. Inicie sesión de nuevo.</p>
+          <p>{{ avisoCierre }}</p>
         </div>
       }
 

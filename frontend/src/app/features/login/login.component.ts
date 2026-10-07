@@ -12,6 +12,12 @@ import { mensajesDeError } from '../../core/http/api-error';
 import { ErroresFormularioComponent } from '../../shared/errores-formulario/errores-formulario.component';
 import { obligatorio, primerError } from '../../shared/validadores';
 
+const AVISOS_CIERRE: Readonly<Record<string, string>> = {
+  expirada: 'Su sesión expiró o ya no es válida. Inicie sesión de nuevo.',
+  'password-cambiada':
+    'Su contraseña ha cambiado y la sesión anterior ya no es válida. Inicie sesión con la nueva.',
+};
+
 @Component({
   selector: 'app-login',
   imports: [
@@ -41,7 +47,8 @@ export class LoginComponent {
   protected readonly enviando = signal(false);
   protected readonly errores = signal<readonly string[]>([]);
   protected readonly verPassword = signal(false);
-  protected readonly sesionExpirada = this.parametros.get('motivo') === 'expirada';
+  /** Por qué se llegó al login, si fue por un cierre de sesión. */
+  protected readonly avisoCierre = AVISOS_CIERRE[this.parametros.get('motivo') ?? ''] ?? null;
 
   protected iniciarSesion(): void {
     if (this.formulario.invalid) {

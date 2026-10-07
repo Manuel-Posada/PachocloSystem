@@ -19,9 +19,16 @@ interface Sesion {
   usuario: Usuario | null;
 }
 
+/**
+ * Por qué se cerró la sesión, para que el login lo explique:
+ * - `expirada`: el token caducó o dejó de ser válido.
+ * - `password-cambiada`: el usuario restableció su propia contraseña y el
+ *   backend invalidó su token.
+ */
+export type MotivoCierre = 'expirada' | 'password-cambiada';
+
 export interface OpcionesCierre {
-  /** `expirada`: el login muestra que la sesión caducó o dejó de ser válida. */
-  motivo?: 'expirada';
+  motivo?: MotivoCierre;
   /** Ruta a la que volver tras iniciar sesión de nuevo. */
   returnUrl?: string;
 }

@@ -2,8 +2,9 @@ import { ApplicationRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { MatDialog } from '@angular/material/dialog';
-import { firstValueFrom } from 'rxjs';
-import { confirmar } from './confirmacion-dialogo.component';
+import { firstValueFrom, of, throwError } from 'rxjs';
+import { ApiError } from '../../core/http/api-error';
+import { DatosConfirmacion, confirmar } from './confirmacion-dialogo.component';
 
 describe('confirmar', () => {
   const datos = { titulo: 'Eliminar paciente', mensaje: '¿Seguro?', accion: 'Eliminar' };
@@ -17,8 +18,10 @@ describe('confirmar', () => {
   afterEach(() => TestBed.inject(MatDialog).closeAll());
 
   /** Devuelve un objeto (no la promesa) para que `await abrir()` no espere al cierre. */
-  async function abrir(): Promise<{ resultado: Promise<boolean> }> {
-    const resultado = firstValueFrom(confirmar(TestBed.inject(MatDialog), datos));
+  async function abrir(
+    conDatos: DatosConfirmacion = datos,
+  ): Promise<{ resultado: Promise<boolean> }> {
+    const resultado = firstValueFrom(confirmar(TestBed.inject(MatDialog), conDatos));
     await TestBed.inject(ApplicationRef).whenStable();
     return { resultado };
   }
@@ -48,6 +51,32 @@ describe('confirmar', () => {
 
     boton('Cancelar').click();
 
+    expect(await resultado).toBe(false);
+  });
+
+  it('con una operación, la ejecuta al confirmar y se cierra con true si sale bien', async () => {
+    const ejecutar = vi.fn(() => of(undefined));
+    const { resultado } = await abrir({ ...datos, accion: 'Desactivar', ejecutar });
+
+    boton('Desactivar').click();
+
+    expect(await resultado).toBe(true);
+    expect(ejecutar).toHaveBeenCalledTimes(1);
+  });
+
+  it('si la operación falla, muestra el error dentro y sigue abierto', async () => {
+    const ejecutar = vi.fn(() =>
+      throwError(() => new ApiError(409, ['No puede desactivar su propio usuario.'])),
+    );
+    const { resultado } = await abrir({ ...datos, accion: 'Desactivar', ejecutar });
+
+    boton('Desactivar').click();
+    await TestBed.inject(ApplicationRef).whenStable();
+
+    expect(document.querySelector('mat-dialog-content [role="alert"]')?.textContent).toContain(
+      'No puede desactivar su propio usuario.',
+    );
+    boton('Cancelar').click();
     expect(await resultado).toBe(false);
   });
 });

@@ -91,6 +91,20 @@ describe('LoginComponent', () => {
       'Su sesión expiró o ya no es válida.',
     );
   });
+
+  it('explica el cierre si el usuario cambió su propia contraseña', async () => {
+    const { elemento } = await renderizar({ motivo: 'password-cambiada' });
+
+    expect(elemento.querySelector('[role="status"]')?.textContent).toContain(
+      'Su contraseña ha cambiado y la sesión anterior ya no es válida.',
+    );
+  });
+
+  it('ignora un motivo desconocido', async () => {
+    const { elemento } = await renderizar({ motivo: 'inventado' });
+
+    expect(elemento.querySelector('[role="status"]')).toBeNull();
+  });
 });
 
 describe('destinoSeguro', () => {
