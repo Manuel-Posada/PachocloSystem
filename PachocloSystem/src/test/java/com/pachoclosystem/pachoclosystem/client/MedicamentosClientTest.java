@@ -7,6 +7,7 @@ import com.pachoclosystem.pachoclosystem.dto.MedicamentoResponse;
 import com.pachoclosystem.pachoclosystem.exception.ConflictoException;
 import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.exception.RespuestaServicioInvalidaException;
+import com.pachoclosystem.pachoclosystem.exception.SalidaNoConfirmadaException;
 import com.pachoclosystem.pachoclosystem.exception.ServicioNoDisponibleException;
 import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
 import org.junit.jupiter.api.BeforeEach;
@@ -263,6 +264,100 @@ class MedicamentosClientTest {
                 .andRespond(withException(new SocketTimeoutException("Read timed out")));
 
         assertThatExceptionOfType(ServicioNoDisponibleException.class)
-                .isThrownBy(() -> cliente.registrarSalida("MED-0001", 1));
+                .isThrownBy(() -> cliente.registrarSalida("MED-0001", 1))
+                .isNotInstanceOf(SalidaNoConfirmadaException.class);
+        // Sin clave no se reintenta: un reintento podría descontar dos veces.
+        servidor.verify();
+    }
+
+    // --- Salidas con clave de idempotencia --------------------------------
+
+    private static final String CLAVE = "8f14e45f-ceea-4672-a5b1-7a0c3c9e2f01";
+
+    @Test
+    void salidaConClaveEnviaLaCabeceraIdempotencyKey() {
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Idempotency-Key", CLAVE))
+                .andExpect(header("X-Api-Key", "clave-de-prueba"))
+                .andExpect(content().json("{\"cantidad\":2}"))
+                .andRespond(withSuccess(MEDICAMENTO_JSON, MediaType.APPLICATION_JSON));
+
+        assertThat(cliente.registrarSalida("MED-0001", 2, CLAVE).cantidadStock()).isEqualTo(10);
+        servidor.verify();
+    }
+
+    @Test
+    void salidaSinClaveNoEnviaLaCabecera() {
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andExpect(headerDoesNotExist("Idempotency-Key"))
+                .andRespond(withSuccess(MEDICAMENTO_JSON, MediaType.APPLICATION_JSON));
+
+        cliente.registrarSalida("MED-0001", 2);
+        servidor.verify();
+    }
+
+    @Test
+    void timeoutConClaveSeReintentaUnaVezConLaMismaClave() {
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andExpect(header("Idempotency-Key", CLAVE))
+                .andRespond(withException(new SocketTimeoutException("Read timed out")));
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andExpect(header("Idempotency-Key", CLAVE))
+                .andExpect(content().json("{\"cantidad\":2}"))
+                .andRespond(withSuccess(MEDICAMENTO_JSON, MediaType.APPLICATION_JSON));
+
+        assertThat(cliente.registrarSalida("MED-0001", 2, CLAVE).idMedicamento()).isEqualTo("MED-0001");
+        servidor.verify();
+    }
+
+    @Test
+    void errorDeConexionConClaveTambienSeReintenta() {
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andRespond(withException(new ConnectException("Connection refused")));
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andExpect(header("Idempotency-Key", CLAVE))
+                .andRespond(withSuccess(MEDICAMENTO_JSON, MediaType.APPLICATION_JSON));
+
+        cliente.registrarSalida("MED-0001", 2, CLAVE);
+        servidor.verify();
+    }
+
+    @Test
+    void siElReintentoTampocoRespondeLaSalidaQuedaSinConfirmar() {
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andExpect(header("Idempotency-Key", CLAVE))
+                .andRespond(withException(new SocketTimeoutException("Read timed out")));
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andExpect(header("Idempotency-Key", CLAVE))
+                .andRespond(withException(new SocketTimeoutException("Read timed out")));
+
+        assertThatExceptionOfType(SalidaNoConfirmadaException.class)
+                .isThrownBy(() -> cliente.registrarSalida("MED-0001", 2, CLAVE));
+        // Solo un reintento: exactamente dos peticiones.
+        servidor.verify();
+    }
+
+    @Test
+    void unaRespuestaDeErrorConClaveNoSeReintenta() {
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                        .body(error(400, "Bad Request", "Stock insuficiente: disponible 1, solicitado 2.")));
+
+        assertThatExceptionOfType(SolicitudInvalidaException.class)
+                .isThrownBy(() -> cliente.registrarSalida("MED-0001", 2, CLAVE))
+                .withMessageContaining("Stock insuficiente");
+        servidor.verify();
+    }
+
+    @Test
+    void unConflictoDeClaveEnMedicamentosLlegaComo409() {
+        servidor.expect(requestTo(BASE + "/api/medicamentos/MED-0001/salidas"))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
+                        .body(error(409, "Conflict", "La clave de idempotencia ya se usó para otra salida.")));
+
+        assertThatExceptionOfType(ConflictoException.class)
+                .isThrownBy(() -> cliente.registrarSalida("MED-0001", 2, CLAVE));
+        servidor.verify();
     }
 }
