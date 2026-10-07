@@ -24,11 +24,13 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  * server de OAuth2 (Nimbus).
  *
  * <p>Solo {@code POST /api/auth/login} es público. El resto de los endpoints
- * reales exigen autenticación y, además, autorización por rol según la matriz
- * de permisos (ADMIN, DOCTOR, ENFERMERO): la lectura es para cualquier usuario
- * autenticado, la gestión de trabajadores y la baja de pacientes son solo de
- * ADMIN, el alta/edición de pacientes es solo de DOCTOR y el alta de registros
- * clínicos corresponde a DOCTOR o ENFERMERO (el tipo se valida en el servicio).
+ * reales exigen autenticación con un rol real (ADMIN, DOCTOR, ENFERMERO): un
+ * usuario cuya contraseña está pendiente de cambio solo recibe la autoridad
+ * {@code CAMBIO_PASSWORD_PENDIENTE} y queda bloqueado (403) hasta cambiarla.
+ * La lectura es para cualquier rol autenticado, la gestión de trabajadores y
+ * la baja de pacientes son solo de ADMIN, el alta/edición de pacientes es solo
+ * de DOCTOR y el alta de registros clínicos corresponde a DOCTOR o ENFERMERO
+ * (el tipo se valida en el servicio).
  * Todo el estado de autenticación vive en el token <em>bearer</em>: sin
  * sesiones HTTP, sin login por formulario, sin Basic auth.</p>
  */
@@ -76,9 +78,18 @@ public class SecurityConfig {
                         // Identidad: cualquier usuario autenticado puede verse a sí mismo.
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
 
+                        // El cambio de contraseña (pendiente u ordinario) lo permite la
+                        // identidad autenticada; se registra en el Paso 4.
+
+                        // Las rutas de negocio exigen un rol real (ADMIN/DOCTOR/ENFERMERO),
+                        // no basta con estar autenticado: quien aún debe cambiar su contraseña
+                        // (única autoridad CAMBIO_PASSWORD_PENDIENTE) recibe 403 con el aviso
+                        // correspondiente hasta completar el cambio.
+
                         // Pacientes: lectura (listado, búsqueda, detalle e historial)
-                        // para cualquier usuario autenticado.
-                        .requestMatchers(HttpMethod.GET, "/api/pacientes", "/api/pacientes/**").authenticated()
+                        // para cualquier rol autenticado.
+                        .requestMatchers(HttpMethod.GET, "/api/pacientes", "/api/pacientes/**")
+                        .hasAnyRole("ADMIN", "DOCTOR", "ENFERMERO")
                         // Alta y edición de pacientes: solo DOCTOR.
                         .requestMatchers(HttpMethod.POST, "/api/pacientes").hasRole("DOCTOR")
                         .requestMatchers(HttpMethod.PUT, "/api/pacientes/**").hasRole("DOCTOR")
@@ -86,16 +97,20 @@ public class SecurityConfig {
                         // Baja (soft delete): solo ADMIN.
                         .requestMatchers(HttpMethod.DELETE, "/api/pacientes/**").hasRole("ADMIN")
 
-                        // Historial: lectura para todos; alta de registro para DOCTOR y
-                        // ENFERMERO (el tipo permitido por rol se valida en el servicio).
-                        .requestMatchers(HttpMethod.GET, "/api/historial").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/pacientes/*/historial").authenticated()
+                        // Historial: lectura para todos los roles; alta de registro para
+                        // DOCTOR y ENFERMERO (el tipo permitido por rol se valida en el
+                        // servicio).
+                        .requestMatchers(HttpMethod.GET, "/api/historial")
+                        .hasAnyRole("ADMIN", "DOCTOR", "ENFERMERO")
+                        .requestMatchers(HttpMethod.GET, "/api/pacientes/*/historial")
+                        .hasAnyRole("ADMIN", "DOCTOR", "ENFERMERO")
                         .requestMatchers(HttpMethod.POST, "/api/pacientes/*/historial")
                         .hasAnyRole("DOCTOR", "ENFERMERO")
 
-                        // Trabajadores: lectura para todos; alta/edición/baja solo ADMIN.
+                        // Trabajadores: lectura para todos los roles; alta/edición/baja
+                        // solo ADMIN.
                         .requestMatchers(HttpMethod.GET, "/api/trabajadores", "/api/trabajadores/**")
-                        .authenticated()
+                        .hasAnyRole("ADMIN", "DOCTOR", "ENFERMERO")
                         .requestMatchers(HttpMethod.POST, "/api/trabajadores").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/trabajadores/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/trabajadores/**").hasRole("ADMIN")

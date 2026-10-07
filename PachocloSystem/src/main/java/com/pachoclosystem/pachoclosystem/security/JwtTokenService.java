@@ -16,8 +16,9 @@ import java.time.Instant;
  *
  * <p>Claims: {@code sub}=idUsuario, {@code username}, {@code rol},
  * {@code idTrabajador} (solo si el usuario está vinculado a un trabajador),
- * {@code iss}, {@code iat} y {@code exp}. Ni la contraseña ni el hash se
- * incluyen jamás en un token.</p>
+ * {@code ver} (versión de token: se incrementa en cada cambio de contraseña,
+ * de modo que el token deja de valer de inmediato), {@code iss}, {@code iat}
+ * y {@code exp}. Ni la contraseña ni el hash se incluyen jamás en un token.</p>
  */
 @Service
 public class JwtTokenService {
@@ -36,6 +37,7 @@ public class JwtTokenService {
                 .subject(usuario.getIdUsuario())
                 .claim("username", usuario.getUsername())
                 .claim("rol", usuario.getRol().name())
+                .claim("ver", usuario.getVersionToken())
                 .issuer(firma.emisor())
                 .issuedAt(ahora)
                 .expiresAt(ahora.plus(firma.expiracion()));

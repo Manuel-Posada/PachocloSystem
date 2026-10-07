@@ -52,6 +52,6 @@ public class AuthService {
         }
         String token = tokenService.generarToken(usuario);
         return new LoginResponse(token, "Bearer", tokenService.expiraEnSegundos(),
-                usuario.getRol().name());
+                usuario.getRol().name(), usuario.isDebeCambiarPassword());
     }
 }
