@@ -70,19 +70,29 @@ Un Doctor requiere `especialidad`; un Enfermero requiere `nivelExperiencia` (`NO
 |---|---|---|---|
 | GET | `/api/historial?filtro=&q=` | Todos los registros ordenados por fecha. `filtro`: `todos` (defecto), `paciente` o `autor` | 200 / 400 |
 | GET | `/api/pacientes/{id}/historial?q=` | Registros de un paciente; `q` filtra por autor | 200 / 404 |
-| POST | `/api/pacientes/{id}/historial` | Agrega un registro | 201 / 400 / 404 |
+| POST | `/api/pacientes/{id}/historial` | Agrega un registro firmado por el usuario autenticado | 201 / 400 / 403 / 404 |
 
 Cuerpo de `POST /api/pacientes/{id}/historial`:
 
 ```json
-{ "tipo": "DIAGNOSTICO", "idAutor": "DOC-0001", "contenido": "Hipertensión leve" }
+{ "tipo": "DIAGNOSTICO", "contenido": "Hipertensión leve" }
 ```
+
+**El autor es siempre el trabajador del usuario autenticado** (se relee del
+repositorio en cada petición, nunca de los claims del token):
+
+- `idAutor` es opcional y se acepta por compatibilidad: si viene y no es el
+  trabajador del usuario, `400`.
+- Un usuario sin trabajador vinculado (el ADMIN) no puede crear registros: `403`
+  "Solo un usuario vinculado a un trabajador puede crear registros."
+- El rol limita el tipo: el doctor crea los cuatro; el enfermero, todos menos
+  `DIAGNOSTICO` (`403` "Su rol no puede crear registros de tipo DIAGNOSTICO.").
 
 `tipo` puede ser `DIAGNOSTICO`, `EVOLUCION`, `MEDICACION` o `SIGNOS_VITALES`. Para `SIGNOS_VITALES` se envía `signosVitales` en lugar de `contenido`:
 
 ```json
 {
-  "tipo": "SIGNOS_VITALES", "idAutor": "ENF-0001",
+  "tipo": "SIGNOS_VITALES",
   "signosVitales": {
     "temperatura": 36.5, "frecCardiaca": 80,
     "presionSistolica": 120, "presionDiastolica": 80,
@@ -92,10 +102,12 @@ Cuerpo de `POST /api/pacientes/{id}/historial`:
 ```
 
 Un registro `MEDICACION` puede además descontar stock del inventario indicando `idMedicamento` y
-`cantidad` (los dos juntos; ver [Integración con MedicamentosService](#integración-con-medicamentosservice)):
+`cantidad` (los dos juntos; ver [Integración con MedicamentosService](#integración-con-medicamentosservice)).
+Lo puede pedir cualquiera que pueda crear el registro (doctor o enfermero), aunque no tenga acceso a
+`/api/medicamentos/{id}/salidas`: el descuento lo hace el servicio con su cliente interno.
 
 ```json
-{ "tipo": "MEDICACION", "idAutor": "DOC-0001", "contenido": "Paracetamol 500 mg vía oral",
+{ "tipo": "MEDICACION", "contenido": "Paracetamol 500 mg vía oral",
   "idMedicamento": "MED-0001", "cantidad": 2 }
 ```
 
@@ -188,9 +200,38 @@ Modelo de usuarios (`Rol`: `ADMIN`, `DOCTOR`, `ENFERMERO`; entidad `Usuario`,
 repositorio en memoria, servicio con reglas de negocio) y creación de un
 administrador inicial al arrancar. La autenticación es **stateless con JWT**:
 todos los endpoints de `/api/**`, salvo el login, exigen un token bearer
-válido. La gestión de usuarios (`/api/usuarios`) es **solo para ADMIN**; el
-resto de endpoints aún **no tiene autorización por rol**: cualquier usuario
-autenticado puede usarlos.
+válido, y cada operación exige un rol (ver [Permisos por rol](#permisos-por-rol)).
+
+### Permisos por rol
+
+Sin token, cualquier operación responde `401`; con un rol sin permiso, `403`. Los
+dos con el cuerpo de error uniforme. La tabla se comprueba en
+`AutorizacionPorRolTest`.
+
+| Operación | ADMIN | DOCTOR | ENFERMERO |
+|---|:-:|:-:|:-:|
+| `GET /api/auth/me` | ✓ | ✓ | ✓ |
+| Leer pacientes (`GET /api/pacientes/**`) | ✓ | ✓ | ✓ |
+| Registrar y editar pacientes (`POST /api/pacientes`, `PUT /api/pacientes/{id}`) | ✓ | ✓ | ✗ |
+| Cambiar habitación (`PATCH /api/pacientes/{id}/habitacion`) | ✓ | ✓ | ✓ |
+| Eliminar pacientes (borra también su historial) | ✓ | ✗ | ✗ |
+| Leer el historial (general y de un paciente) | ✓ | ✓ | ✓ |
+| Crear registros de historial | ✗ ¹ | ✓ los 4 tipos | ✓ todos menos `DIAGNOSTICO` |
+| Leer trabajadores | ✓ | ✓ | ✗ |
+| Registrar, editar y eliminar trabajadores | ✓ | ✗ | ✗ |
+| Leer medicamentos (incl. stock bajo, por vencer y vencidos) | ✓ | ✓ | ✓ |
+| Salidas de stock (`POST /api/medicamentos/{id}/salidas`) | ✓ | ✗ ² | ✓ |
+| Alta, edición, borrado y entradas de medicamentos | ✓ | ✗ | ✗ |
+| Gestión de usuarios (`/api/usuarios/**`) | ✓ | ✗ | ✗ |
+
+1. El ADMIN no tiene trabajador vinculado y los registros se firman con el
+   trabajador del usuario autenticado.
+2. El doctor sí descuenta stock desde un registro de `MEDICACION`.
+
+Las reglas por ruta están en `SecurityConfig`. Cada recurso termina en una
+regla solo-ADMIN, así que un endpoint nuevo sin regla propia queda cerrado
+para los demás roles. Las reglas que dependen del cuerpo (autor y tipo de
+registro) están en `HistorialClinicoService`.
 
 ### Autenticación (JWT)
 
