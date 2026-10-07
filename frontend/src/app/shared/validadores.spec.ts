@@ -4,10 +4,12 @@ import {
   enteroEntre,
   especialidad,
   habitacion,
+  longitudMaxima,
   nombrePersona,
   obligatorio,
   primerError,
   textoDescriptivo,
+  unoDe,
 } from './validadores';
 
 const validar = (validador: (c: FormControl) => unknown, valor: unknown) =>
@@ -116,5 +118,29 @@ describe('textoDescriptivo', () => {
     expect(validar(especialidad, '12')).toEqual({
       textoDescriptivo: 'La especialidad debe ser un texto descriptivo (mínimo 3 caracteres).',
     });
+  });
+});
+
+describe('longitudMaxima', () => {
+  const validador = longitudMaxima(5, 'Largo.');
+
+  it.each(['', 'abcde', '  abcde  ', null])('acepta %j', (valor) => {
+    expect(validar(validador, valor)).toBeNull();
+  });
+
+  it('rechaza más caracteres de la cuenta', () => {
+    expect(validar(validador, 'abcdef')).toEqual({ longitudMaxima: 'Largo.' });
+  });
+});
+
+describe('unoDe', () => {
+  const validador = unoDe(['TABLETA', 'JARABE'], 'No válido.');
+
+  it.each(['TABLETA', 'JARABE', null, ''])('acepta %j', (valor) => {
+    expect(validar(validador, valor)).toBeNull();
+  });
+
+  it.each(['tableta', 'PASTILLA'])('rechaza %j', (valor) => {
+    expect(validar(validador, valor)).toEqual({ unoDe: 'No válido.' });
   });
 });

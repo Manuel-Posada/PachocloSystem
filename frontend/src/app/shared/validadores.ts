@@ -39,6 +39,18 @@ export function enteroEntre(min: number, max: number, mensaje: string): Validato
   };
 }
 
+/** Como `@Size(max)`, sobre el texto sin espacios al inicio ni al final. */
+export function longitudMaxima(maximo: number, mensaje: string): ValidatorFn {
+  return (control) =>
+    String(control.value ?? '').trim().length <= maximo ? null : { longitudMaxima: mensaje };
+}
+
+/** El valor debe ser uno de los permitidos (p. ej. un enum del backend). Vacío lo valida `obligatorio`. */
+export function unoDe(permitidos: readonly unknown[], mensaje: string): ValidatorFn {
+  return (control) =>
+    vacio(control.value) || permitidos.includes(control.value) ? null : { unoDe: mensaje };
+}
+
 /**
  * Texto con contenido real: al menos `minimo` caracteres (sin contar los
  * espacios de los extremos) y alguna letra, no solo números o símbolos.
