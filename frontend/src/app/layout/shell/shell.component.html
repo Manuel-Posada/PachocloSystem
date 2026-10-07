@@ -39,7 +39,7 @@
     [attr.role]="esMovil() ? 'dialog' : 'navigation'"
   >
     <mat-nav-list aria-label="Secciones">
-      @for (seccion of secciones; track seccion.ruta) {
+      @for (seccion of secciones(); track seccion.ruta) {
         <a
           mat-list-item
           [routerLink]="seccion.ruta"

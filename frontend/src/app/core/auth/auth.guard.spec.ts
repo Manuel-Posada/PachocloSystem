@@ -6,11 +6,13 @@ import {
   UrlTree,
   provideRouter,
 } from '@angular/router';
-import { authGuard, invitadoGuard } from './auth.guard';
+import { PermisosService } from '../permisos';
+import { authGuard, invitadoGuard, permisoGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 
 describe('guards de sesión', () => {
   let autenticado = false;
+  let permitido = false;
   const ruta = {} as ActivatedRouteSnapshot;
   const estado = { url: '/trabajadores' } as RouterStateSnapshot;
 
@@ -19,6 +21,7 @@ describe('guards de sesión', () => {
       providers: [
         provideRouter([]),
         { provide: AuthService, useValue: { autenticado: () => autenticado } },
+        { provide: PermisosService, useValue: { puede: () => permitido } },
       ],
     });
   });
@@ -35,6 +38,14 @@ describe('guards de sesión', () => {
   it('authGuard sin sesión lleva al login con la ruta pedida', () => {
     autenticado = false;
     expect(url(ejecutar(authGuard))).toBe('/login?returnUrl=%2Ftrabajadores');
+  });
+
+  it('permisoGuard deja pasar con el permiso y, sin él, lleva al inicio', () => {
+    permitido = true;
+    expect(ejecutar(permisoGuard('trabajadores.leer'))).toBe(true);
+
+    permitido = false;
+    expect(url(ejecutar(permisoGuard('trabajadores.leer')))).toBe('/');
   });
 
   it('invitadoGuard deja pasar sin sesión', () => {

@@ -6,17 +6,19 @@ import { AuthService } from '../../core/auth/auth.service';
 import { ShellComponent } from './shell.component';
 
 describe('ShellComponent', () => {
-  const usuario = signal<Usuario | null>({
+  const doctora: Usuario = {
     idUsuario: 'USR-0002',
     username: 'ana.ruiz',
     rol: 'DOCTOR',
     idTrabajador: 'DOC-0001',
     activo: true,
-  });
+  };
+  const usuario = signal<Usuario | null>(doctora);
   const auth = { usuario, cerrarSesion: vi.fn() };
 
   beforeEach(() => {
     auth.cerrarSesion.mockReset();
+    usuario.set(doctora);
     TestBed.configureTestingModule({
       imports: [ShellComponent],
       providers: [provideRouter([]), { provide: AuthService, useValue: auth }],
@@ -37,6 +39,19 @@ describe('ShellComponent', () => {
     expect(enlaces.map((a) => a.getAttribute('href'))).toEqual([
       '/pacientes',
       '/trabajadores',
+      '/medicamentos',
+      '/historial',
+    ]);
+  });
+
+  it('oculta las secciones que el rol no puede abrir (el enfermero no ve Trabajadores)', async () => {
+    usuario.set({ ...doctora, rol: 'ENFERMERO', idTrabajador: 'ENF-0001' });
+
+    const elemento = await renderizar();
+
+    const enlaces = Array.from(elemento.querySelectorAll('mat-nav-list a'));
+    expect(enlaces.map((a) => a.getAttribute('href'))).toEqual([
+      '/pacientes',
       '/medicamentos',
       '/historial',
     ]);

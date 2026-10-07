@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, invitadoGuard } from './core/auth/auth.guard';
+import { authGuard, invitadoGuard, permisoGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
@@ -33,6 +33,7 @@ export const routes: Routes = [
       {
         path: 'trabajadores',
         title: 'Trabajadores · PachocloSystem',
+        canActivate: [permisoGuard('trabajadores.leer')],
         loadComponent: () =>
           import('./features/trabajadores/trabajadores-lista/trabajadores-lista.component').then(
             (m) => m.TrabajadoresListaComponent,
