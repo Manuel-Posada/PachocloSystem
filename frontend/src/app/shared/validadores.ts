@@ -9,6 +9,8 @@ import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
 /** Nombres de personas (pacientes y trabajadores): letras y espacios, 3 a 60 caracteres. */
 export const PATRON_NOMBRE_PERSONA = /^[A-Za-zÁÉÍÓÚÑÜáéíóúñü][A-Za-zÁÉÍÓÚÑÜáéíóúñü\s]{2,59}$/;
 
+const CONTIENE_LETRA = /[A-Za-zÁÉÍÓÚÑÜáéíóúñü]/;
+
 function vacio(valor: unknown): boolean {
   return valor === null || valor === undefined || String(valor).trim() === '';
 }
@@ -37,11 +39,34 @@ export function enteroEntre(min: number, max: number, mensaje: string): Validato
   };
 }
 
+/**
+ * Texto con contenido real: al menos `minimo` caracteres (sin contar los
+ * espacios de los extremos) y alguna letra, no solo números o símbolos.
+ * Vacío lo valida `obligatorio`.
+ */
+export function textoDescriptivo(minimo: number, mensaje: string): ValidatorFn {
+  return (control) => {
+    if (vacio(control.value)) {
+      return null;
+    }
+    const texto = String(control.value).trim();
+    return texto.length >= minimo && CONTIENE_LETRA.test(texto)
+      ? null
+      : { textoDescriptivo: mensaje };
+  };
+}
+
 export function nombrePersona(
   mensaje = 'El nombre debe tener letras y espacios (3 a 60 caracteres).',
 ): ValidatorFn {
   return patron(PATRON_NOMBRE_PERSONA, mensaje);
 }
+
+/** Especialidad de un doctor (reglas de `TrabajadorService.validarDatosDeRol`). */
+export const especialidad = textoDescriptivo(
+  3,
+  'La especialidad debe ser un texto descriptivo (mínimo 3 caracteres).',
+);
 
 export const edad = enteroEntre(0, 120, 'La edad debe ser un número entero entre 0 y 120.');
 

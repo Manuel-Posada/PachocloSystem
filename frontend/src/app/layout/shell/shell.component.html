@@ -17,7 +17,7 @@
     @if (esMovil()) {
       <!-- Solo icono: el nombre accesible lo da aria-label. -->
     } @else if (usuario(); as u) {
-      <span>{{ u.username }} · {{ etiquetasRol[u.rol] }}</span>
+      <span>{{ u.username }} · {{ etiquetaRol(u.rol) }}</span>
     } @else {
       <span>Mi cuenta</span>
     }

@@ -9,8 +9,8 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
-import { ETIQUETAS_ROL } from '../../core/auth/auth.models';
 import { AuthService } from '../../core/auth/auth.service';
+import { etiquetaRol } from '../../core/roles';
 
 interface Seccion {
   readonly ruta: string;
@@ -40,7 +40,7 @@ export class ShellComponent {
   private readonly auth = inject(AuthService);
 
   protected readonly usuario = this.auth.usuario;
-  protected readonly etiquetasRol = ETIQUETAS_ROL;
+  protected readonly etiquetaRol = etiquetaRol;
 
   protected readonly esMovil = toSignal(
     inject(BreakpointObserver)

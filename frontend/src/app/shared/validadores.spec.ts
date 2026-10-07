@@ -2,10 +2,12 @@ import { FormControl, Validators } from '@angular/forms';
 import {
   edad,
   enteroEntre,
+  especialidad,
   habitacion,
   nombrePersona,
   obligatorio,
   primerError,
+  textoDescriptivo,
 } from './validadores';
 
 const validar = (validador: (c: FormControl) => unknown, valor: unknown) =>
@@ -92,5 +94,27 @@ describe('primerError', () => {
 
   it('usa un mensaje genérico para validadores sin mensaje', () => {
     expect(primerError(new FormControl('', Validators.required))).toBe('El valor no es válido.');
+  });
+});
+
+describe('textoDescriptivo', () => {
+  const validador = textoDescriptivo(3, 'Corto.');
+
+  it.each(['abc', '  Cardiología ', 'A12', 'Nivel 2'])('acepta %j', (valor) => {
+    expect(validar(validador, valor)).toBeNull();
+  });
+
+  it.each(['ab', '  ab  ', '123', '---'])('rechaza %j', (valor) => {
+    expect(validar(validador, valor)).toEqual({ textoDescriptivo: 'Corto.' });
+  });
+
+  it('deja el vacío a obligatorio', () => {
+    expect(validar(validador, '   ')).toBeNull();
+  });
+
+  it('especialidad usa el mensaje del backend', () => {
+    expect(validar(especialidad, '12')).toEqual({
+      textoDescriptivo: 'La especialidad debe ser un texto descriptivo (mínimo 3 caracteres).',
+    });
   });
 });

@@ -1,10 +1,4 @@
-export type Rol = 'ADMIN' | 'DOCTOR' | 'ENFERMERO';
-
-export const ETIQUETAS_ROL: Readonly<Record<Rol, string>> = {
-  ADMIN: 'Administrador',
-  DOCTOR: 'Doctor',
-  ENFERMERO: 'Enfermero',
-};
+import { Rol } from '../roles';
 
 export interface LoginRequest {
   username: string;
