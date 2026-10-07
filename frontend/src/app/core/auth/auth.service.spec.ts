@@ -118,14 +118,14 @@ describe('AuthService', () => {
     expect(auth.autenticado()).toBe(false);
   });
 
-  it('avisa antes de expirar y, al expirar, cierra la sesión recordando la ruta', () => {
+  it('avisa antes de expirar y, al expirar, cierra la sesión recordando la ruta', async () => {
     const auth = crear();
     iniciarSesion(auth);
 
-    vi.advanceTimersByTime(1800_000 - AVISO_EXPIRACION_MS - 1);
+    await vi.advanceTimersByTimeAsync(1800_000 - AVISO_EXPIRACION_MS - 1);
     expect(snackBar.open).not.toHaveBeenCalled();
 
-    vi.advanceTimersByTime(1);
+    await vi.advanceTimersByTimeAsync(1);
     expect(snackBar.open).toHaveBeenCalledWith(
       expect.stringContaining('Su sesión expira en 5 minutos'),
       'Entendido',
@@ -133,7 +133,7 @@ describe('AuthService', () => {
     );
     expect(auth.autenticado()).toBe(true);
 
-    vi.advanceTimersByTime(AVISO_EXPIRACION_MS);
+    await vi.advanceTimersByTimeAsync(AVISO_EXPIRACION_MS);
     expect(auth.autenticado()).toBe(false);
     expect(sessionStorage.getItem(CLAVE)).toBeNull();
     expect(router.navigate).toHaveBeenCalledWith(['/login'], {
@@ -141,14 +141,14 @@ describe('AuthService', () => {
     });
   });
 
-  it('si quedan menos minutos que la antelación del aviso, avisa en seguida con lo que queda', () => {
+  it('si quedan menos minutos que la antelación del aviso, avisa en seguida con lo que queda', async () => {
     sessionStorage.setItem(
       CLAVE,
       JSON.stringify({ token: 't', expiraEn: Date.now() + 90_000, usuario: ADMIN }),
     );
     crear();
 
-    vi.advanceTimersByTime(0);
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(snackBar.open).toHaveBeenCalledWith(
       expect.stringContaining('Su sesión expira en 2 minutos'),
@@ -157,7 +157,7 @@ describe('AuthService', () => {
     );
   });
 
-  it('cerrar sesión borra todo, cancela los temporizadores y lleva al login', () => {
+  it('cerrar sesión borra todo, cancela los temporizadores y lleva al login', async () => {
     const auth = crear();
     iniciarSesion(auth);
 
@@ -169,7 +169,7 @@ describe('AuthService', () => {
       queryParams: { motivo: undefined, returnUrl: undefined },
     });
 
-    vi.runAllTimers();
+    await vi.runAllTimersAsync();
     expect(snackBar.open).not.toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledTimes(1);
   });

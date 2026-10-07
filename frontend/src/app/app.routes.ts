@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { authGuard, invitadoGuard } from './core/auth/auth.guard';
 
 const enConstruccion = () =>
   import('./features/en-construccion/en-construccion.component').then(
@@ -7,7 +8,14 @@ const enConstruccion = () =>
 
 export const routes: Routes = [
   {
+    path: 'login',
+    title: 'Iniciar sesión · PachocloSystem',
+    canActivate: [invitadoGuard],
+    loadComponent: () => import('./features/login/login.component').then((m) => m.LoginComponent),
+  },
+  {
     path: '',
+    canActivate: [authGuard],
     loadComponent: () => import('./layout/shell/shell.component').then((m) => m.ShellComponent),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'pacientes' },

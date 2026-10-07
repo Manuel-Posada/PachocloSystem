@@ -5,6 +5,29 @@
     </button>
   }
   <a class="marca" routerLink="/">PachocloSystem</a>
+  <span class="separador"></span>
+  <button
+    mat-button
+    type="button"
+    class="usuario"
+    [attr.aria-label]="esMovil() ? 'Menú de usuario' : null"
+    [matMenuTriggerFor]="menuUsuario"
+  >
+    <mat-icon>account_circle</mat-icon>
+    @if (esMovil()) {
+      <!-- Solo icono: el nombre accesible lo da aria-label. -->
+    } @else if (usuario(); as u) {
+      <span>{{ u.username }} · {{ etiquetasRol[u.rol] }}</span>
+    } @else {
+      <span>Mi cuenta</span>
+    }
+  </button>
+  <mat-menu #menuUsuario="matMenu" xPosition="before">
+    <button mat-menu-item type="button" (click)="cerrarSesion()">
+      <mat-icon>logout</mat-icon>
+      <span>Cerrar sesión</span>
+    </button>
+  </mat-menu>
 </mat-toolbar>
 
 <mat-sidenav-container class="contenedor">

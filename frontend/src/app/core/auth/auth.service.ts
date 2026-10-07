@@ -1,6 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, computed, inject, signal } from '@angular/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, switchMap, tap, throwError } from 'rxjs';
 import { LoginRequest, LoginResponse, Usuario } from './auth.models';
@@ -38,7 +37,7 @@ export interface OpcionesCierre {
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly injector = inject(Injector);
 
   private readonly sesion = signal<Sesion | null>(leerSesionGuardada());
   private temporizadores: ReturnType<typeof setTimeout>[] = [];
@@ -121,7 +120,7 @@ export class AuthService {
     const minutosAviso = Math.ceil(Math.min(restante, AVISO_EXPIRACION_MS) / 60_000);
     this.temporizadores = [
       setTimeout(
-        () => this.avisarExpiracion(minutosAviso),
+        () => void this.avisarExpiracion(minutosAviso),
         Math.max(restante - AVISO_EXPIRACION_MS, 0),
       ),
       setTimeout(
@@ -131,13 +130,17 @@ export class AuthService {
     ];
   }
 
-  private avisarExpiracion(minutos: number): void {
+  private async avisarExpiracion(minutos: number): Promise<void> {
     const plazo = minutos === 1 ? '1 minuto' : `${minutos} minutos`;
-    this.snackBar.open(
-      `Su sesión expira en ${plazo}. Guarde sus cambios: después deberá iniciar sesión de nuevo.`,
-      'Entendido',
-      { duration: 30_000 },
-    );
+    // Carga diferida: el snack bar (y su overlay) no entra en el bundle inicial.
+    const { MatSnackBar } = await import('@angular/material/snack-bar');
+    this.injector
+      .get(MatSnackBar)
+      .open(
+        `Su sesión expira en ${plazo}. Guarde sus cambios: después deberá iniciar sesión de nuevo.`,
+        'Entendido',
+        { duration: 30_000 },
+      );
   }
 
   private cancelarTemporizadores(): void {

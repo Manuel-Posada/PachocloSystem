@@ -1,0 +1,64 @@
+<main class="pantalla">
+  <mat-card class="tarjeta" appearance="outlined">
+    <mat-card-header>
+      <mat-card-title>PachocloSystem</mat-card-title>
+      <mat-card-subtitle>Inicie sesión para continuar</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      @if (errores().length > 0) {
+        <div class="mensaje error" role="alert">
+          @for (mensaje of errores(); track mensaje) {
+            <p>{{ mensaje }}</p>
+          }
+        </div>
+      } @else if (sesionExpirada) {
+        <div class="mensaje aviso" role="status">
+          <p>Su sesión expiró o ya no es válida. Inicie sesión de nuevo.</p>
+        </div>
+      }
+
+      <form [formGroup]="formulario" (ngSubmit)="iniciarSesion()" novalidate>
+        <mat-form-field>
+          <mat-label>Usuario</mat-label>
+          <input matInput formControlName="username" autocomplete="username" required />
+          @if (formulario.controls.username.hasError('obligatorio')) {
+            <mat-error>El usuario es obligatorio.</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field>
+          <mat-label>Contraseña</mat-label>
+          <input
+            matInput
+            formControlName="password"
+            autocomplete="current-password"
+            required
+            [type]="verPassword() ? 'text' : 'password'"
+          />
+          <button
+            mat-icon-button
+            matSuffix
+            type="button"
+            [attr.aria-label]="verPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+            [attr.aria-pressed]="verPassword()"
+            (click)="verPassword.set(!verPassword())"
+          >
+            <mat-icon>{{ verPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          @if (formulario.controls.password.hasError('obligatorio')) {
+            <mat-error>La contraseña es obligatoria.</mat-error>
+          }
+        </mat-form-field>
+
+        <button mat-flat-button type="submit" class="enviar" [disabled]="enviando()">
+          @if (enviando()) {
+            <mat-spinner diameter="20" aria-label="Iniciando sesión" />
+          } @else {
+            Iniciar sesión
+          }
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+</main>

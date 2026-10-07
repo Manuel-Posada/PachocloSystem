@@ -1,0 +1,47 @@
+.pantalla {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.tarjeta {
+  width: 100%;
+  max-width: 400px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.mensaje {
+  margin-top: 16px;
+  padding: 8px 16px;
+  border-radius: 8px;
+
+  p {
+    margin: 4px 0;
+  }
+}
+
+.error {
+  background-color: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.aviso {
+  background-color: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.enviar {
+  height: 44px;
+
+  mat-spinner {
+    margin: 0 auto;
+  }
+}

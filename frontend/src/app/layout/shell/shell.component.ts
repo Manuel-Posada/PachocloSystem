@@ -4,10 +4,13 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map } from 'rxjs';
+import { ETIQUETAS_ROL } from '../../core/auth/auth.models';
+import { AuthService } from '../../core/auth/auth.service';
 
 interface Seccion {
   readonly ruta: string;
@@ -27,12 +30,18 @@ interface Seccion {
     MatListModule,
     MatIconModule,
     MatButtonModule,
+    MatMenuModule,
   ],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ShellComponent {
+  private readonly auth = inject(AuthService);
+
+  protected readonly usuario = this.auth.usuario;
+  protected readonly etiquetasRol = ETIQUETAS_ROL;
+
   protected readonly esMovil = toSignal(
     inject(BreakpointObserver)
       .observe(Breakpoints.Handset)
@@ -46,4 +55,8 @@ export class ShellComponent {
     { ruta: '/medicamentos', etiqueta: 'Medicamentos', icono: 'medication' },
     { ruta: '/historial', etiqueta: 'Historial clínico', icono: 'history_edu' },
   ];
+
+  protected cerrarSesion(): void {
+    this.auth.cerrarSesion();
+  }
 }
