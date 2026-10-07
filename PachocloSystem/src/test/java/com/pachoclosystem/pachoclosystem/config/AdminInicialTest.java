@@ -118,6 +118,20 @@ class AdminInicialTest {
     }
 
     @Test
+    void passwordDeEntornoDeMasDe72BytesFallaElArranqueSinMostrarla() {
+        String passwordLarga = "ñ".repeat(37);
+        entorno.setProperty(AdminInicial.PROP_USERNAME, "admin.pruebas");
+        entorno.setProperty(AdminInicial.PROP_PASSWORD, passwordLarga);
+
+        assertThatExceptionOfType(SolicitudInvalidaException.class)
+                .isThrownBy(this::ejecutarArranque)
+                .withMessageContaining("72 bytes")
+                .satisfies(excepcion -> assertThat(excepcion.getMessage()).doesNotContain(passwordLarga));
+
+        assertThat(repositorio.listarTodos()).isEmpty();
+    }
+
+    @Test
     void passwordDeEntornoConEspaciosEnBlancoSeTrataComoNoDefinida() {
         entorno.setProperty(AdminInicial.PROP_USERNAME, "admin.temporal");
         entorno.setProperty(AdminInicial.PROP_PASSWORD, "   ");
