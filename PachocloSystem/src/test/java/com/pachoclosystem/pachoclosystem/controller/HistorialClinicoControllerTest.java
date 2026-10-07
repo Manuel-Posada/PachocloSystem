@@ -2,7 +2,10 @@ package com.pachoclosystem.pachoclosystem.controller;
 
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
 import com.pachoclosystem.pachoclosystem.model.Rol;
+import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -231,6 +234,24 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CUERPO_DIAGNOSTICO.formatted("   ")))
                 .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensajes[0]")
+                        .value("No tiene permisos para realizar esta operación."));
+    }
+
+    @ParameterizedTest(name = "ENFERMERO ante {0}")
+    @EnumSource(value = TipoRegistro.class, names = "SIGNOS_VITALES", mode = EnumSource.Mode.EXCLUDE)
+    void elEnfermeroRecibe403ParaCualquierTipoDistintoDeSignosVitales(TipoRegistro tipo) throws Exception {
+        String paciente = registrarPaciente("Ana Torres", 30, 101);
+        String enfermero = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
+        String cuerpo = "{\"tipo\":\"%s\",\"contenido\":\"Hipertension leve\"}".formatted(tipo.name());
+
+        comoEnfermero(enfermero, post("/api/pacientes/{id}/historial", paciente)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.error").value("Forbidden"))
+                .andExpect(jsonPath("$.mensajes", hasSize(1)))
                 .andExpect(jsonPath("$.mensajes[0]")
                         .value("No tiene permisos para realizar esta operación."));
     }

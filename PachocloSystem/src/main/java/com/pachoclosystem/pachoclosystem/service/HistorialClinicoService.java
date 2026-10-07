@@ -37,13 +37,20 @@ public class HistorialClinicoService {
 
     /**
      * Agrega un registro clínico a un paciente. El autor es el usuario
-     * autenticado (nunca un dato del cuerpo). Un ENFERMERO solo puede registrar
-     * {@code SIGNOS_VITALES}; para el resto de tipos recibe 403, y esa
-     * comprobación precede a la validación del contenido y a la búsqueda del
-     * paciente.
+     * autenticado (nunca un dato del cuerpo) y siempre debe tener un trabajador
+     * vinculado: un usuario sin trabajador (p. ej. el ADMIN) recibe 403 antes de
+     * tocar el paciente, de modo que nunca se crea un registro sin autor. Un
+     * ENFERMERO solo puede registrar {@code SIGNOS_VITALES}; para el resto de
+     * tipos recibe 403, y esa comprobación precede a la validación del contenido
+     * y a la búsqueda del paciente.
      */
     public RegistroResponse agregarRegistroPaciente(String idPaciente, Usuario usuarioAutor, TipoRegistro tipo,
                                                     String contenido, SignosVitalesRequest signos) {
+        String idTrabajador = usuarioAutor.getIdTrabajador();
+        if (idTrabajador == null || idTrabajador.isBlank()) {
+            throw new AccessDeniedException("No tiene permisos para realizar esta operación.");
+        }
+
         if (usuarioAutor.getRol() == Rol.ENFERMERO && tipo != TipoRegistro.SIGNOS_VITALES) {
             throw new AccessDeniedException("No tiene permisos para realizar esta operación.");
         }
@@ -51,10 +58,10 @@ public class HistorialClinicoService {
         String contenidoFinal = construirContenido(tipo, contenido, signos);
 
         Paciente paciente = buscarPacienteActivo(idPaciente);
-        TrabajadorHospital autor = repositorioTrabajadores.buscarPorId(usuarioAutor.getIdTrabajador());
+        TrabajadorHospital autor = repositorioTrabajadores.buscarPorId(idTrabajador);
         if (autor == null) {
             throw new NotFoundException(
-                    "No se encontró un trabajador con el ID " + usuarioAutor.getIdTrabajador() + ".");
+                    "No se encontró un trabajador con el ID " + idTrabajador + ".");
         }
 
         RegistroClinico registro = new RegistroClinico(tipo, contenidoFinal, autor);

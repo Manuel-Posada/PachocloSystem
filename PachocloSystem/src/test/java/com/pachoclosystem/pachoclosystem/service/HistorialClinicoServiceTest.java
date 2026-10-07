@@ -279,6 +279,37 @@ class HistorialClinicoServiceTest {
     }
 
     @Test
+    void unUsuarioSinTrabajadorNoPuedeSerAutorAunqueElPacienteNoExista() {
+        Usuario admin = new Usuario("USR-ADMIN", "admin", "hash-de-prueba", Rol.ADMIN, null);
+
+        // El 403 por falta de trabajador precede al 404 por paciente inexistente.
+        assertThatExceptionOfType(AccessDeniedException.class)
+                .isThrownBy(() -> servicio.agregarRegistroPaciente(
+                        "PAC-9999", admin, TipoRegistro.DIAGNOSTICO, "Hipertension leve", null));
+    }
+
+    @Test
+    void unUsuarioConTrabajadorEnBlancoNoPuedeSerAutor() {
+        Usuario usuario = new Usuario("USR-BLANCO", "usuario.blanco", "hash-de-prueba", Rol.DOCTOR, "   ");
+
+        assertThatExceptionOfType(AccessDeniedException.class)
+                .isThrownBy(() -> servicio.agregarRegistroPaciente(
+                        "PAC-9999", usuario, TipoRegistro.DIAGNOSTICO, "Hipertension leve", null));
+    }
+
+    @Test
+    void unUsuarioSinTrabajadorNuncaDejaUnRegistroSinAutor() {
+        Paciente p = paciente("Ana Torres");
+        Usuario admin = new Usuario("USR-ADMIN", "admin", "hash-de-prueba", Rol.ADMIN, null);
+
+        assertThatExceptionOfType(AccessDeniedException.class)
+                .isThrownBy(() -> servicio.agregarRegistroPaciente(
+                        p.getIdPaciente(), admin, TipoRegistro.DIAGNOSTICO, "Hipertension leve", null));
+
+        assertThat(p.obtenerHistorial()).isEmpty();
+    }
+
+    @Test
     void historialDePacienteDadoDeBajaLanzaNotFoundYNoAdmiteNuevosRegistros() {
         Paciente p = paciente("Ana Torres");
         TrabajadorHospital d = doctor("Carlos Mena");
