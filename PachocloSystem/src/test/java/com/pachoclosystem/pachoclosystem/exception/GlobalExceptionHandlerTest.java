@@ -101,6 +101,20 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void accesoDenegadoDeNegocioResponde403UniformeConSuMotivo() {
+        var excepcion = new AccesoDenegadoException("Los enfermeros no pueden crear diagnósticos.");
+
+        ResponseEntity<ErrorResponse> respuesta = manejador.accesoDenegado(excepcion);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(respuesta.getBody()).isNotNull();
+        assertThat(respuesta.getBody().status()).isEqualTo(403);
+        assertThat(respuesta.getBody().error()).isEqualTo("Forbidden");
+        assertThat(respuesta.getBody().mensajes())
+                .containsExactly("Los enfermeros no pueden crear diagnósticos.");
+    }
+
+    @Test
     void errorInesperadoResponde500GenericoSinDetallarElFalloNiLaClase() {
         var excepcion = new IllegalStateException("clave secreta interna");
 

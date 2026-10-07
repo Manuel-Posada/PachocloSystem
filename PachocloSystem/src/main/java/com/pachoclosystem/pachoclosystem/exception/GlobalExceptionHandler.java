@@ -57,6 +57,15 @@ public class GlobalExceptionHandler {
         return respuesta(HttpStatus.UNAUTHORIZED, List.of(MENSAJE_CREDENCIALES_INVALIDAS));
     }
 
+    /**
+     * 403 de una regla de negocio (p. ej. un enfermero no crea diagnósticos):
+     * mismo cuerpo uniforme que el 403 de las reglas por URL, con el motivo.
+     */
+    @ExceptionHandler(AccesoDenegadoException.class)
+    public ResponseEntity<ErrorResponse> accesoDenegado(AccesoDenegadoException ex) {
+        return respuesta(HttpStatus.FORBIDDEN, List.of(ex.getMessage()));
+    }
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> noEncontrado(NotFoundException ex) {
         return respuesta(HttpStatus.NOT_FOUND, List.of(ex.getMessage()));

@@ -6,6 +6,7 @@ import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.exception.ServicioNoDisponibleException;
 import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.ResultActions;
@@ -36,9 +37,7 @@ class HistorialMedicacionTest extends MockMvcBaseTest {
     private MedicamentosClient cliente;
 
     private ResultActions registrar(String paciente, String cuerpo) throws Exception {
-        return perform(post("/api/pacientes/{id}/historial", paciente)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(cuerpo));
+        return postHistorial(paciente, cuerpo);
     }
 
     private static String medicacion(String autor, String idMedicamento, Integer cantidad) {
@@ -72,6 +71,30 @@ class HistorialMedicacionTest extends MockMvcBaseTest {
         perform(get("/api/pacientes/{id}/historial", paciente))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].medicacion.cantidad").value(2));
+    }
+
+    @Test
+    void elDoctorDescuentaStockDesdeUnRegistroAunqueNoTengaAccesoASalidas() throws Exception {
+        String paciente = registrarPaciente("Ana Torres", 30, 101);
+        String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
+        String tokenDoctor = tokenDeTrabajador(doctor);
+        when(cliente.registrarSalida("MED-0001", 1)).thenReturn(new MedicamentoResponse("MED-0001",
+                "Dolex", "Paracetamol", "TABLETA", "500 mg", "GSK", "L-1", 9, 5,
+                LocalDate.of(2027, 3, 31), "Estante A3", false, false));
+
+        // La ruta de salidas le está prohibida (403) y no llega al cliente...
+        mockMvc.perform(post("/api/medicamentos/{id}/salidas", "MED-0001")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenDoctor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"cantidad\":1}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(cliente);
+
+        // ...pero el descuento de su registro de MEDICACION va por el cliente interno.
+        registrar(paciente, medicacion(doctor, "MED-0001", 1))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.medicacion.cantidad").value(1));
+        verify(cliente).registrarSalida("MED-0001", 1);
     }
 
     @Test

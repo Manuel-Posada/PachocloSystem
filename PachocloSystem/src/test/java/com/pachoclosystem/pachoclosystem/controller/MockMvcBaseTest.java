@@ -2,11 +2,13 @@ package com.pachoclosystem.pachoclosystem.controller;
 
 import com.jayway.jsonpath.JsonPath;
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.IPacienteRepository;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
 import com.pachoclosystem.pachoclosystem.repository.IUsuarioRepository;
 import com.pachoclosystem.pachoclosystem.security.JwtTokenService;
+import com.pachoclosystem.pachoclosystem.service.UsuarioService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,6 +21,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -46,6 +50,9 @@ public abstract class MockMvcBaseTest {
 
     @Autowired
     protected JwtTokenService tokenService;
+
+    @Autowired
+    protected UsuarioService usuarioService;
 
     @BeforeEach
     void limpiarRepositorios() {
@@ -129,11 +136,43 @@ public abstract class MockMvcBaseTest {
 
     /** Agrega un registro al historial de un paciente y devuelve su ID. */
     protected String registrarRegistro(String idPaciente, String cuerpo) throws Exception {
-        MvcResult resultado = perform(post("/api/pacientes/{id}/historial", idPaciente)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(cuerpo))
+        MvcResult resultado = postHistorial(idPaciente, cuerpo)
                 .andExpect(status().isCreated())
                 .andReturn();
         return leer(resultado, "$.idRegistro");
+    }
+
+    /**
+     * Crea un registro firmado por el trabajador del campo {@code idAutor} del
+     * cuerpo: el autor sale del token, así que se usa el token de su usuario.
+     */
+    protected ResultActions postHistorial(String idPaciente, String cuerpo) throws Exception {
+        String idAutor = JsonPath.read(cuerpo, "$.idAutor");
+        return postHistorialComo(idAutor, idPaciente, cuerpo);
+    }
+
+    /** Crea un registro con el token del usuario del trabajador indicado. */
+    protected ResultActions postHistorialComo(String idTrabajador, String idPaciente, String cuerpo)
+            throws Exception {
+        return mockMvc.perform(post("/api/pacientes/{id}/historial", idPaciente)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenDeTrabajador(idTrabajador))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(cuerpo));
+    }
+
+    /**
+     * Token del usuario vinculado a ese trabajador (DOCTOR o ENFERMERO según su
+     * ID); si aún no tiene usuario, lo crea con un username único (el
+     * repositorio de usuarios no se vacía entre tests).
+     */
+    protected String tokenDeTrabajador(String idTrabajador) {
+        Usuario usuario = repositorioUsuarios.buscarPorIdTrabajador(idTrabajador);
+        if (usuario == null) {
+            Rol rol = idTrabajador.startsWith("DOC") ? Rol.DOCTOR : Rol.ENFERMERO;
+            String username = "t." + idTrabajador.toLowerCase(Locale.ROOT) + "."
+                    + UUID.randomUUID().toString().substring(0, 8);
+            usuario = usuarioService.crearUsuario(username, "clave-de-pruebas-10", rol, idTrabajador);
+        }
+        return tokenService.generarToken(usuario);
     }
 }

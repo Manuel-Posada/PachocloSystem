@@ -78,11 +78,9 @@ class ErroresHttpTest extends MockMvcBaseTest {
         String paciente = registrarPaciente("Ana Torres", 30, 101);
         String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
 
-        perform(post("/api/pacientes/{id}/historial", paciente)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+        postHistorial(paciente, """
                                 {"tipo":"INVENTADO","idAutor":"%s","contenido":"Hipertension leve"}"""
-                                .formatted(doctor)))
+                                .formatted(doctor))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"))
