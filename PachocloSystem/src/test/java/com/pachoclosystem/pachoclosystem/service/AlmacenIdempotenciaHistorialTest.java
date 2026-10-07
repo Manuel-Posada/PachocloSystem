@@ -166,7 +166,37 @@ class AlmacenIdempotenciaHistorialTest {
         }
 
         assertThat(almacen.peticionesConClave("clave-uno-0000000")).isZero();
+        assertThat(almacen.cerrojosActivos()).isZero();
         assertThat(almacen.conClave("clave-uno-0000000", () -> "despues")).isEqualTo("despues");
+    }
+
+    @Test
+    void losCerrojosSeLiberanAlTerminarYNoQuedanTrasCaducarLaClave() {
+        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24), 10);
+
+        for (int i = 1; i <= 50; i++) {
+            String clave = "clave-" + i + "-0000000000";
+            almacen.conClave(clave, () -> {
+                almacen.guardar(clave, "USR-0001", "PAC-0001", "huella", REGISTRO);
+                return null;
+            });
+        }
+        // Las claves se guardan (hasta el límite), pero ningún cerrojo sobrevive a su petición.
+        assertThat(almacen.tamano()).isEqualTo(10);
+        assertThat(almacen.cerrojosActivos()).isZero();
+
+        // Tras caducar, la clave es nueva y su cerrojo vuelve a crearse y a borrarse.
+        reloj.avanzar(Duration.ofHours(24));
+        String clave = "clave-50-0000000000";
+        assertThat(almacen.conClave(clave, () -> {
+            assertThat(almacen.cerrojosActivos()).isEqualTo(1);
+            assertThat(almacen.buscar(clave)).isEmpty();
+            almacen.guardar(clave, "USR-0002", "PAC-0002", "otra-huella", REGISTRO);
+            return almacen.buscar(clave).orElseThrow().idUsuario();
+        })).isEqualTo("USR-0002");
+        assertThat(almacen.cerrojosActivos()).isZero();
+        // Al guardar se purgaron las demás caducadas.
+        assertThat(almacen.tamano()).isEqualTo(1);
     }
 
     @Test

@@ -127,6 +127,15 @@ public class AlmacenIdempotenciaHistorial {
         return cerrojo == null ? 0 : cerrojo.peticiones;
     }
 
+    /**
+     * Cerrojos vivos (para pruebas y diagnóstico): solo los de claves con
+     * peticiones en curso o esperando. No dependen de la caducidad de la clave:
+     * el de una clave se borra en cuanto termina su última petición.
+     */
+    public int cerrojosActivos() {
+        return cerrojos.size();
+    }
+
     private void purgar() {
         Iterator<Uso> iterador = usos.values().iterator();
         while (iterador.hasNext()) {
