@@ -18,24 +18,21 @@ form {
   margin-top: 16px;
 }
 
-.mensaje {
+app-errores-formulario {
+  display: block;
+  margin-top: 16px;
+}
+
+.aviso {
   margin-top: 16px;
   padding: 8px 16px;
   border-radius: 8px;
+  background-color: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
 
   p {
     margin: 4px 0;
   }
-}
-
-.error {
-  background-color: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
-}
-
-.aviso {
-  background-color: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
 }
 
 .enviar {

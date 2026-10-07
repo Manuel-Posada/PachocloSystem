@@ -9,7 +9,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { mensajesDeError } from '../../core/http/api-error';
-import { obligatorio } from '../../shared/validadores';
+import { ErroresFormularioComponent } from '../../shared/errores-formulario/errores-formulario.component';
+import { obligatorio, primerError } from '../../shared/validadores';
 
 @Component({
   selector: 'app-login',
@@ -21,6 +22,7 @@ import { obligatorio } from '../../shared/validadores';
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    ErroresFormularioComponent,
   ],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
@@ -32,9 +34,10 @@ export class LoginComponent {
   private readonly parametros = inject(ActivatedRoute).snapshot.queryParamMap;
 
   protected readonly formulario = inject(NonNullableFormBuilder).group({
-    username: ['', obligatorio],
-    password: ['', obligatorio],
+    username: ['', obligatorio('El usuario es obligatorio.')],
+    password: ['', obligatorio('La contraseña es obligatoria.')],
   });
+  protected readonly primerError = primerError;
   protected readonly enviando = signal(false);
   protected readonly errores = signal<readonly string[]>([]);
   protected readonly verPassword = signal(false);
