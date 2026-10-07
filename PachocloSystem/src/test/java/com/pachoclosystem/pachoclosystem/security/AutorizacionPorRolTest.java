@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -133,7 +134,9 @@ class AutorizacionPorRolTest extends MockMvcBaseTest {
     /** Lo único que puede hacer quien aún debe cambiar su contraseña. */
     private static final Set<String> CON_CAMBIO_PENDIENTE = Set.of("GET /api/auth/me", "POST /api/auth/password");
 
+    /** Las rutas de los controladores (Actuator registra otro mapeo para sus endpoints). */
     @Autowired
+    @Qualifier("requestMappingHandlerMapping")
     private RequestMappingHandlerMapping mapeoDeRutas;
 
     // ------------------------------------------------------------ por rol
@@ -217,7 +220,7 @@ class AutorizacionPorRolTest extends MockMvcBaseTest {
 
     @ParameterizedTest(name = "ruta sin endpoint {0}")
     @ValueSource(strings = {"/", "/api", "/api/inexistente", "/api/pacientes/PAC-9999/otra",
-            "/api/usuarios/USR-9999/inexistente", "/api/medicamentos/MED-9999/lotes", "/actuator/health"})
+            "/api/usuarios/USR-9999/inexistente", "/api/medicamentos/MED-9999/lotes", "/actuator/env"})
     void unaRutaSinEndpointNoQuedaAbierta(String ruta) throws Exception {
         comprobar401(mockMvc.perform(request(HttpMethod.GET, ruta)).andReturn());
 

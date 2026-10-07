@@ -22,6 +22,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 /**
  * Comportamiento del arranque del administrador inicial, sin arrancar la
@@ -159,6 +160,32 @@ class AdminInicialTest {
         assertThat(repositorio.listarTodos()).hasSize(1);
         assertThat(warnings()).isEmpty();
         assertThat(mensajesDeLog()).anyMatch(m -> m.contains("ya existe"));
+    }
+
+    @Test
+    void enProduccionSinPasswordNoSeCreaElAdminNiSeGeneraUnaAleatoria() {
+        entorno.setActiveProfiles("prod");
+        entorno.setProperty(AdminInicial.PROP_USERNAME, "admin.produccion");
+
+        assertThatIllegalStateException()
+                .isThrownBy(this::ejecutarArranque)
+                .withMessageContaining("ADMIN_PASSWORD")
+                .withMessageContaining("prod");
+
+        assertThat(repositorio.buscarPorUsername("admin.produccion")).isNull();
+        assertThat(warnings()).isEmpty();
+    }
+
+    @Test
+    void enProduccionSinPasswordArrancaSiElAdminYaExiste() {
+        servicio.crearUsuario("admin.produccion", "otra-password-larga", Rol.ADMIN, null);
+        entorno.setActiveProfiles("prod");
+        entorno.setProperty(AdminInicial.PROP_USERNAME, "admin.produccion");
+
+        ejecutarArranque();
+
+        assertThat(repositorio.listarTodos()).hasSize(1);
+        assertThat(warnings()).isEmpty();
     }
 
     @Test

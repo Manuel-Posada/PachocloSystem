@@ -16,7 +16,12 @@ import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryEnMemori
 import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryEnMemoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionOperations;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,6 +72,26 @@ class HistorialClinicoServiceTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(excepcion);
         }
+    }
+
+    /**
+     * La fecha del registro es la hora local de la zona del reloj de la
+     * aplicación, no la del servidor: a las 03:00 UTC son las 22:00 del día
+     * anterior en Bogotá.
+     */
+    @Test
+    void laFechaDelRegistroEsLaHoraLocalDeLaZonaDelReloj() {
+        Clock bogota = Clock.fixed(Instant.parse("2026-06-16T03:00:00.123456789Z"), ZoneId.of("America/Bogota"));
+        HistorialClinicoService enBogota = new HistorialClinicoService(repositorioPacientes,
+                repositorioTrabajadores, repositorioRegistros, null, TransactionOperations.withoutTransaction(),
+                bogota);
+        Paciente p = paciente("Ana Torres");
+        TrabajadorHospital d = doctor("Carlos Mena");
+
+        RegistroResponse registro = enBogota.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(),
+                TipoRegistro.EVOLUCION, "Paciente estable", null);
+
+        assertThat(registro.fecha()).isEqualTo(LocalDateTime.of(2026, 6, 15, 22, 0, 0, 123_456_000));
     }
 
     @Test

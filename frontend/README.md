@@ -18,8 +18,8 @@ npm start          # http://localhost:4200
 ```
 
 En desarrollo, `proxy.conf.json` reenvía `/api` a `localhost:8080`, así que el navegador ve un
-único origen y el backend **no necesita CORS**. En producción la SPA se sirve en el mismo origen
-que la API.
+único origen y el backend **no necesita CORS**. En producción el frontend (Vercel) y la API
+(Railway) están en **orígenes distintos**: ver [Despliegue en Vercel](#despliegue-en-vercel).
 
 Para entrar se usa el administrador inicial del backend (`ADMIN_USERNAME` / `ADMIN_PASSWORD`).
 Desde **Usuarios** el admin crea los usuarios de doctores y enfermeros. Si se arranca con
@@ -31,8 +31,27 @@ Desde **Usuarios** el admin crea los usuarios de doctores y enfermeros. Si se ar
 npm test                # tests unitarios (Vitest)
 npm run lint            # ESLint (angular-eslint)
 npm run format:check    # Prettier (npm run format para corregir)
-npm run build           # build de producción en dist/frontend
+npm run build           # build de producción en dist/frontend (API en el mismo origen)
+npm run build:vercel    # build de Vercel: exige API_BASE_URL (ver abajo)
 ```
+
+## Despliegue en Vercel
+
+El código llama siempre a rutas relativas (`/api/...`). El último interceptor
+(`apiBaseUrlInterceptor`) les antepone el origen de la API cuando está configurado; los demás
+interceptores ven la ruta relativa, así que el token y el cierre de sesión por 401 funcionan igual
+en cualquier origen.
+
+- **`API_BASE_URL`** (variable de entorno del proyecto en Vercel): origen de PachocloSystem en
+  https, sin barra final ni ruta (p. ej. `https://<servicio>.up.railway.app`). `npm run build:vercel`
+  la valida con `scripts/configurar-api.mjs`, genera `src/environments/environment.vercel.ts` (no
+  versionado) y compila con la configuración `production,vercel`. Sin ella, o si no es https, el
+  build falla.
+- **`vercel.json`**: el directorio raíz del proyecto en Vercel es `frontend/`. Sirve
+  `dist/frontend/browser` y responde `index.html` a cualquier ruta que no sea un archivo, para que
+  recargar `/pacientes` funcione.
+- **Backend**: `CORS_ORIGENES` de PachocloSystem debe contener el origen del frontend
+  (`https://<proyecto>.vercel.app`).
 
 ## Estructura
 

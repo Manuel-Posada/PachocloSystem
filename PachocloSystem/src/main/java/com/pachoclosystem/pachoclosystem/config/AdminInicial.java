@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 import java.security.SecureRandom;
@@ -24,7 +25,9 @@ import java.security.SecureRandom;
  *       sola vez</strong> en el log a nivel WARN. En ambos casos el arranque
  *       crea el administrador; solo cuando la contraseña es aleatoria la cuenta
  *       queda bloqueada (cambio de contraseña obligatorio en el primer acceso),
- *       porque esa contraseña ha quedado escrita en el log.</li>
+ *       porque esa contraseña ha quedado escrita en el log. Con el perfil
+ *       {@code prod} no se genera: sin {@code ADMIN_PASSWORD} la aplicación no
+ *       arranca mientras el administrador no exista.</li>
  * </ul>
  *
  * <p>La contraseña del entorno nunca se escribe en el log, y el hash nunca se
@@ -63,6 +66,12 @@ public class AdminInicial implements ApplicationRunner {
         boolean passwordGenerada = false;
 
         if (password == null || password.isBlank()) {
+            // En producción no se genera: esa contraseña quedaría escrita en el log.
+            if (entorno.acceptsProfiles(Profiles.of(ValidacionProduccion.PERFIL))
+                    && !repositorio.existePorUsername(username)) {
+                throw new IllegalStateException("En producción (perfil prod) ADMIN_PASSWORD es obligatoria "
+                        + "para crear el administrador inicial '" + username + "'.");
+            }
             password = generarPasswordAleatoria();
             passwordGenerada = true;
         } else if (password.length() < UsuarioService.LONGITUD_MINIMA_PASSWORD) {

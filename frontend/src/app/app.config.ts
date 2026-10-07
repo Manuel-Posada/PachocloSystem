@@ -12,6 +12,7 @@ import { catchError, of } from 'rxjs';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { AuthService } from './core/auth/auth.service';
+import { apiBaseUrlInterceptor } from './core/http/api-base-url.interceptor';
 import { errorInterceptor } from './core/http/error.interceptor';
 
 /**
@@ -28,7 +29,8 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
-    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+    // apiBaseUrlInterceptor va el último: los demás ven siempre la ruta relativa /api/...
+    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor, apiBaseUrlInterceptor])),
     provideAppInitializer(refrescarUsuario),
     // index.html carga la fuente "Material Symbols Outlined", no la clásica "Material Icons".
     { provide: MAT_ICON_DEFAULT_OPTIONS, useValue: { fontSet: 'material-symbols-outlined' } },

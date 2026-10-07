@@ -8,9 +8,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * Configuración del cifrado de contraseñas.
  *
- * <p>Usa <strong>solo</strong> {@code spring-security-crypto} (BCrypt): no hay
- * aquí ninguna configuración de Spring Security web (ni filtros ni cadenas de
- * seguridad), que llegará en la Fase 2.</p>
+ * <p>Usa <strong>solo</strong> {@code spring-security-crypto} (BCrypt). La
+ * configuración de Spring Security web (cadena de filtros, JWT, permisos por
+ * rol) está en {@link SecurityConfig}.</p>
  */
 @Configuration
 public class PasswordConfig {
