@@ -1,0 +1,60 @@
+<h2 mat-dialog-title>
+  {{ trabajador ? 'Editar trabajador ' + trabajador.idTrabajador : 'Nuevo trabajador' }}
+</h2>
+
+<form [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+  <mat-dialog-content>
+    <app-errores-formulario [mensajes]="errores()" />
+
+    <mat-form-field class="campo-completo">
+      <mat-label>Nombre completo</mat-label>
+      <input matInput formControlName="nombre" maxlength="60" required cdkFocusInitial />
+      <mat-error>{{ primerError(formulario.controls.nombre) }}</mat-error>
+    </mat-form-field>
+
+    <fieldset class="grupo">
+      <legend id="etiqueta-rol">Rol</legend>
+      <mat-radio-group formControlName="rol" aria-labelledby="etiqueta-rol">
+        @for (opcion of roles; track opcion) {
+          <mat-radio-button [value]="opcion">{{ etiquetaRol(opcion) }}</mat-radio-button>
+        }
+      </mat-radio-group>
+      @if (trabajador) {
+        <p class="nota">El rol de un trabajador no se puede cambiar.</p>
+      }
+      @if (formulario.controls.rol.touched && formulario.controls.rol.invalid) {
+        <mat-error>{{ primerError(formulario.controls.rol) }}</mat-error>
+      }
+    </fieldset>
+
+    @if (rol() === 'Doctor') {
+      <mat-form-field class="campo-completo">
+        <mat-label>Especialidad</mat-label>
+        <input matInput formControlName="especialidad" required />
+        <mat-error>{{ primerError(formulario.controls.especialidad) }}</mat-error>
+      </mat-form-field>
+    } @else if (rol() === 'Enfermero') {
+      <fieldset class="grupo">
+        <legend id="etiqueta-nivel">Nivel de experiencia</legend>
+        <mat-radio-group formControlName="nivelExperiencia" aria-labelledby="etiqueta-nivel">
+          @for (nivel of niveles; track nivel) {
+            <mat-radio-button [value]="nivel">{{ etiquetasNivel[nivel] }}</mat-radio-button>
+          }
+        </mat-radio-group>
+        @if (
+          formulario.controls.nivelExperiencia.touched &&
+          formulario.controls.nivelExperiencia.invalid
+        ) {
+          <mat-error>{{ primerError(formulario.controls.nivelExperiencia) }}</mat-error>
+        }
+      </fieldset>
+    }
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close [disabled]="enviando()">Cancelar</button>
+    <button mat-flat-button type="submit" [disabled]="enviando()">
+      {{ trabajador ? 'Guardar cambios' : 'Registrar' }}
+    </button>
+  </mat-dialog-actions>
+</form>
