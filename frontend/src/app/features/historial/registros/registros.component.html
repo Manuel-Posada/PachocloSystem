@@ -1,0 +1,38 @@
+<ol class="registros">
+  @for (registro of registros(); track registro.idRegistro) {
+    <li class="registro">
+      <div class="cabecera">
+        <span [class]="'tipo tipo-' + registro.tipo.toLowerCase()">
+          {{ etiquetasTipo[registro.tipo] }}
+        </span>
+        <time class="fecha" [attr.datetime]="registro.fecha">
+          {{ formatearFechaHora(registro.fecha) }}
+        </time>
+      </div>
+
+      @if (mostrarPaciente()) {
+        <p class="paciente">
+          Paciente:
+          <a [routerLink]="['/pacientes', registro.idPaciente, 'historial']">
+            {{ registro.nombrePaciente }} ({{ registro.idPaciente }})
+          </a>
+        </p>
+      }
+
+      <p class="contenido">{{ registro.contenido }}</p>
+
+      @if (registro.medicacion; as medicacion) {
+        <p class="medicacion">
+          Descontó {{ medicacion.cantidad }}
+          {{ medicacion.cantidad === 1 ? 'unidad' : 'unidades' }} de
+          {{ medicacion.idMedicamento }} del inventario.
+        </p>
+      }
+
+      <p class="autor">
+        {{ registro.autor.nombreCompleto }} ({{ registro.autor.idTrabajador }}) ·
+        {{ etiquetaRol(registro.autor.rol) }}
+      </p>
+    </li>
+  }
+</ol>
