@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.service;
 
+import com.pachoclosystem.pachoclosystem.exception.ConflictoException;
 import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
 import com.pachoclosystem.pachoclosystem.model.Doctor;
@@ -111,8 +112,9 @@ public class UsuarioService {
         return errores;
     }
 
-    private SolicitudInvalidaException usuarioDuplicado(String usernameNormalizado) {
-        return new SolicitudInvalidaException(
+    /** 409: el username ya pertenece a otro usuario (activo o no). */
+    private ConflictoException usuarioDuplicado(String usernameNormalizado) {
+        return new ConflictoException(
                 "Ya existe un usuario con el username " + usernameNormalizado + ".");
     }
 
@@ -141,7 +143,8 @@ public class UsuarioService {
                     "El trabajador " + idTrabajador + " no es un Enfermero.");
         }
         if (repositorio.buscarPorIdTrabajador(idTrabajador) != null) {
-            throw new SolicitudInvalidaException(
+            // 409: el vínculo es único y no se libera al desactivar (ver activar()).
+            throw new ConflictoException(
                     "El trabajador " + idTrabajador + " ya tiene un usuario.");
         }
     }

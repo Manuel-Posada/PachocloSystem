@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.service;
 
+import com.pachoclosystem.pachoclosystem.exception.ConflictoException;
 import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
 import com.pachoclosystem.pachoclosystem.model.Doctor;
@@ -13,6 +14,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -118,7 +127,7 @@ class UsuarioServiceTest {
     void usernameRepetidoRechazaConMayusculasDistintas() {
         servicio.crearUsuario("ana.torres", PASSWORD_VALIDA, Rol.ADMIN, null);
 
-        assertThatExceptionOfType(SolicitudInvalidaException.class)
+        assertThatExceptionOfType(ConflictoException.class)
                 .isThrownBy(() -> servicio.crearUsuario("ANA.TORRES", PASSWORD_VALIDA, Rol.ADMIN, null))
                 .withMessage("Ya existe un usuario con el username ana.torres.");
 
@@ -126,10 +135,42 @@ class UsuarioServiceTest {
     }
 
     @Test
+    void altasSimultaneasConElMismoUsernameDejanUnSoloUsuarioYElRestoRecibeConflicto()
+            throws Exception {
+        int hilos = 8;
+        ExecutorService ejecutor = Executors.newFixedThreadPool(hilos);
+        CountDownLatch salida = new CountDownLatch(1);
+        try {
+            List<Future<Boolean>> intentos = new ArrayList<>();
+            for (int i = 0; i < hilos; i++) {
+                intentos.add(ejecutor.submit(() -> {
+                    salida.await();
+                    try {
+                        servicio.crearUsuario("mismo.nombre", PASSWORD_VALIDA, Rol.ADMIN, null);
+                        return true;
+                    } catch (ConflictoException duplicado) {
+                        return false;
+                    }
+                }));
+            }
+            salida.countDown();
+
+            int creados = 0;
+            for (Future<Boolean> intento : intentos) {
+                creados += intento.get(10, TimeUnit.SECONDS) ? 1 : 0;
+            }
+            assertThat(creados).isEqualTo(1);
+            assertThat(repositorio.listarTodos()).hasSize(1);
+        } finally {
+            ejecutor.shutdownNow();
+        }
+    }
+
+    @Test
     void usernameRepetidoNoConsumeIdDeUsuario() {
         servicio.crearUsuario("ana.torres", PASSWORD_VALIDA, Rol.ADMIN, null);
 
-        assertThatExceptionOfType(SolicitudInvalidaException.class)
+        assertThatExceptionOfType(ConflictoException.class)
                 .isThrownBy(() -> servicio.crearUsuario("ana.torres", PASSWORD_VALIDA, Rol.ADMIN, null));
 
         assertThat(servicio.crearUsuario("otro.usuario", PASSWORD_VALIDA, Rol.ADMIN, null).getIdUsuario())
@@ -263,7 +304,7 @@ class UsuarioServiceTest {
                 "Carlos Mena", "Doctor", "Cardiologia", null);
         servicio.crearUsuario("carlos.mena", PASSWORD_VALIDA, Rol.DOCTOR, doctor.getIdTrabajador());
 
-        assertThatExceptionOfType(SolicitudInvalidaException.class)
+        assertThatExceptionOfType(ConflictoException.class)
                 .isThrownBy(() -> servicio.crearUsuario("otro.nombre", PASSWORD_VALIDA, Rol.DOCTOR,
                         doctor.getIdTrabajador()))
                 .withMessage("El trabajador DOC-0001 ya tiene un usuario.");
