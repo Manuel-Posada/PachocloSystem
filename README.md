@@ -51,6 +51,11 @@ desarrollo**: use los suyos y no los guarde en el repositorio.
 | `ADMIN_PASSWORD` | PachocloSystem | `admin-ejemplo-2026` | Mínimo 10 caracteres. Si se omite, se genera una aleatoria y se imprime una vez en el log (WARN). |
 | `JWT_SECRET` | PachocloSystem | `secreto-jwt-ejemplo-solo-desarrollo` | Mínimo 32 bytes. Si se omite, los tokens no sobreviven a un reinicio. |
 
+Opcionales de PachocloSystem: `CORS_ORIGENES` (orígenes permitidos si el frontend se sirve desde
+otro origen; vacío por defecto, sin CORS) y `APP_LOGIN_MAX_INTENTOS` / `APP_LOGIN_BLOQUEO_MINUTOS`
+(límite de intentos de login, 5 y 15 por defecto). Detalle en el
+[README de PachocloSystem](PachocloSystem/README.md).
+
 ### Git Bash
 
 ```bash
@@ -108,10 +113,11 @@ pantalla **Usuarios**.
 1. Entre como `admin`.
 2. **Trabajadores:** registre un doctor (p. ej. nombre "Eva Mora", especialidad "Cardiología").
 3. **Usuarios:** cree un usuario con rol `DOCTOR` vinculado a ese doctor (contraseña de 10
-   caracteres o más).
+   caracteres o más). Es una contraseña temporal: el doctor la cambiará al entrar.
 4. **Pacientes:** registre un paciente.
 5. **Medicamentos:** registre uno con stock inicial (esto habla con MedicamentosService).
-6. Cierre sesión y entre con el usuario del doctor.
+6. Cierre sesión y entre con el usuario del doctor. La aplicación le pide cambiar la contraseña;
+   después vuelve al login y entra con la nueva.
 7. **Pacientes → Historial:** agregue un registro de tipo `MEDICACION` indicando el medicamento y
    una cantidad. El registro queda firmado por el doctor y el stock baja.
 8. En **Medicamentos** compruebe el nuevo stock; en **Historial** vea el registro.
@@ -148,17 +154,22 @@ de cada punto están allí.
 
 - **Todo en memoria.** Pacientes, trabajadores, usuarios, historial, medicamentos y claves de
   idempotencia se pierden al reiniciar cada servicio. Al arrancar solo se recrea el administrador
-  inicial. Sin `ADMIN_PASSWORD` la contraseña es aleatoria y queda en el log; sin `JWT_SECRET` los
+  inicial. Sin `ADMIN_PASSWORD` la contraseña es aleatoria, queda en el log y hay que cambiarla en
+  el primer acceso; sin `JWT_SECRET` los
   tokens no sobreviven a un reinicio.
 - **Sesión de 30 minutos sin renovación.** No hay refresh token: el frontend avisa 5 minutos antes
   y, al expirar, vuelve al login. El token se guarda en `sessionStorage` y se pierde al cerrar la
   pestaña.
 - **Sin paginación:** las listas llegan completas.
-- **Un usuario no puede cambiar su propia contraseña** (con la actual); solo el ADMIN la
-  restablece, y eso invalida los tokens de ese usuario.
+- **El bloqueo de login por IP es global detrás de un proxy.** Tras 5 fallos seguidos, la IP queda
+  bloqueada 15 minutos. Con el proxy de desarrollo del frontend todas las peticiones llegan con la
+  misma IP, así que 5 fallos de cualquiera bloquean el login de todos durante ese tiempo. El
+  estado del bloqueo vive en memoria.
 
-**Usuarios y trabajadores**
+**Usuarios, trabajadores y pacientes**
 
+- La **baja de un paciente es lógica**: deja de aparecer en listas e historial, pero sus datos se
+  conservan en memoria y no se puede reactivar desde la API.
 - Un trabajador solo puede tener **un usuario, aunque esté desactivado**: si su usuario se
   desactivó, no se le puede crear otro.
 - Un doctor o enfermero desactivado solo se reactiva si su trabajador sigue existiendo, es de su
@@ -166,10 +177,6 @@ de cada punto están allí.
 
 **Historial y stock de medicamentos**
 
-- **Paciente borrado durante una salida de stock:** el paciente se lee antes de la salida y se
-  guarda después. Si un ADMIN lo elimina mientras se espera la respuesta (con clave puede tardar
-  hasta 2 × (`timeout-conexion` + `timeout-lectura`)), el paciente **se vuelve a crear** con su
-  historial. Pasa con y sin `Idempotency-Key`.
 - **Sin `Idempotency-Key`**, si la salida de stock se hace pero su respuesta no llega (timeout), el
   cliente recibe 503, el stock queda descontado sin registro y reintentar descontaría otra vez.
   Si el timeout salta con las cabeceras ya recibidas pero sin cuerpo, recibe **502** y no hay
@@ -185,7 +192,8 @@ de cada punto están allí.
 
 **Despliegue**
 
-- Frontend y API se asumen en el **mismo origen** (proxy en desarrollo); no hay CORS configurado.
+- Frontend y API se asumen en el **mismo origen** (proxy en desarrollo). CORS está desactivado por
+  defecto; si se sirven desde orígenes distintos hay que definir `CORS_ORIGENES`.
 - Sin `MEDICAMENTOS_API_KEY`, MedicamentosService no exige autenticación (solo desarrollo).
 
 ### Para una versión futura
@@ -195,4 +203,4 @@ de cada punto están allí.
 - **Refresh token** para renovar la sesión sin volver a iniciar sesión.
 - **Rol de farmacia** para gestionar el inventario sin ser ADMIN.
 - **Tests E2E** con Playwright (previstos en el plan del frontend, fase F7).
-- Cambio de contraseña propia, paginación y CORS si algún día el frontend se sirve desde otro origen.
+- Paginación, y cambio de rol de un usuario desde la pantalla Usuarios (el backend ya lo admite).
