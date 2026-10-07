@@ -90,11 +90,62 @@ class LogsSinSecretosTest extends MockMvcBaseTest {
         });
     }
 
+    @Test
+    void laGestionDeUsuariosNoLogueaPasswordTemporalNuevaNiHash() throws Exception {
+        String temporal = "temporal-log-1234567890";
+        String nueva = "nueva-log-clave-1234567";
+        String username = "log.oculto" + System.nanoTime();
+
+        // Alta por API con contraseña temporal.
+        MvcResult alta = mockMvc.perform(post("/api/usuarios")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAdmin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"password\":\"" + temporal
+                                + "\",\"rol\":\"ADMIN\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        // Login, cambio propio de contraseña y reset administrativo.
+        MvcResult login = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"password\":\"" + temporal + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String token = leer(login, "$.token");
+
+        mockMvc.perform(post("/api/auth/password")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"passwordActual\":\"" + temporal + "\",\"passwordNueva\":\"" + nueva + "\"}"))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/usuarios/{id}/password-reset",
+                        leer(alta, "$.idUsuario"))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAdmin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"reset-log-clave-12345\"}"))
+                .andExpect(status().isOk());
+
+        List<String> mensajes = appenders.stream()
+                .flatMap(appender -> appender.list.stream())
+                .map(ILoggingEvent::getFormattedMessage)
+                .toList();
+
+        assertThat(mensajes).allSatisfy(mensaje -> assertThat(mensaje)
+                .doesNotContain(temporal)
+                .doesNotContain(nueva)
+                .doesNotContain("reset-log-clave-12345")
+                .doesNotContain("$2a$10$")
+                .doesNotContain(SECRETO_JWT)
+                .doesNotContain(token));
+    }
+
     private List<Logger> loggersCapturados() {
         return List.of(
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.security"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.config.ClaveFirmaJwt"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.controller.AuthController"),
+                (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.controller.UsuarioController"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.exception.GlobalExceptionHandler"));
     }
 }
