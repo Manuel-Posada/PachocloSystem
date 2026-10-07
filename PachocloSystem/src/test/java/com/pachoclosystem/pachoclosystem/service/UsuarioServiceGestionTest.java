@@ -224,6 +224,29 @@ class UsuarioServiceGestionTest {
     }
 
     @Test
+    void desactivarIncrementaLaVersionYReactivarNoLaToca() {
+        // Dos admins para poder desactivar a uno sin romper el invariante.
+        Usuario adminUno = servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
+        Usuario adminDos = servicio.crearUsuario("admin.dos", PASSWORD_VALIDA, Rol.ADMIN, null);
+        String actor = adminUno.getIdUsuario();
+        assertThat(adminDos.getVersionToken()).isZero();
+
+        servicio.cambiarEstado(adminDos.getIdUsuario(), false, actor);
+        assertThat(adminDos.isActivo()).isFalse();
+        assertThat(adminDos.getVersionToken()).isEqualTo(1);
+
+        // Desactivar de nuevo no vuelve a versionar.
+        servicio.cambiarEstado(adminDos.getIdUsuario(), false, actor);
+        assertThat(adminDos.getVersionToken()).isEqualTo(1);
+
+        // Reactivar restaura el acceso de la cuenta pero no la versión: los
+        // tokens emitidos antes de la desactivación siguen revocados.
+        servicio.cambiarEstado(adminDos.getIdUsuario(), true, actor);
+        assertThat(adminDos.isActivo()).isTrue();
+        assertThat(adminDos.getVersionToken()).isEqualTo(1);
+    }
+
+    @Test
     void unAdminNoPuedeDesactivarseASiMismo() {
         Usuario admin = servicio.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
 

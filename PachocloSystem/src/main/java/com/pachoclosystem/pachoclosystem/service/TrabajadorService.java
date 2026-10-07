@@ -88,8 +88,11 @@ public class TrabajadorService {
 
     /**
      * Cascada de desactivación: al eliminar un trabajador, su usuario
-     * vinculado (si lo tiene) queda {@code activo=false} para que sus tokens
-     * dejen de ser válidos. Si el trabajador no tiene usuario, no se toca nada.
+     * vinculado (si lo tiene) queda {@code activo=false} y su versión de
+     * token se incrementa, de modo que sus tokens dejan de ser válidos de
+     * inmediato y no vuelven a valer aunque alguien intente reactivar la
+     * cuenta (el trabajador ya no existe, así que la reactivación se
+     * rechaza). Si el trabajador no tiene usuario, no se toca nada.
      */
     private void desactivarUsuarioVinculado(String idTrabajador) {
         Usuario usuario = usuarioRepository.buscarPorIdTrabajador(idTrabajador);

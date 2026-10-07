@@ -16,8 +16,10 @@ import java.util.regex.Pattern;
  * <p>El rol y el trabajador vinculado son mutables, pero solo a través de
  * operaciones con nombre propio ({@link #cambiarRol(Rol, String)}, que valida su
  * coherencia); no hay setters genéricos. {@link #cambiarPassword(String, boolean)}
- * reemplaza el hash e incrementa {@link #getVersionToken()}, que es lo que
- * permite revocar los tokens emitidos antes de un cambio de contraseña.</p>
+ * y {@link #desactivar()} incrementan {@link #getVersionToken()}, que es lo que
+ * permite revocar los tokens emitidos antes de un cambio de contraseña o de una
+ * desactivación. {@link #reactivar()} nunca restaura esa versión: un token
+ * emitido antes de la desactivación no vuelve a valer.</p>
  */
 public class Usuario {
 
@@ -95,12 +97,23 @@ public class Usuario {
         return versionToken;
     }
 
-    /** Único cambio de estado permitido: desactivar el usuario. Idempotente. */
+    /**
+     * Desactiva el usuario y revoca sus tokens. Idempotente: solo la primera
+     * desactivación incrementa {@link #getVersionToken()}; desactivar a un
+     * usuario ya inactivo no cambia nada.
+     */
     public void desactivar() {
-        this.activo = false;
+        if (this.activo) {
+            this.activo = false;
+            this.versionToken = this.versionToken + 1;
+        }
     }
 
-    /** Reactiva el usuario. Idempotente: reactivar un usuario activo no hace nada. */
+    /**
+     * Reactiva el usuario. Idempotente: reactivar un usuario activo no hace
+     * nada. No restaura la versión del token: los tokens emitidos antes de la
+     * desactivación siguen revocados.
+     */
     public void reactivar() {
         this.activo = true;
     }

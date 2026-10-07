@@ -41,6 +41,36 @@ class UsuarioVersionTokenModeloTest {
     }
 
     @Test
+    void desactivarIncrementaLaVersionSoloLaPrimeraVez() {
+        Usuario usuario = admin("USR-0001");
+        assertThat(usuario.getVersionToken()).isZero();
+
+        // Desactivar un usuario activo revoca sus tokens (versión +1).
+        usuario.desactivar();
+        assertThat(usuario.getVersionToken()).isEqualTo(1);
+
+        // Desactivar a un usuario ya inactivo es idempotente: no cambia nada.
+        usuario.desactivar();
+        usuario.desactivar();
+        assertThat(usuario.getVersionToken()).isEqualTo(1);
+    }
+
+    @Test
+    void reactivarNoTocaLaVersionDelToken() {
+        Usuario usuario = admin("USR-0001");
+        usuario.desactivar();
+        assertThat(usuario.getVersionToken()).isEqualTo(1);
+
+        // Reactivar NO restaura la versión: el token anterior sigue revocado.
+        usuario.reactivar();
+        assertThat(usuario.isActivo()).isTrue();
+        assertThat(usuario.getVersionToken()).isEqualTo(1);
+
+        usuario.reactivar();
+        assertThat(usuario.getVersionToken()).isEqualTo(1);
+    }
+
+    @Test
     void cambiarRolAdminExigeNoTenerTrabajador() {
         Usuario usuario = new Usuario("USR-0001", "carlos.mena", HASH, Rol.DOCTOR, "DOC-0001");
 

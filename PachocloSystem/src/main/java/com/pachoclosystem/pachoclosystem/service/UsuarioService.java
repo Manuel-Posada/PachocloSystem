@@ -177,8 +177,10 @@ public class UsuarioService {
 
     /**
      * Activa o desactiva un usuario. Un ADMIN no puede desactivarse a sí mismo
-     * ni dejar al sistema sin ningún ADMIN activo. Reactivar una cuenta cuyo
-     * trabajador ya no existe se rechaza. La operación es idempotente.
+     * ni dejar al sistema sin ningún ADMIN activo. Desactivar incrementa la
+     * versión del token (revocación inmediata y permanente: reactivar no la
+     * deshace) y reactivar una cuenta cuyo trabajador ya no existe se rechaza.
+     * La operación es idempotente.
      */
     public Usuario cambiarEstado(String idUsuario, boolean activo, String idActor) {
         cerrojoAdministracion.lock();

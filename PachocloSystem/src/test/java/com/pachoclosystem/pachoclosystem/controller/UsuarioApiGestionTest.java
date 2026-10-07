@@ -15,6 +15,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -332,6 +333,85 @@ class UsuarioApiGestionTest extends MockMvcBaseTest {
                         .content("{\"username\":\"" + username + "\",\"password\":\"password-estado-123\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.debeCambiarPassword").value(false));
+    }
+
+    @Test
+    void desactivarRevocaElTokenYReactivarNoLoResucita() throws Exception {
+        String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
+        String username = "token.revoca" + sufijo();
+        // Alta directa por el servicio (sin pendiente): solo cubre el ciclo de
+        // estado y la revocación de tokens, no el flag de cambio de contraseña.
+        servicioUsuarios.crearUsuario(username, "password-estado-123", Rol.DOCTOR, doctor);
+        String idUsuario = idDe(username);
+        String tokenA = leer(login(username, "password-estado-123"), "$.token");
+
+        // El token A vale antes de la desactivación.
+        mockMvc.perform(get("/api/pacientes").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isOk());
+
+        // ADMIN desactiva: la cuenta queda inactiva y el token A se revoca.
+        perform(patch("/api/usuarios/{id}/estado", idUsuario)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"activo\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo").value(false));
+        mockMvc.perform(get("/api/pacientes").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isUnauthorized());
+
+        // ADMIN reactiva: la cuenta vuelve, pero el token A NO se resucita
+        // (la versión no se restaura).
+        perform(patch("/api/usuarios/{id}/estado", idUsuario)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"activo\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo").value(true));
+        mockMvc.perform(get("/api/pacientes").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isUnauthorized());
+
+        // Un login nuevo emite el token B con versión mayor, y ese sí funciona.
+        String tokenB = leer(login(username, "password-estado-123"), "$.token");
+        assertThat(versionDe(tokenB)).isEqualTo(versionDe(tokenA) + 1L);
+        mockMvc.perform(get("/api/pacientes").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenB))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void eliminarElTrabajadorDesactivaAlUsuarioYSuTokenNoVuelveNunca() throws Exception {
+        String doctor = registrarDoctor("Carlos Mena", "Cardiologia");
+        String username = "cascada.token" + sufijo();
+        servicioUsuarios.crearUsuario(username, "password-estado-123", Rol.DOCTOR, doctor);
+        String idUsuario = idDe(username);
+        String tokenA = leer(login(username, "password-estado-123"), "$.token");
+
+        mockMvc.perform(get("/api/pacientes").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isOk());
+
+        // El ADMIN elimina el trabajador: la cascada desactiva al usuario con
+        // versión +1 (revocación permanente, verificable en el repositorio).
+        perform(delete("/api/trabajadores/{id}", doctor))
+                .andExpect(status().isNoContent());
+
+        Usuario usuario = repositorioUsuarios.buscarPorUsername(username);
+        assertThat(usuario).isNotNull();
+        assertThat(usuario.isActivo()).isFalse();
+        assertThat(usuario.getVersionToken()).isEqualTo(1);
+
+        // El token A queda muerto.
+        mockMvc.perform(get("/api/pacientes").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isUnauthorized());
+
+        // Se intenta reactivar por API: se rechaza por huérfano y el token A
+        // sigue sin valer (aunque el estado se hubiera revertido, la versión
+        // no se restaura).
+        perform(patch("/api/usuarios/{id}/estado", idUsuario)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"activo\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensajes[0]")
+                        .value("No se puede reactivar la cuenta: el trabajador "
+                                + doctor + " ya no existe."));
+        mockMvc.perform(get("/api/pacientes").header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
+                .andExpect(status().isUnauthorized());
     }
 
     // ------------------------------------------------------------------
