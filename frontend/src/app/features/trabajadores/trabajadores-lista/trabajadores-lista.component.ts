@@ -1,4 +1,3 @@
-import { ComponentType } from '@angular/cdk/portal';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -25,20 +24,19 @@ import {
 } from 'rxjs';
 import { mensajesDeError } from '../../../core/http/api-error';
 import { NotificacionService } from '../../../core/notificacion.service';
+import { etiquetaRol } from '../../../core/roles';
 import { confirmar } from '../../../shared/confirmacion-dialogo/confirmacion-dialogo.component';
 import { ESPERA_BUSQUEDA_MS } from '../../../shared/listas';
-import { HabitacionDialogoComponent } from '../habitacion-dialogo/habitacion-dialogo.component';
-import { PacienteDialogoComponent } from '../paciente-dialogo/paciente-dialogo.component';
-import { Paciente } from '../paciente.models';
-import { PacienteService } from '../paciente.service';
+import {
+  DatosTrabajadorDialogo,
+  TrabajadorDialogoComponent,
+} from '../trabajador-dialogo/trabajador-dialogo.component';
+import { ETIQUETAS_NIVEL, Trabajador } from '../trabajador.models';
+import { TrabajadorService } from '../trabajador.service';
 
-/**
- * Lista de pacientes con búsqueda en el servidor. Las altas y ediciones se
- * hacen en diálogos que guardan ellos mismos; al cerrarse con éxito, la lista
- * se recarga.
- */
+/** Lista de trabajadores; mismo patrón que la de pacientes (ver README). */
 @Component({
-  selector: 'app-pacientes-lista',
+  selector: 'app-trabajadores-lista',
   imports: [
     ReactiveFormsModule,
     MatTableModule,
@@ -49,22 +47,23 @@ import { PacienteService } from '../paciente.service';
     MatProgressBarModule,
     MatTooltipModule,
   ],
-  templateUrl: './pacientes-lista.component.html',
+  templateUrl: './trabajadores-lista.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class PacientesListaComponent {
-  private readonly servicio = inject(PacienteService);
+export class TrabajadoresListaComponent {
+  private readonly servicio = inject(TrabajadorService);
   private readonly dialogo = inject(MatDialog);
   private readonly notificaciones = inject(NotificacionService);
   private readonly recargas = new Subject<void>();
 
-  protected readonly columnas = ['idPaciente', 'nombre', 'edad', 'habitacion', 'acciones'];
+  protected readonly columnas = ['idTrabajador', 'nombreCompleto', 'rol', 'detalle', 'acciones'];
   protected readonly busqueda = new FormControl('', { nonNullable: true });
-  protected readonly pacientes = signal<readonly Paciente[]>([]);
+  protected readonly trabajadores = signal<readonly Trabajador[]>([]);
   protected readonly cargando = signal(true);
   protected readonly errores = signal<readonly string[]>([]);
   /** Filtro de la última carga, para el mensaje de lista vacía. */
   protected readonly filtro = signal('');
+  protected readonly etiquetaRol = etiquetaRol;
 
   constructor() {
     merge(
@@ -81,8 +80,8 @@ export class PacientesListaComponent {
         switchMap((texto) =>
           this.servicio.listar(texto).pipe(
             tap({
-              next: (pacientes) => {
-                this.pacientes.set(pacientes);
+              next: (trabajadores) => {
+                this.trabajadores.set(trabajadores);
                 this.filtro.set(texto);
                 this.errores.set([]);
                 this.cargando.set(false);
@@ -100,45 +99,41 @@ export class PacientesListaComponent {
       .subscribe();
   }
 
+  /** Especialidad del doctor o nivel del enfermero. */
+  protected detalle(trabajador: Trabajador): string {
+    return trabajador.nivelExperiencia
+      ? `Nivel ${ETIQUETAS_NIVEL[trabajador.nivelExperiencia].toLowerCase()}`
+      : (trabajador.especialidad ?? '');
+  }
+
   protected recargar(): void {
     this.recargas.next();
   }
 
   protected nuevo(): void {
-    this.abrirDialogo(PacienteDialogoComponent, {}, (p) => `Paciente ${p.idPaciente} registrado.`);
+    this.abrirDialogo({}, (t) => `Trabajador ${t.idTrabajador} registrado.`);
   }
 
-  protected editar(paciente: Paciente): void {
-    this.abrirDialogo(
-      PacienteDialogoComponent,
-      { paciente },
-      (p) => `Paciente ${p.idPaciente} actualizado.`,
-    );
+  protected editar(trabajador: Trabajador): void {
+    this.abrirDialogo({ trabajador }, (t) => `Trabajador ${t.idTrabajador} actualizado.`);
   }
 
-  protected cambiarHabitacion(paciente: Paciente): void {
-    this.abrirDialogo(
-      HabitacionDialogoComponent,
-      { paciente },
-      (p) => `${p.nombre} pasa a la habitación ${p.habitacion}.`,
-    );
-  }
-
-  protected eliminar(paciente: Paciente): void {
+  protected eliminar(trabajador: Trabajador): void {
     confirmar(this.dialogo, {
-      titulo: 'Eliminar paciente',
+      titulo: 'Eliminar trabajador',
       mensaje:
-        `Se eliminará a ${paciente.nombre} (${paciente.idPaciente}) junto con todo su ` +
-        'historial clínico. Esta acción no se puede deshacer.',
+        `Se eliminará a ${trabajador.nombreCompleto} (${trabajador.idTrabajador}). Si tiene un ` +
+        'usuario de acceso, también quedará desactivado y no podrá volver a iniciar sesión. ' +
+        'Esta acción no se puede deshacer.',
       accion: 'Eliminar',
     })
       .pipe(
         filter(Boolean),
-        switchMap(() => this.servicio.eliminar(paciente.idPaciente)),
+        switchMap(() => this.servicio.eliminar(trabajador.idTrabajador)),
       )
       .subscribe({
         next: () => {
-          this.notificaciones.exito(`Paciente ${paciente.idPaciente} eliminado.`);
+          this.notificaciones.exito(`Trabajador ${trabajador.idTrabajador} eliminado.`);
           this.recargar();
         },
         error: (error: unknown) => {
@@ -148,16 +143,18 @@ export class PacientesListaComponent {
       });
   }
 
-  /** Abre un diálogo que guarda por su cuenta; si se cierra con un paciente, avisa y recarga. */
-  private abrirDialogo<C, D>(
-    componente: ComponentType<C>,
-    datos: D,
-    mensajeExito: (guardado: Paciente) => string,
+  /** Abre el diálogo, que guarda por su cuenta; si se cierra con un trabajador, avisa y recarga. */
+  private abrirDialogo(
+    datos: DatosTrabajadorDialogo,
+    mensajeExito: (guardado: Trabajador) => string,
   ): void {
     this.dialogo
-      .open<C, D, Paciente>(componente, { data: datos, width: '480px', maxWidth: '95vw' })
+      .open<TrabajadorDialogoComponent, DatosTrabajadorDialogo, Trabajador>(
+        TrabajadorDialogoComponent,
+        { data: datos, width: '480px', maxWidth: '95vw' },
+      )
       .afterClosed()
-      .pipe(filter((guardado): guardado is Paciente => guardado !== undefined))
+      .pipe(filter((guardado): guardado is Trabajador => guardado !== undefined))
       .subscribe((guardado) => {
         this.notificaciones.exito(mensajeExito(guardado));
         this.recargar();

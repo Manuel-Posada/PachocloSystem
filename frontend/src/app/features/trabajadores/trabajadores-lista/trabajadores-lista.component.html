@@ -1,0 +1,87 @@
+<header class="lista-encabezado">
+  <h1>Trabajadores</h1>
+  <button mat-flat-button type="button" (click)="nuevo()">
+    <mat-icon>add</mat-icon>
+    Nuevo trabajador
+  </button>
+</header>
+
+<mat-form-field class="lista-busqueda" subscriptSizing="dynamic">
+  <mat-label>Buscar por ID o nombre</mat-label>
+  <mat-icon matPrefix>search</mat-icon>
+  <input matInput type="search" [formControl]="busqueda" />
+</mat-form-field>
+
+<div class="lista-progreso">
+  @if (cargando()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Cargando trabajadores" />
+  }
+</div>
+
+@if (errores().length > 0) {
+  <div class="lista-estado lista-estado-error" role="alert">
+    @for (mensaje of errores(); track $index) {
+      <p>{{ mensaje }}</p>
+    }
+    <button mat-stroked-button type="button" (click)="recargar()">Reintentar</button>
+  </div>
+} @else if (trabajadores().length > 0) {
+  <div class="lista-tabla">
+    <table mat-table [dataSource]="trabajadores()">
+      <ng-container matColumnDef="idTrabajador">
+        <th mat-header-cell *matHeaderCellDef>ID</th>
+        <td mat-cell *matCellDef="let t">{{ t.idTrabajador }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="nombreCompleto">
+        <th mat-header-cell *matHeaderCellDef>Nombre</th>
+        <td mat-cell *matCellDef="let t">{{ t.nombreCompleto }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="rol">
+        <th mat-header-cell *matHeaderCellDef>Rol</th>
+        <td mat-cell *matCellDef="let t">{{ etiquetaRol(t.rol) }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="detalle">
+        <th mat-header-cell *matHeaderCellDef>Especialidad / nivel</th>
+        <td mat-cell *matCellDef="let t">{{ detalle(t) }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="acciones">
+        <th mat-header-cell *matHeaderCellDef><span class="solo-lectores">Acciones</span></th>
+        <td mat-cell *matCellDef="let t" class="celda-acciones">
+          <button
+            mat-icon-button
+            type="button"
+            matTooltip="Editar"
+            [attr.aria-label]="'Editar a ' + t.nombreCompleto"
+            (click)="editar(t)"
+          >
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            type="button"
+            matTooltip="Eliminar"
+            [attr.aria-label]="'Eliminar a ' + t.nombreCompleto"
+            (click)="eliminar(t)"
+          >
+            <mat-icon>delete</mat-icon>
+          </button>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="columnas"></tr>
+      <tr mat-row *matRowDef="let fila; columns: columnas"></tr>
+    </table>
+  </div>
+} @else if (!cargando()) {
+  <div class="lista-estado">
+    @if (filtro()) {
+      <p>Ningún trabajador coincide con «{{ filtro() }}».</p>
+    } @else {
+      <p>Todavía no hay trabajadores registrados.</p>
+    }
+  </div>
+}
