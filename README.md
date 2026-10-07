@@ -52,9 +52,9 @@ desarrollo**: use los suyos y no los guarde en el repositorio.
 | `JWT_SECRET` | PachocloSystem | `secreto-jwt-ejemplo-solo-desarrollo` | Mínimo 32 bytes. Si se omite, los tokens no sobreviven a un reinicio. |
 
 Opcionales de PachocloSystem: `CORS_ORIGENES` (orígenes permitidos si el frontend se sirve desde
-otro origen; vacío por defecto, sin CORS) y `APP_LOGIN_MAX_INTENTOS` / `APP_LOGIN_BLOQUEO_MINUTOS`
-(límite de intentos de login, 5 y 15 por defecto). Detalle en el
-[README de PachocloSystem](PachocloSystem/README.md).
+otro origen; vacío por defecto, sin CORS), `APP_LOGIN_PROXIES_CONFIABLES` (IPs de los proxies
+inversos propios, cuya `X-Forwarded-For` se acepta para el límite de intentos de login) y los
+umbrales de ese límite. Detalle en el [README de PachocloSystem](PachocloSystem/README.md).
 
 ### Git Bash
 
@@ -161,10 +161,10 @@ de cada punto están allí.
   y, al expirar, vuelve al login. El token se guarda en `sessionStorage` y se pierde al cerrar la
   pestaña.
 - **Sin paginación:** las listas llegan completas.
-- **El bloqueo de login por IP es global detrás de un proxy.** Tras 5 fallos seguidos, la IP queda
-  bloqueada 15 minutos. Con el proxy de desarrollo del frontend todas las peticiones llegan con la
-  misma IP, así que 5 fallos de cualquiera bloquean el login de todos durante ese tiempo. El
-  estado del bloqueo vive en memoria.
+- **Límite de intentos de login en memoria.** 5 fallos de un usuario desde una IP bloquean ese
+  par 15 minutos; 50 fallos desde una IP, esa IP; 100 de una cuenta desde cualquier IP, esa cuenta.
+  Detrás de un proxy sin configurar `APP_LOGIN_PROXIES_CONFIABLES` (como el de desarrollo) todos
+  comparten IP: 50 fallos entre todos bloquean el login de todos durante la ventana.
 
 **Usuarios, trabajadores y pacientes**
 

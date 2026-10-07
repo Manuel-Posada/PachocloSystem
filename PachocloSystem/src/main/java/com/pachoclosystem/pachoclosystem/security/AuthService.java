@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
  * lanza {@link DemasiadosIntentosException} ({@code 429} con {@code Retry-After})
  * sin registrar un nuevo fallo. Cada fallo de credencial (inexistente,
  * contraseña incorrecta o usuario inactivo) registra un fallo; el acierto
- * reinicia solo el contador del usuario.</p>
+ * reinicia solo el contador de ese usuario desde esa IP.</p>
  */
 @Service
 public class AuthService {
@@ -79,7 +79,7 @@ public class AuthService {
             limitador.registrarFallo(username, ip);
             throw new CredencialesInvalidasException();
         }
-        limitador.registrarExito(username);
+        limitador.registrarExito(username, ip);
         String token = tokenService.generarToken(usuario, credenciales);
         return new LoginResponse(token, "Bearer", tokenService.expiraEnSegundos(),
                 usuario.getRol().name(), credenciales.debeCambiarPassword());

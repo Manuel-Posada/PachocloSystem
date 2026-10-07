@@ -301,7 +301,11 @@ válido, y cada operación exige un rol (ver [Permisos por rol](#permisos-por-ro
 
 Sin token, cualquier operación responde `401`; con un rol sin permiso, `403`. Los
 dos con el cuerpo de error uniforme. La tabla se comprueba en
-`AutorizacionPorRolTest`, que además falla si un endpoint mapeado no tiene fila.
+`AutorizacionPorRolTest`, fila a fila, para cada rol, sin token, con un token
+mal firmado y con la contraseña pendiente de cambio. Ese test también falla si
+algún endpoint mapeado no recibe ninguna fila, y comprueba que `POST
+/api/auth/login` es el único público y que las rutas sin endpoint no quedan
+abiertas.
 
 | Operación | ADMIN | DOCTOR | ENFERMERO |
 |---|:-:|:-:|:-:|
@@ -488,38 +492,69 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
 
 ## Límite de intentos de login
 
-Protección contra fuerza bruta en `POST /api/auth/login`: un
-`LimitadorIntentosLogin` en memoria mantiene contadores **independientes por
-usuario y por IP**, ambos con la misma ventana de bloqueo temporal.
+Protección contra fuerza bruta en `POST /api/auth/login`. Un
+`LimitadorIntentosLogin` en memoria cuenta los fallos en **tres contadores**,
+con la misma ventana:
+
+| Contador | Umbral por defecto | Para qué |
+|---|---|---|
+| **Usuario + IP** | 5 | La protección principal. Solo bloquea a quien falla, desde su IP. |
+| **IP** (con cualquier usuario) | 50 | Frena a una sola fuente que prueba muchos usernames (*password spraying*). |
+| **Usuario** (desde cualquier IP) | 100 | Frena la fuerza bruta distribuida contra una cuenta. |
 
 | Variable | Propiedad | Por defecto | Descripción |
 |---|---|---|---|
-| `APP_LOGIN_MAX_INTENTOS` | `app.login.max-intentos` | `5` | Fallos consecutivos que bloquean la cuenta y la IP. |
-| `APP_LOGIN_BLOQUEO_MINUTOS` | `app.login.bloqueo-minutos` | `15` | Duración de la ventana de bloqueo. |
-| `APP_LOGIN_MAX_ENTRADAS` | `app.login.max-entradas` | `10000` | Tope de entradas del mapa (purga defensiva del límite de memoria). |
+| `APP_LOGIN_MAX_INTENTOS` | `app.login.max-intentos` | `5` | Fallos de un usuario desde una IP que bloquean ese par. |
+| `APP_LOGIN_MAX_INTENTOS_IP` | `app.login.max-intentos-ip` | `50` | Fallos desde una IP que la bloquean. No puede ser menor que el anterior. |
+| `APP_LOGIN_MAX_INTENTOS_USUARIO` | `app.login.max-intentos-usuario` | `100` | Fallos de una cuenta, desde cualquier IP, que la bloquean. No puede ser menor que el primero. |
+| `APP_LOGIN_BLOQUEO_MINUTOS` | `app.login.bloqueo-minutos` | `15` | Ventana de conteo y duración del bloqueo. |
+| `APP_LOGIN_MAX_ENTRADAS` | `app.login.max-entradas` | `10000` | Tope de entradas en memoria (purga defensiva). |
+| `APP_LOGIN_PROXIES_CONFIABLES` | `app.login.proxies-confiables` | *(vacío)* | IPs de los proxies inversos propios, separadas por comas (ver abajo). |
+
+**Por qué tres contadores.** Antes se bloqueaba por usuario y por IP con el mismo
+umbral de 5. Eso permitía a cualquiera bloquear al `admin` durante 15 minutos
+con 5 contraseñas malas, y detrás de un proxy (todos con la misma IP) 5 fallos
+de una persona bloqueaban el login de todos. Ahora:
+
+- Quien ataca una cuenta desde su IP **se bloquea a sí mismo**: el titular sigue
+  entrando desde la suya, y los demás usuarios de la IP del atacante también.
+- Bloquear una cuenta para todos exige fallar desde **al menos 20 IPs
+  distintas** (100 fallos con un máximo de 5 por IP).
+- Una IP compartida solo se bloquea si acumula **50 fallos** en la ventana.
 
 Comportamiento:
 
-- Tras **5 fallos**, el 6º intento (contra ese usuario o desde esa IP) responde
-  **`429 Too Many Requests`** con el cuerpo de error uniforme y la cabecera
-  `Retry-After` en segundos. El bloqueo se comprueba **antes** de evaluar las
-  credenciales, de modo que durante el bloqueo una contraseña correcta también
-  responde 429.
-- Un **acierto reinicia solo el contador del usuario**; el contador de la IP
-  nunca se reinicia. La IP se bloquea con 5 fallos de usuarios distintos, y la
-  **IP de origen es exclusivamente `getRemoteAddr()`**: la cabecera
-  `X-Forwarded-For` se ignora (no se confía en ella para el bloqueo). Detrás
-  de un proxy, como el de desarrollo del frontend, todas las peticiones llegan
-  con la IP del proxy: 5 fallos de cualquier usuario bloquean el login de todos
-  durante la ventana.
-- Un **429 no registra un fallo**: los intentos durante el bloqueo no extienden
-  la cuenta atrás, y la IP/usuario se desbloquean en solitario al agotarse la
-  ventana. Un **400 por body inválido no cuenta ni comprueba el bloqueo**.
+- Al llegar a un umbral, el siguiente intento responde **`429 Too Many
+  Requests`** con el cuerpo de error uniforme y `Retry-After` en segundos (el
+  del bloqueo más largo que le afecte). El bloqueo se comprueba **antes** de
+  evaluar las credenciales, así que durante el bloqueo una contraseña correcta
+  también responde 429.
+- Un **acierto reinicia solo el contador de ese usuario desde esa IP**. Los de
+  la IP y de la cuenta no se reinician: un acierto no da más intentos a quien
+  prueba otros usernames ni a quien ataca la cuenta desde otras IPs.
+- Un **429 no registra un fallo**: no extiende la cuenta atrás, y el bloqueo se
+  deshace solo al agotarse la ventana. Un **400 por body inválido no cuenta ni
+  comprueba el bloqueo**.
 - El fallo se registra en las tres causas de 401 (usuario inexistente,
   contraseña incorrecta, usuario inactivo) y el 429 es **idéntico** exista o no
   el usuario (sin revelar su existencia). El username del log se normaliza a
   minúsculas, se truncan los caracteres de control y se limita a 30 caracteres;
   ninguna contraseña, hash ni token se escribe en el log.
+
+**IP del cliente y proxies.** Por defecto la IP es la del socket
+(`getRemoteAddr()`) y `X-Forwarded-For` **se ignora**, porque cualquiera puede
+escribir esa cabecera. Si la aplicación está detrás de un proxy inverso propio,
+hay que poner su IP en `APP_LOGIN_PROXIES_CONFIABLES` (tal como la ve el
+servidor, p. ej. `10.0.0.5`; IPv6 en la forma de `getRemoteAddr()`, como
+`0:0:0:0:0:0:0:1`). Entonces, solo para peticiones que llegan desde esa IP, se
+lee `X-Forwarded-For` de derecha a izquierda saltando los proxies de confianza y
+se usa la primera IP que no lo es: la que añadió el proxy, no la que pudiera
+haber escrito el cliente. Un valor que no sea una IP literal impide arrancar.
+
+Sin esa configuración detrás de un proxy (como el de desarrollo del frontend,
+que no envía `X-Forwarded-For`), todos llegan con la IP del proxy: cada usuario
+solo se bloquea a sí mismo, pero 50 fallos entre todos bloquean esa IP, es decir,
+el login de todos durante la ventana.
 
 ## CORS
 

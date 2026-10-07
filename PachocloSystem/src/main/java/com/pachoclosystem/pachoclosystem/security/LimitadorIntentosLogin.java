@@ -14,32 +14,43 @@ import java.util.concurrent.ConcurrentHashMap;
  * Límite de intentos fallidos de login en memoria (sin base de datos y sin
  * estado global estático).
  *
- * <p>Mantiene dos espacios de claves independientes:
+ * <p>Cuenta los fallos en tres espacios de claves, cada uno con su umbral y la
+ * misma ventana de {@code app.login.bloqueo-minutos}:
  * <ul>
- *   <li><strong>usuario</strong>: la clave es el username normalizado igual que
- *       {@link Usuario#normalizarUsername} (minúsculas, sin espacios alrededor),
- *       de modo que «Admin» y «admin» cuenten como la misma clave. Un login
- *       correcto reinicia <em>solo</em> este contador.</li>
- *   <li><strong>ip</strong>: la clave es la IP de {@code getRemoteAddr()}; es la
- *       protección principal porque no la puede inventar un atacante y
- *       <em>nunca</em> se reinicia con los éxitos de un usuario.</li>
+ *   <li><strong>usuario + IP</strong> ({@code app.login.max-intentos}, 5): la
+ *       protección principal contra la fuerza bruta. Solo bloquea a quien falla,
+ *       desde su IP: un atacante que conoce el username {@code admin} se
+ *       bloquea a sí mismo, no al administrador que entra desde otra IP. Un
+ *       login correcto reinicia este contador.</li>
+ *   <li><strong>IP</strong> ({@code app.login.max-intentos-ip}, 50): frena a
+ *       una sola fuente que prueba muchos usernames (password spraying). El
+ *       umbral es alto para que una IP compartida (una oficina, un proxy) no
+ *       quede bloqueada por los fallos de unos pocos. Nunca se reinicia con un
+ *       éxito.</li>
+ *   <li><strong>usuario</strong> desde cualquier IP
+ *       ({@code app.login.max-intentos-usuario}, 100): frena la fuerza bruta
+ *       distribuida contra una cuenta. Como cada par usuario + IP se corta a
+ *       los 5 fallos, bloquear así una cuenta exige fallar desde al menos
+ *       100 / 5 = 20 IPs distintas. Tampoco se reinicia con un éxito.</li>
  * </ul>
- * Un usuario o una IP quedan <strong>bloqueados</strong> al acumular
- * {@code app.login.max-intentos} fallos dentro de la ventana de
- * {@code app.login.bloqueo-minutos} tras el último fallo; el bloqueo se deshace
- * solo al agotarse esa ventana. {@link #estaBloqueado(String, String)} devuelve
- * los segundos restantes (0 si no hay bloqueo) y se usa para responder 429 con
- * {@code Retry-After}; un intento durante el bloqueo <em>no</em> registra un
- * nuevo fallo y por tanto no extiende la cuenta atrás.</p>
+ * La IP es la que resuelve {@link ResolutorIpCliente}: la del socket, salvo
+ * que la petición llegue de un proxy de confianza configurado.</p>
  *
- * <p>Atomicidad: todas las lecturas/escrituras del contador pasan por
- * {@code compute}/{@code removeIf} de {@link ConcurrentHashMap}; nunca se lee,
- * comprueba y escribe sin una operación atómica. La memoria está acotada por
- * {@code app.login.max-entradas}: al alcanzar el tope se purgan las entradas
- * caducadas (ventana de conteo) y, si aun así se sigue superando, se deja de
- * crear claves de <em>usuario</em> nuevas (las ya existentes sí se actualizan)
- * pero la <em>IP</em> se sigue contando siempre, porque inventar usernames no
- * debe impedir que la IP quede protegida.</p>
+ * <p>Una clave queda <strong>bloqueada</strong> al acumular su umbral de
+ * fallos dentro de la ventana tras el último fallo; el bloqueo se deshace solo
+ * al agotarse esa ventana. {@link #estaBloqueado(String, String)} devuelve los
+ * segundos restantes del bloqueo más largo (0 si no hay ninguno) y se usa para
+ * responder 429 con {@code Retry-After}; un intento durante el bloqueo
+ * <em>no</em> registra un nuevo fallo y por tanto no extiende la cuenta
+ * atrás.</p>
+ *
+ * <p>Atomicidad: todas las lecturas/escrituras de los contadores pasan por
+ * {@code compute}/{@code removeIf} de {@link ConcurrentHashMap}. La memoria
+ * está acotada por {@code app.login.max-entradas}: al alcanzar el tope se
+ * purgan las entradas caducadas y, si aun así se sigue superando, se dejan de
+ * crear claves nuevas de usuario y de usuario + IP (las existentes sí se
+ * actualizan), pero la IP se cuenta siempre: inventar usernames no debe
+ * desproteger nada.</p>
  */
 @Component
 public class LimitadorIntentosLogin {
@@ -48,20 +59,37 @@ public class LimitadorIntentosLogin {
     private record EstadoClave(int fallos, Instant ultimoFallo) {
     }
 
+    /** Clave del contador principal: username normalizado e IP del cliente. */
+    private record UsuarioEnIp(String usuario, String ip) {
+    }
+
     private final Clock reloj;
     private final int maxIntentos;
+    private final int maxIntentosIp;
+    private final int maxIntentosUsuario;
     private final Duration ventana;
     private final int maxEntradas;
 
-    private final Map<String, EstadoClave> porUsuario = new ConcurrentHashMap<>();
+    private final Map<UsuarioEnIp, EstadoClave> porUsuarioEnIp = new ConcurrentHashMap<>();
     private final Map<String, EstadoClave> porIp = new ConcurrentHashMap<>();
+    private final Map<String, EstadoClave> porUsuario = new ConcurrentHashMap<>();
 
     public LimitadorIntentosLogin(Clock reloj,
                                   @Value("${app.login.max-intentos:5}") int maxIntentos,
+                                  @Value("${app.login.max-intentos-ip:50}") int maxIntentosIp,
+                                  @Value("${app.login.max-intentos-usuario:100}") int maxIntentosUsuario,
                                   @Value("${app.login.bloqueo-minutos:15}") long bloqueoMinutos,
                                   @Value("${app.login.max-entradas:10000}") int maxEntradas) {
         if (maxIntentos < 1) {
             throw new IllegalArgumentException("app.login.max-intentos debe ser al menos 1.");
+        }
+        if (maxIntentosIp < maxIntentos) {
+            throw new IllegalArgumentException(
+                    "app.login.max-intentos-ip no puede ser menor que app.login.max-intentos.");
+        }
+        if (maxIntentosUsuario < maxIntentos) {
+            throw new IllegalArgumentException(
+                    "app.login.max-intentos-usuario no puede ser menor que app.login.max-intentos.");
         }
         if (bloqueoMinutos < 1) {
             throw new IllegalArgumentException("app.login.bloqueo-minutos debe ser al menos 1.");
@@ -71,57 +99,71 @@ public class LimitadorIntentosLogin {
         }
         this.reloj = reloj;
         this.maxIntentos = maxIntentos;
+        this.maxIntentosIp = maxIntentosIp;
+        this.maxIntentosUsuario = maxIntentosUsuario;
         this.ventana = Duration.ofMinutes(bloqueoMinutos);
         this.maxEntradas = maxEntradas;
     }
 
     /**
-     * Segundos que quedan de bloqueo para el usuario o para la IP (0 si ninguno
-     * está bloqueado). No registra ningún fallo ni extiende el bloqueo.
+     * Segundos que quedan del bloqueo más largo que afecta a este usuario desde
+     * esta IP (0 si no hay ninguno). No registra ningún fallo ni extiende el
+     * bloqueo.
      */
     public long estaBloqueado(String usuario, String ip) {
         Instant ahora = reloj.instant();
-        long segundosUsuario = segundosRestantes(porUsuario, normalizar(usuario), ahora);
-        long segundosIp = segundosRestantes(porIp, ip, ahora);
-        return Math.max(segundosUsuario, segundosIp);
+        String claveUsuario = normalizar(usuario);
+        String claveIp = normalizarIp(ip);
+        long segundos = segundosRestantes(porUsuario, claveUsuario, maxIntentosUsuario, ahora);
+        segundos = Math.max(segundos, segundosRestantes(porIp, claveIp, maxIntentosIp, ahora));
+        if (claveUsuario != null && claveIp != null) {
+            segundos = Math.max(segundos, segundosRestantes(
+                    porUsuarioEnIp, new UsuarioEnIp(claveUsuario, claveIp), maxIntentos, ahora));
+        }
+        return segundos;
     }
 
-    /** Cuenta un fallo de login en el usuario y en la IP. */
+    /** Cuenta un fallo de login en el par usuario + IP, en la IP y en el usuario. */
     public void registrarFallo(String usuario, String ip) {
         Instant ahora = reloj.instant();
         String claveUsuario = normalizar(usuario);
-        if (porUsuario.size() + porIp.size() >= maxEntradas) {
+        String claveIp = normalizarIp(ip);
+        if (entradas() >= maxEntradas) {
             purgarCaducadas(ahora);
         }
-        if (porUsuario.size() + porIp.size() >= maxEntradas) {
-            // Memoria al tope: se actualizan las claves de usuario existentes
-            // pero NO se crean nuevas; la IP se cuenta siempre.
-            registrarFalloIp(ip, ahora);
-            if (claveUsuario != null && porUsuario.containsKey(claveUsuario)) {
-                porUsuario.compute(claveUsuario, (clave, estado) -> incrementar(estado, ahora));
-            }
-            return;
+        // Memoria al tope: no se crean claves nuevas de usuario ni de par (un
+        // atacante puede inventar usernames), pero la IP se cuenta siempre.
+        boolean alTope = entradas() >= maxEntradas;
+        if (claveIp != null) {
+            porIp.compute(claveIp, (clave, estado) -> incrementar(estado, ahora));
         }
-        registrarFalloUsuario(usuario, ahora);
-        registrarFalloIp(ip, ahora);
+        if (claveUsuario != null) {
+            contar(porUsuario, claveUsuario, alTope, ahora);
+            if (claveIp != null) {
+                contar(porUsuarioEnIp, new UsuarioEnIp(claveUsuario, claveIp), alTope, ahora);
+            }
+        }
     }
 
     /**
-     * Reinicia SOLO el contador del usuario (un login correcto). El contador de
-     * la IP no se toca: otros usuarios desde esa misma IP deben seguir
-     * acumulando sus fallos.
+     * Un login correcto reinicia SOLO el contador de ese usuario desde esa IP.
+     * Los de la IP y del usuario no se tocan: un acierto no debe dar más
+     * intentos a quien prueba otros usernames desde la misma IP ni a quien
+     * ataca la cuenta desde otras IPs.
      */
-    public void registrarExito(String usuario) {
+    public void registrarExito(String usuario, String ip) {
         String claveUsuario = normalizar(usuario);
-        if (claveUsuario != null) {
-            porUsuario.remove(claveUsuario);
+        String claveIp = normalizarIp(ip);
+        if (claveUsuario != null && claveIp != null) {
+            porUsuarioEnIp.remove(new UsuarioEnIp(claveUsuario, claveIp));
         }
     }
 
-    /** Vacía ambos espacios de claves. Para pruebas aisladas y mantenimiento. */
+    /** Vacía todos los contadores. Para pruebas aisladas y mantenimiento. */
     public void reiniciar() {
-        porUsuario.clear();
+        porUsuarioEnIp.clear();
         porIp.clear();
+        porUsuario.clear();
     }
 
     /**
@@ -145,33 +187,29 @@ public class LimitadorIntentosLogin {
         return limpieza.toString();
     }
 
-    private long segundosRestantes(Map<String, EstadoClave> mapa, String clave, Instant ahora) {
-        if (clave == null || clave.isBlank()) {
+    private int entradas() {
+        return porUsuarioEnIp.size() + porIp.size() + porUsuario.size();
+    }
+
+    private <K> void contar(Map<K, EstadoClave> mapa, K clave, boolean alTope, Instant ahora) {
+        if (alTope && !mapa.containsKey(clave)) {
+            return;
+        }
+        mapa.compute(clave, (k, estado) -> incrementar(estado, ahora));
+    }
+
+    private <K> long segundosRestantes(Map<K, EstadoClave> mapa, K clave, int umbral, Instant ahora) {
+        if (clave == null) {
             return 0;
         }
         EstadoClave estado = mapa.get(clave);
-        if (estado == null || estado.fallos() < maxIntentos || caducada(estado, ahora)) {
+        if (estado == null || estado.fallos() < umbral || caducada(estado, ahora)) {
             return 0;
         }
         long restanteMs = estado.ultimoFallo().toEpochMilli()
                 + ventana.toMillis() - ahora.toEpochMilli();
         // Ceil a segundos; siempre > 0 porque la entrada no ha caducado.
         return (restanteMs + 999) / 1000;
-    }
-
-    private void registrarFalloUsuario(String usuario, Instant ahora) {
-        String clave = normalizar(usuario);
-        if (clave == null) {
-            return;
-        }
-        porUsuario.compute(clave, (k, estado) -> incrementar(estado, ahora));
-    }
-
-    private void registrarFalloIp(String ip, Instant ahora) {
-        if (ip == null || ip.isBlank()) {
-            return;
-        }
-        porIp.compute(ip, (k, estado) -> incrementar(estado, ahora));
     }
 
     /** Devuelve el estado incrementado; si no existía o caducó, arranca en 1. */
@@ -187,11 +225,18 @@ public class LimitadorIntentosLogin {
     }
 
     private void purgarCaducadas(Instant ahora) {
-        porUsuario.entrySet().removeIf(entrada -> caducada(entrada.getValue(), ahora));
+        porUsuarioEnIp.entrySet().removeIf(entrada -> caducada(entrada.getValue(), ahora));
         porIp.entrySet().removeIf(entrada -> caducada(entrada.getValue(), ahora));
+        porUsuario.entrySet().removeIf(entrada -> caducada(entrada.getValue(), ahora));
     }
 
+    /** Username normalizado como {@link Usuario#normalizarUsername}; {@code null} si queda vacío. */
     private static String normalizar(String username) {
-        return Usuario.normalizarUsername(username);
+        String normalizado = Usuario.normalizarUsername(username);
+        return normalizado == null || normalizado.isEmpty() ? null : normalizado;
+    }
+
+    private static String normalizarIp(String ip) {
+        return ip == null || ip.isBlank() ? null : ip.trim();
     }
 }

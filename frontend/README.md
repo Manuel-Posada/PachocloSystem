@@ -167,8 +167,9 @@ UTC y en UTC-5 mostraría el día anterior.
 - Todo error HTTP llega a los componentes como `ApiError` (`status` y `mensajes`, los del
   `ErrorResponse` del backend). Sin ese cuerpo, por ejemplo con el backend apagado, el mensaje
   es "No se pudo conectar con el servidor". Un 401 fuera del login cierra la sesión.
-- Tras 5 intentos fallidos el login responde 429 durante 15 minutos (por usuario y por IP); el
-  formulario muestra el mensaje del backend. Con el proxy de desarrollo todas las peticiones
-  llegan al backend con la misma IP, así que el bloqueo por IP afecta a todos los usuarios.
+- Tras 5 intentos fallidos de un usuario el login le responde 429 durante 15 minutos; el
+  formulario muestra el mensaje del backend. El proxy de desarrollo no envía `X-Forwarded-For`,
+  así que todos llegan al backend con la misma IP: cada usuario solo se bloquea a sí mismo, pero
+  50 fallos entre todos bloquean el login de todos (ver el README del backend).
 - Si MedicamentosService no responde, el backend devuelve 503 (o 502). Medicamentos lo muestra
   como aviso dentro del módulo y el resto de la app sigue funcionando.

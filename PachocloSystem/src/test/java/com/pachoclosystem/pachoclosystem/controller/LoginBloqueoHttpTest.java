@@ -1,6 +1,5 @@
 package com.pachoclosystem.pachoclosystem.controller;
 
-import com.pachoclosystem.pachoclosystem.security.LimitadorIntentosLogin;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,11 +27,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Bloqueo temporal del login por HTTP con la cadena real y un reloj controlado
  * (el {@code @TestConfiguration} reemplaza el bean {@code Clock} por uno
- * ajustable): 5 fallos -> el 6º intento responde 429 con el cuerpo uniforme y
- * {@code Retry-After}, el bloqueo no distingue usuarios inexistentes, un éxito
- * reinicia solo el contador del usuario, la IP se bloquea con fallos de
- * usuarios distintos, {@code X-Forwarded-For} se ignora, el 429 no extiende la
- * cuenta atrás y un 400 por body inválido no cuenta ni comprueba el bloqueo.
+ * ajustable), con la configuración por defecto (sin proxies de confianza):
+ * 5 fallos de un usuario desde una IP -> el 6º intento responde 429 con el
+ * cuerpo uniforme y {@code Retry-After}; el bloqueo no distingue usuarios
+ * inexistentes; atacar una cuenta desde una IP no la bloquea desde otra ni
+ * bloquea a otros usuarios de la misma IP; la IP se bloquea a los 50 fallos;
+ * un éxito reinicia solo el par usuario + IP; {@code X-Forwarded-For} se
+ * ignora; el 429 no extiende la cuenta atrás y un 400 por body inválido no
+ * cuenta ni comprueba el bloqueo.
  */
 class LoginBloqueoHttpTest extends MockMvcBaseTest {
 
@@ -53,9 +55,6 @@ class LoginBloqueoHttpTest extends MockMvcBaseTest {
 
     @Autowired
     private ConfiguracionRelojDePrueba configuracion;
-
-    @Autowired
-    private LimitadorIntentosLogin limitadorIntentos;
 
     @BeforeEach
     void fijarReloj() {
@@ -108,48 +107,89 @@ class LoginBloqueoHttpTest extends MockMvcBaseTest {
     }
 
     @Test
-    void unExitoReiniciaSoloElContadorDelUsuarioYCuatroFallosMasNoBloquean() throws Exception {
-        String ipA = "203.0.113.1";
-        String ipB = "203.0.113.2";
+    void atacarAlAdminDesdeUnaIpNoLeImpideEntrarDesdeOtra() throws Exception {
+        String ipAtacante = "203.0.113.66";
+        String ipAdmin = "198.51.100.7";
 
-        // 4 fallos desde la IP A.
-        for (int i = 0; i < 4; i++) {
-            mockMvc.perform(conIp(loginCon("admin", "clave-mala"), ipA))
+        // El atacante conoce el username y falla hasta quedar bloqueado.
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(conIp(loginCon("admin", "adivinando-" + i), ipAtacante))
                     .andExpect(status().isUnauthorized());
         }
-        // Éxito: reinicia el contador del usuario (la IP A se queda en 4, nunca se reinicia).
-        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), ipA))
-                .andExpect(status().isOk());
-
-        // 4 fallos más desde la IP B: el usuario no vuelve a alcanzar 5.
-        for (int i = 0; i < 4; i++) {
-            mockMvc.perform(conIp(loginCon("admin", "clave-mala"), ipB))
-                    .andExpect(status().isUnauthorized());
+        for (int i = 0; i < 10; i++) {
+            mockMvc.perform(conIp(loginCon("admin", "sigo-probando"), ipAtacante))
+                    .andExpect(status().isTooManyRequests());
         }
-        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), ipB))
-                .andExpect(status().isOk());
 
-        // A nivel de componente: el contador del usuario se reinició pero la IP A
-        // sigue acumulando (5º fallo sobre la IP A -> bloqueada).
-        limitadorIntentos.registrarFallo("admin", ipA);
-        assertThat(limitadorIntentos.estaBloqueado("admin", ipA)).isPositive();
+        // El administrador entra con normalidad desde su IP.
+        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), ipAdmin))
+                .andExpect(status().isOk());
+        // Y su éxito no desbloquea al atacante.
+        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), ipAtacante))
+                .andExpect(status().isTooManyRequests());
     }
 
     @Test
-    void cincoFallosDeLaMismaIpConUsuariosDistintosBloqueanEsaIp() throws Exception {
+    void unExitoReiniciaElParYCuatroFallosMasNoBloquean() throws Exception {
+        String ip = "203.0.113.1";
+
+        for (int i = 0; i < 4; i++) {
+            mockMvc.perform(conIp(loginCon("admin", "clave-mala"), ip))
+                    .andExpect(status().isUnauthorized());
+        }
+        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), ip))
+                .andExpect(status().isOk());
+
+        // El contador del par volvió a cero: 4 fallos más tampoco bloquean.
+        for (int i = 0; i < 4; i++) {
+            mockMvc.perform(conIp(loginCon("admin", "clave-mala"), ip))
+                    .andExpect(status().isUnauthorized());
+        }
+        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), ip))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void variosUsuariosQueCompartenIpNoSeBloqueanEntreSi() throws Exception {
+        // Sin proxies de confianza, todos los que pasan por un mismo proxy
+        // (p. ej. el de desarrollo del frontend) llegan con la misma IP.
+        String ipCompartida = "127.0.0.1";
+
+        // Alguien se equivoca hasta bloquearse...
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(conIp(loginCon("despistado", "pase-erroneo"), ipCompartida))
+                    .andExpect(status().isUnauthorized());
+        }
+        mockMvc.perform(conIp(loginCon("despistado", "pase-erroneo"), ipCompartida))
+                .andExpect(status().isTooManyRequests());
+
+        // ...y el resto de usuarios de esa IP sigue entrando.
+        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), ipCompartida))
+                .andExpect(status().isOk());
+        mockMvc.perform(conIp(loginCon("otro.usuario", "pase-erroneo"), ipCompartida))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void unaIpConCincuentaFallosDeUsuariosDistintosSeBloquea() throws Exception {
         String ip = "203.0.113.50";
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 50; i++) {
             mockMvc.perform(conIp(loginCon("inventado." + i, "pase"), ip))
                     .andExpect(status().isUnauthorized());
         }
-        // El 6º intento desde la misma IP, con un usuario nuevo, se bloquea por IP.
-        mockMvc.perform(conIp(loginCon("inventado.nuevo", "pase"), ip))
+        // Desde esa IP ya nadie entra, ni con la contraseña correcta...
+        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), ip))
                 .andExpect(status().isTooManyRequests());
 
-        // El mismo usuario desde otra IP sigue dando 401: solo la IP quedó bloqueada.
-        mockMvc.perform(conIp(loginCon("inventado.nuevo", "pase"), "203.0.113.60"))
-                .andExpect(status().isUnauthorized());
+        // ...pero desde otra IP sí.
+        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), "203.0.113.60"))
+                .andExpect(status().isOk());
+
+        // Y se recupera al agotarse la ventana.
+        configuracion.reloj.avanzar(Duration.ofMinutes(15).plusSeconds(1));
+        mockMvc.perform(conIp(loginCon("admin", PASSWORD_ADMIN), ip))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -167,10 +207,10 @@ class LoginBloqueoHttpTest extends MockMvcBaseTest {
                         conCabecera(loginCon("victima", "pase"), "X-Forwarded-For", "2.2.2.2"), ipReal))
                 .andExpect(status().isTooManyRequests());
 
-        // Y una IP distinta cuyo X-Forwarded-For apunta a la IP bloqueada NO se
-        // bloquea: con un usuario nuevo el bloqueo depende de getRemoteAddr().
+        // Y otra IP cuyo X-Forwarded-For apunta a la bloqueada NO hereda el
+        // bloqueo: con la configuración por defecto cuenta getRemoteAddr().
         mockMvc.perform(conIp(
-                        conCabecera(loginCon("otra.victima", "pase"), "X-Forwarded-For", ipReal), "198.51.100.2"))
+                        conCabecera(loginCon("victima", "pase"), "X-Forwarded-For", ipReal), "198.51.100.2"))
                 .andExpect(status().isUnauthorized());
     }
 
