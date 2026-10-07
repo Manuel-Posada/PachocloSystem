@@ -163,7 +163,7 @@ con `"Debe cambiar su contraseña antes de continuar."` hasta completar el cambi
 | Método | Ruta | Descripción |
 |---|---|---|
 | POST | `/api/auth/login` | Público. `{ "username", "password" }` → JWT bearer |
-| GET | `/api/auth/me` | Autenticado. Devuelve `{ idUsuario, username, rol, idTrabajador, activo, debeCambiarPassword, versionToken }` |
+| GET | `/api/auth/me` | Autenticado. Devuelve `{ idUsuario, username, rol, idTrabajador, activo, debeCambiarPassword }` |
 | POST | `/api/auth/password` | Autenticado. Cambia la contraseña del propio usuario: `{ "passwordActual", "passwordNueva" }` → `204`. El token usado queda revocado de inmediato y hay que volver a iniciar sesión. |
 
 Login correcto:
@@ -219,9 +219,10 @@ curl http://localhost:8080/api/pacientes -H "Authorization: Bearer eyJhbGciOiJIU
 | POST | `/api/usuarios/{id}/password-reset` | Reset administrativo `{ password }`: nueva contraseña temporal (cambio obligatorio) y revocación de los tokens existentes | 200 / 400 / 401 / 403 / 404 |
 
 `GET /api/auth/me` devuelve el mismo `UsuarioResponse` que la gestión de
-usuarios: `{ idUsuario, username, rol, idTrabajador, activo,
-debeCambiarPassword, versionToken }`. Ninguna respuesta nunca incluye la
-contraseña ni su hash.
+usuarios, sin exponer la versión del token (el claim `ver` es un detalle
+interno del JWT que solo evalúa el conversor de autenticación):
+`{ idUsuario, username, rol, idTrabajador, activo, debeCambiarPassword }`.
+Ninguna respuesta nunca incluye la contraseña ni su hash.
 
 Reglas de negocio (aplicadas por `UsuarioService`):
 
