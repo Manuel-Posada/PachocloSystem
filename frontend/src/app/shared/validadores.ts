@@ -51,6 +51,35 @@ export function unoDe(permitidos: readonly unknown[], mensaje: string): Validato
     vacio(control.value) || permitidos.includes(control.value) ? null : { unoDe: mensaje };
 }
 
+/** Al menos `minimo` caracteres sin contar los espacios de los extremos. Vacío lo valida `obligatorio`. */
+export function longitudMinima(minimo: number, mensaje: string): ValidatorFn {
+  return (control) =>
+    vacio(control.value) || String(control.value).trim().length >= minimo
+      ? null
+      : { longitudMinima: mensaje };
+}
+
+/** Alguna letra: no solo números o símbolos. Vacío se acepta (lo valida `obligatorio` si toca). */
+export function contieneLetra(mensaje: string): ValidatorFn {
+  return (control) =>
+    vacio(control.value) || CONTIENE_LETRA.test(String(control.value))
+      ? null
+      : { contieneLetra: mensaje };
+}
+
+/** Como `@DecimalMin` + `@DecimalMax`: número (con decimales) dentro del rango. Vacío lo valida `obligatorio`. */
+export function numeroEntre(min: number, max: number, mensaje: string): ValidatorFn {
+  return (control) => {
+    if (vacio(control.value)) {
+      return null;
+    }
+    const numero = Number(control.value);
+    return Number.isFinite(numero) && numero >= min && numero <= max
+      ? null
+      : { numeroEntre: mensaje };
+  };
+}
+
 /**
  * Texto con contenido real: al menos `minimo` caracteres (sin contar los
  * espacios de los extremos) y alguna letra, no solo números o símbolos.

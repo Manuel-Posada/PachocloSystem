@@ -1,10 +1,13 @@
 import { FormControl, Validators } from '@angular/forms';
 import {
+  contieneLetra,
   edad,
   enteroEntre,
   especialidad,
   habitacion,
   longitudMaxima,
+  longitudMinima,
+  numeroEntre,
   nombrePersona,
   obligatorio,
   primerError,
@@ -142,5 +145,41 @@ describe('unoDe', () => {
 
   it.each(['tableta', 'PASTILLA'])('rechaza %j', (valor) => {
     expect(validar(validador, valor)).toEqual({ unoDe: 'No válido.' });
+  });
+});
+
+describe('longitudMinima', () => {
+  const validador = longitudMinima(5, 'Corto.');
+
+  it.each(['abcde', '  abcde  ', '', null])('acepta %j', (valor) => {
+    expect(validar(validador, valor)).toBeNull();
+  });
+
+  it.each(['abcd', '  ab  '])('rechaza %j', (valor) => {
+    expect(validar(validador, valor)).toEqual({ longitudMinima: 'Corto.' });
+  });
+});
+
+describe('contieneLetra', () => {
+  const validador = contieneLetra('Sin letras.');
+
+  it.each(['abc', '120 mg', 'Ñ', '', null])('acepta %j', (valor) => {
+    expect(validar(validador, valor)).toBeNull();
+  });
+
+  it.each(['12345', '--- 1'])('rechaza %j', (valor) => {
+    expect(validar(validador, valor)).toEqual({ contieneLetra: 'Sin letras.' });
+  });
+});
+
+describe('numeroEntre', () => {
+  const validador = numeroEntre(30, 45, 'Fuera.');
+
+  it.each([30, 36.6, 45, '37.2', null, ''])('acepta %j', (valor) => {
+    expect(validar(validador, valor)).toBeNull();
+  });
+
+  it.each([29.9, 45.1, 'abc'])('rechaza %j', (valor) => {
+    expect(validar(validador, valor)).toEqual({ numeroEntre: 'Fuera.' });
   });
 });
