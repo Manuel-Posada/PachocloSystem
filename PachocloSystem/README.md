@@ -166,17 +166,21 @@ inexistente, stock insuficiente, vencido o servicio caído) no se crea el regist
 
 ```bash
 # Terminal 1
-cd MedicamentosService && MEDICAMENTOS_API_KEY=clave-local-123 ./mvnw spring-boot:run
+cd MedicamentosService && MEDICAMENTOS_API_KEY=<clave-del-servicio> ./mvnw spring-boot:run
 # Terminal 2
-cd PachocloSystem && MEDICAMENTOS_API_KEY=clave-local-123 ADMIN_PASSWORD=Admin12345 \
-  JWT_SECRET=una-clave-jwt-local-de-al-menos-32-bytes ./mvnw spring-boot:run
+cd PachocloSystem && MEDICAMENTOS_API_KEY=<clave-del-servicio> ADMIN_PASSWORD=<contraseña-admin> \
+  JWT_SECRET=<secreto-jwt-32-bytes> ./mvnw spring-boot:run
 
 # Terminal 3: login y llamadas
 TOKEN=$(curl -s -X POST localhost:8080/api/auth/login -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"Admin12345"}' | sed 's/.*"token":"\([^"]*\)".*/\1/')
+  -d '{"username":"admin","password":"<contraseña-admin>"}' | sed 's/.*"token":"\([^"]*\)".*/\1/')
 curl localhost:8080/api/medicamentos -H "Authorization: Bearer $TOKEN"   # 200
 curl localhost:8081/api/medicamentos                                     # 401: falta X-Api-Key
 ```
+
+> Los valores entre `<...>` son marcadores: sustitúyalos por los suyos. Este ejemplo es solo para
+> desarrollo; en producción no use valores de ejemplo, genere claves y contraseñas propias y no las
+> guarde en el repositorio.
 
 ## Usuarios, roles y autenticación
 
