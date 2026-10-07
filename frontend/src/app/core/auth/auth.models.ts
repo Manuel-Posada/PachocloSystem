@@ -13,10 +13,14 @@ export interface LoginResponse {
   rol: Rol;
 }
 
-/** `GET /api/auth/me`. `idTrabajador` es `null` para el administrador. */
+/**
+ * `UsuarioResponse` (`GET /api/auth/me` y `/api/usuarios`). `idTrabajador` es
+ * `null` para el administrador. Nunca trae el hash de la contraseña.
+ */
 export interface Usuario {
   idUsuario: string;
   username: string;
   rol: Rol;
   idTrabajador: string | null;
+  activo: boolean;
 }

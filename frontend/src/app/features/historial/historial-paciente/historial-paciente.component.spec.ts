@@ -36,12 +36,14 @@ describe('HistorialPacienteComponent', () => {
     username: 'eva',
     rol: 'DOCTOR',
     idTrabajador: 'DOC-0001',
+    activo: true,
   };
   const admin: Usuario = {
     idUsuario: 'USR-0001',
     username: 'admin',
     rol: 'ADMIN',
     idTrabajador: null,
+    activo: true,
   };
 
   const historial = {

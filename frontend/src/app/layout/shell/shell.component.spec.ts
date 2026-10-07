@@ -11,6 +11,7 @@ describe('ShellComponent', () => {
     username: 'ana.ruiz',
     rol: 'DOCTOR',
     idTrabajador: 'DOC-0001',
+    activo: true,
   });
   const auth = { usuario, cerrarSesion: vi.fn() };
 

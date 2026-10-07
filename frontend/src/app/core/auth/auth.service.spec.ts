@@ -12,6 +12,7 @@ const ADMIN: Usuario = {
   username: 'admin',
   rol: 'ADMIN',
   idTrabajador: null,
+  activo: true,
 };
 
 describe('AuthService', () => {
