@@ -38,8 +38,10 @@ export const routes: Routes = [
       {
         path: 'medicamentos',
         title: 'Medicamentos · PachocloSystem',
-        loadComponent: enConstruccion,
-        data: { titulo: 'Medicamentos' },
+        loadComponent: () =>
+          import('./features/medicamentos/medicamentos-lista/medicamentos-lista.component').then(
+            (m) => m.MedicamentosListaComponent,
+          ),
       },
       {
         path: 'historial',

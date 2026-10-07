@@ -1,0 +1,161 @@
+<header class="lista-encabezado">
+  <h1>Medicamentos</h1>
+  <button mat-flat-button type="button" (click)="nuevo()">
+    <mat-icon>add</mat-icon>
+    Nuevo medicamento
+  </button>
+</header>
+
+<nav mat-tab-nav-bar [tabPanel]="panel" aria-label="Vistas del inventario" class="pestanas">
+  @for (pestana of pestanas; track pestana.vista) {
+    <button
+      mat-tab-link
+      type="button"
+      [active]="vista() === pestana.vista"
+      (click)="cambiarVista(pestana.vista)"
+    >
+      {{ pestana.etiqueta }}
+    </button>
+  }
+</nav>
+
+<mat-tab-nav-panel #panel>
+  @switch (vista()) {
+    @case ('todos') {
+      <mat-form-field class="lista-busqueda" subscriptSizing="dynamic">
+        <mat-label>Buscar por ID, nombre o principio activo</mat-label>
+        <mat-icon matPrefix>search</mat-icon>
+        <input matInput type="search" [formControl]="busqueda" />
+      </mat-form-field>
+    }
+    @case ('por-vencer') {
+      <mat-form-field class="dias">
+        <mat-label>Vencen en los próximos (días)</mat-label>
+        <input matInput type="number" [formControl]="dias" min="1" max="365" step="1" />
+        <mat-error>{{ primerError(dias) }}</mat-error>
+      </mat-form-field>
+    }
+  }
+
+  <div class="lista-progreso">
+    @if (cargando()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Cargando medicamentos" />
+    }
+  </div>
+
+  @if (errores().length > 0) {
+    <div class="aviso-servicio" role="alert">
+      <mat-icon aria-hidden="true">warning</mat-icon>
+      <div class="aviso-texto">
+        @for (mensaje of errores(); track $index) {
+          <p>{{ mensaje }}</p>
+        }
+      </div>
+      <button mat-stroked-button type="button" (click)="recargar()">Reintentar</button>
+    </div>
+  }
+
+  @if (medicamentos().length > 0) {
+    <div class="lista-tabla">
+      <table mat-table [dataSource]="medicamentos()">
+        <ng-container matColumnDef="idMedicamento">
+          <th mat-header-cell *matHeaderCellDef>ID</th>
+          <td mat-cell *matCellDef="let m">{{ m.idMedicamento }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="medicamento">
+          <th mat-header-cell *matHeaderCellDef>Medicamento</th>
+          <td mat-cell *matCellDef="let m">
+            <span class="principal">{{ descripcion(m) }}</span>
+            <span class="secundario">
+              {{ m.principioActivo }} · {{ etiquetaPresentacion(m) }} ·
+              {{ m.laboratorio }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="lote">
+          <th mat-header-cell *matHeaderCellDef>Lote</th>
+          <td mat-cell *matCellDef="let m">
+            <span class="principal">{{ m.lote }}</span>
+            <span class="secundario">{{ m.ubicacion }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="stock">
+          <th mat-header-cell *matHeaderCellDef class="celda-numero">Stock</th>
+          <td mat-cell *matCellDef="let m" class="celda-numero">
+            <span class="principal">{{ m.cantidadStock }}</span>
+            <span class="secundario">mín. {{ m.stockMinimo }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="vencimiento">
+          <th mat-header-cell *matHeaderCellDef>Vence</th>
+          <td mat-cell *matCellDef="let m">{{ formatearFecha(m.fechaVencimiento) }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="estado">
+          <th mat-header-cell *matHeaderCellDef>Estado</th>
+          <td mat-cell *matCellDef="let m">
+            @if (m.vencido) {
+              <span class="insignia insignia-vencido">Vencido</span>
+            }
+            @if (m.stockBajo) {
+              <span class="insignia insignia-stock-bajo">Stock bajo</span>
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="acciones">
+          <th mat-header-cell *matHeaderCellDef><span class="solo-lectores">Acciones</span></th>
+          <td mat-cell *matCellDef="let m" class="celda-acciones">
+            <button
+              mat-icon-button
+              type="button"
+              matTooltip="Entrada de stock"
+              [attr.aria-label]="'Entrada de stock de ' + descripcion(m)"
+              (click)="moverStock(m, 'entrada')"
+            >
+              <mat-icon>add_circle</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              type="button"
+              matTooltip="Salida de stock"
+              [attr.aria-label]="'Salida de stock de ' + descripcion(m)"
+              (click)="moverStock(m, 'salida')"
+            >
+              <mat-icon>remove_circle</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              type="button"
+              matTooltip="Editar"
+              [attr.aria-label]="'Editar ' + descripcion(m)"
+              (click)="editar(m)"
+            >
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              type="button"
+              matTooltip="Eliminar"
+              [attr.aria-label]="'Eliminar ' + descripcion(m)"
+              (click)="eliminar(m)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columnas"></tr>
+        <tr mat-row *matRowDef="let fila; columns: columnas"></tr>
+      </table>
+    </div>
+  } @else if (mensajeVacio(); as mensaje) {
+    <div class="lista-estado">
+      <p>{{ mensaje }}</p>
+    </div>
+  }
+</mat-tab-nav-panel>
