@@ -22,8 +22,10 @@ export const routes: Routes = [
       {
         path: 'pacientes',
         title: 'Pacientes · PachocloSystem',
-        loadComponent: enConstruccion,
-        data: { titulo: 'Pacientes' },
+        loadComponent: () =>
+          import('./features/pacientes/pacientes-lista/pacientes-lista.component').then(
+            (m) => m.PacientesListaComponent,
+          ),
       },
       {
         path: 'trabajadores',
