@@ -1,0 +1,55 @@
+.contexto {
+  margin: 0 0 16px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.grupo {
+  margin: 0 0 16px;
+  padding: 0;
+  border: none;
+
+  legend {
+    padding: 0;
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  mat-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 8px;
+  }
+}
+
+mat-error.error-grupo,
+.grupo mat-error {
+  display: block;
+  margin: -8px 0 16px;
+  font: var(--mat-sys-body-small);
+}
+
+.descuento {
+  margin-bottom: 8px;
+
+  .nota {
+    margin: 8px 0;
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .fila-campos {
+    margin-top: 8px;
+  }
+}
+
+.aviso-inventario {
+  margin: 8px 0;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+
+  p {
+    margin: 4px 0;
+  }
+}

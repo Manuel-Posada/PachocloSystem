@@ -1,0 +1,122 @@
+<h2 mat-dialog-title>
+  {{ medicamento ? 'Editar medicamento ' + medicamento.idMedicamento : 'Nuevo medicamento' }}
+</h2>
+
+<form [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+  <mat-dialog-content>
+    <app-errores-formulario [mensajes]="errores()" />
+
+    <div class="fila-campos">
+      <mat-form-field>
+        <mat-label>Nombre comercial</mat-label>
+        <input matInput formControlName="nombre" maxlength="80" required cdkFocusInitial />
+        <mat-error>{{ primerError(formulario.controls.nombre) }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Principio activo</mat-label>
+        <input matInput formControlName="principioActivo" maxlength="80" required />
+        <mat-error>{{ primerError(formulario.controls.principioActivo) }}</mat-error>
+      </mat-form-field>
+    </div>
+
+    <div class="fila-campos">
+      <mat-form-field>
+        <mat-label>Presentación</mat-label>
+        <select matNativeControl formControlName="presentacion" required>
+          <option value="" disabled>Seleccione…</option>
+          @for (p of presentaciones; track p) {
+            <option [value]="p">{{ etiquetasPresentacion[p] }}</option>
+          }
+        </select>
+        <mat-error>{{ primerError(formulario.controls.presentacion) }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Concentración</mat-label>
+        <input
+          matInput
+          formControlName="concentracion"
+          maxlength="40"
+          placeholder="p. ej. 500 mg"
+          required
+        />
+        <mat-error>{{ primerError(formulario.controls.concentracion) }}</mat-error>
+      </mat-form-field>
+    </div>
+
+    <div class="fila-campos">
+      <mat-form-field>
+        <mat-label>Laboratorio</mat-label>
+        <input matInput formControlName="laboratorio" maxlength="80" required />
+        <mat-error>{{ primerError(formulario.controls.laboratorio) }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Lote</mat-label>
+        <input matInput formControlName="lote" maxlength="40" required />
+        <mat-error>{{ primerError(formulario.controls.lote) }}</mat-error>
+      </mat-form-field>
+    </div>
+
+    <div class="fila-campos">
+      @if (medicamento) {
+        <mat-form-field>
+          <mat-label>Stock actual</mat-label>
+          <input matInput [value]="medicamento.cantidadStock" disabled />
+          <mat-hint>Solo cambia con entradas y salidas.</mat-hint>
+        </mat-form-field>
+      } @else {
+        <mat-form-field>
+          <mat-label>Stock inicial</mat-label>
+          <input
+            matInput
+            type="number"
+            formControlName="cantidadStock"
+            min="0"
+            max="1000000"
+            step="1"
+            required
+          />
+          <mat-error>{{ primerError(formulario.controls.cantidadStock) }}</mat-error>
+        </mat-form-field>
+      }
+      <mat-form-field>
+        <mat-label>Stock mínimo</mat-label>
+        <input
+          matInput
+          type="number"
+          formControlName="stockMinimo"
+          min="0"
+          max="1000000"
+          step="1"
+          required
+        />
+        <mat-error>{{ primerError(formulario.controls.stockMinimo) }}</mat-error>
+      </mat-form-field>
+    </div>
+
+    <div class="fila-campos">
+      <mat-form-field>
+        <mat-label>Fecha de vencimiento</mat-label>
+        <input matInput type="date" formControlName="fechaVencimiento" required />
+        <mat-error>{{ primerError(formulario.controls.fechaVencimiento) }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Ubicación</mat-label>
+        <input
+          matInput
+          formControlName="ubicacion"
+          maxlength="80"
+          placeholder="p. ej. Farmacia, estante A"
+          required
+        />
+        <mat-error>{{ primerError(formulario.controls.ubicacion) }}</mat-error>
+      </mat-form-field>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close [disabled]="enviando()">Cancelar</button>
+    <button mat-flat-button type="submit" [disabled]="enviando()">
+      {{ medicamento ? 'Guardar cambios' : 'Registrar' }}
+    </button>
+  </mat-dialog-actions>
+</form>

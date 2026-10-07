@@ -1,0 +1,72 @@
+<a mat-button routerLink="/pacientes" class="volver">
+  <mat-icon>arrow_back</mat-icon>
+  Pacientes
+</a>
+
+@if (carga(); as carga) {
+  @if (carga.paciente; as paciente) {
+    <header class="lista-encabezado">
+      <div>
+        <h1>Historial de {{ paciente.nombre }}</h1>
+        <p class="datos">
+          {{ paciente.idPaciente }} · {{ paciente.edad }} años · Habitación
+          {{ paciente.habitacion }}
+        </p>
+      </div>
+      @if (!motivoSoloConsulta()) {
+        <button mat-flat-button type="button" (click)="nuevo(paciente)">
+          <mat-icon>add</mat-icon>
+          Nuevo registro
+        </button>
+      }
+    </header>
+
+    @if (motivoSoloConsulta(); as motivo) {
+      <p class="solo-consulta" role="note">
+        <mat-icon aria-hidden="true">visibility</mat-icon>
+        {{ motivo }}
+      </p>
+    }
+
+    <mat-form-field class="lista-busqueda" subscriptSizing="dynamic">
+      <mat-label>Buscar por autor (nombre o ID)</mat-label>
+      <mat-icon matPrefix>search</mat-icon>
+      <input matInput type="search" [formControl]="busqueda" />
+    </mat-form-field>
+
+    <div class="lista-progreso">
+      @if (cargando()) {
+        <mat-progress-bar mode="indeterminate" aria-label="Cargando el historial" />
+      }
+    </div>
+
+    @if (errores().length > 0) {
+      <div class="lista-estado lista-estado-error" role="alert">
+        @for (mensaje of errores(); track $index) {
+          <p>{{ mensaje }}</p>
+        }
+        <button mat-stroked-button type="button" (click)="recargar()">Reintentar</button>
+      </div>
+    } @else if (registros().length > 0) {
+      <app-registros [registros]="registros()" />
+    } @else if (!cargando()) {
+      <div class="lista-estado">
+        @if (filtro()) {
+          <p>Ningún registro de este paciente tiene un autor que coincida con «{{ filtro() }}».</p>
+        } @else {
+          <p>Este paciente todavía no tiene registros.</p>
+        }
+      </div>
+    }
+  } @else {
+    <div class="lista-estado lista-estado-error" role="alert">
+      @for (mensaje of carga.errores; track $index) {
+        <p>{{ mensaje }}</p>
+      }
+    </div>
+  }
+} @else {
+  <div class="lista-progreso">
+    <mat-progress-bar mode="indeterminate" aria-label="Cargando el paciente" />
+  </div>
+}

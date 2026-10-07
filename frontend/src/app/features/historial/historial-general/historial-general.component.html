@@ -1,0 +1,44 @@
+<header class="lista-encabezado">
+  <h1>Historial clínico</h1>
+</header>
+<p class="nota">
+  Registros de todos los pacientes, del más reciente al más antiguo. Para añadir uno, abra el
+  historial del paciente desde Pacientes.
+</p>
+
+<div class="filtros">
+  <mat-form-field subscriptSizing="dynamic">
+    <mat-label>Buscar en</mat-label>
+    <select matNativeControl [formControl]="filtro">
+      @for (opcion of filtros; track opcion.valor) {
+        <option [value]="opcion.valor">{{ opcion.etiqueta }}</option>
+      }
+    </select>
+  </mat-form-field>
+  <mat-form-field class="lista-busqueda" subscriptSizing="dynamic">
+    <mat-label>Nombre o ID</mat-label>
+    <mat-icon matPrefix>search</mat-icon>
+    <input matInput type="search" [formControl]="busqueda" />
+  </mat-form-field>
+</div>
+
+<div class="lista-progreso">
+  @if (cargando()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Cargando el historial" />
+  }
+</div>
+
+@if (errores().length > 0) {
+  <div class="lista-estado lista-estado-error" role="alert">
+    @for (mensaje of errores(); track $index) {
+      <p>{{ mensaje }}</p>
+    }
+    <button mat-stroked-button type="button" (click)="recargar()">Reintentar</button>
+  </div>
+} @else if (registros().length > 0) {
+  <app-registros [registros]="registros()" [mostrarPaciente]="true" />
+} @else if (!cargando()) {
+  <div class="lista-estado">
+    <p>{{ mensajeVacio() }}</p>
+  </div>
+}

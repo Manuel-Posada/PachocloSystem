@@ -1,0 +1,23 @@
+.principal {
+  display: block;
+}
+
+.secundario {
+  display: block;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.insignia {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: var(--mat-sys-label-medium);
+  background-color: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.insignia-inactivo {
+  background-color: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface-variant);
+}

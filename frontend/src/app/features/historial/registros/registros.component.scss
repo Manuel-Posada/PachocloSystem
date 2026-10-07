@@ -1,0 +1,58 @@
+.registros {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.registro {
+  padding: 12px 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+
+  p {
+    margin: 8px 0 0;
+  }
+}
+
+.cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.tipo {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: var(--mat-sys-label-medium);
+  background-color: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.tipo-diagnostico {
+  background-color: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.tipo-medicacion {
+  background-color: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}
+
+.fecha,
+.autor,
+.paciente,
+.medicacion {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// El contenido es texto libre del usuario: se respetan sus saltos de línea.
+.contenido {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}

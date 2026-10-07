@@ -1,0 +1,59 @@
+.pestanas {
+  margin-top: 16px;
+}
+
+.dias {
+  width: 100%;
+  max-width: 260px;
+  margin-top: 16px;
+}
+
+// Aviso no bloqueante: el módulo sigue usable (pestañas, filtros, datos ya cargados).
+.aviso-servicio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+
+  .aviso-texto {
+    flex: 1 1 240px;
+  }
+
+  p {
+    margin: 4px 0;
+  }
+}
+
+.principal {
+  display: block;
+}
+
+.secundario {
+  display: block;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.insignia {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: var(--mat-sys-label-medium);
+  white-space: nowrap;
+}
+
+.insignia-vencido {
+  background-color: var(--mat-sys-error);
+  color: var(--mat-sys-on-error);
+}
+
+.insignia-stock-bajo {
+  background-color: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}

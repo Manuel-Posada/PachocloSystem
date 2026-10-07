@@ -1,0 +1,3 @@
+# Prettier exige LF: sin esto, en Windows con core.autocrlf=true el checkout deja CRLF
+# y "npm run format:check" falla en todos los archivos.
+* text=auto eol=lf
