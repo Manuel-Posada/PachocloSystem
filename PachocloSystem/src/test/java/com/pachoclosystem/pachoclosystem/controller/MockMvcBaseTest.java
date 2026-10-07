@@ -1,6 +1,8 @@
 package com.pachoclosystem.pachoclosystem.controller;
 
 import com.jayway.jsonpath.JsonPath;
+import com.pachoclosystem.pachoclosystem.BaseDeDatosDePruebas;
+import com.pachoclosystem.pachoclosystem.config.AdminInicial;
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
 import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
@@ -12,10 +14,13 @@ import com.pachoclosystem.pachoclosystem.security.LimitadorIntentosLogin;
 import com.pachoclosystem.pachoclosystem.service.UsuarioService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
+import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
@@ -31,9 +36,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Base común de los tests MockMvc: arranca la aplicación completa y vacía los
- * repositorios en memoria antes de cada test, de modo que cada prueba es
- * independiente del orden de ejecución y de los datos creados por otras pruebas.
+ * Base común de los tests MockMvc: arranca la aplicación completa contra la base
+ * PostgreSQL de pruebas y la vacía antes de cada test (salvo el administrador),
+ * de modo que cada prueba es independiente del orden de ejecución y de los datos
+ * creados por otras pruebas.
  *
  * <p>Ofrece tokens JWT reales para los tres roles ({@link #performComo(Rol, MockHttpServletRequestBuilder)}):
  * el administrador lo crea {@code AdminInicial} al arrancar y los usuarios
@@ -71,15 +77,30 @@ public abstract class MockMvcBaseTest {
     @Autowired
     protected LimitadorIntentosLogin limitadorIntentos;
 
+    @Autowired
+    protected JdbcClient jdbc;
+
+    @Autowired
+    private AdminInicial adminInicial;
+
+    @Autowired
+    private Environment entorno;
+
     /** Token de apoyo por rol (uno por test, creado bajo demanda). */
     private final Map<Rol, String> tokensPorRol = new EnumMap<>(Rol.class);
 
+    /**
+     * Vacía la base de pruebas. El administrador de este contexto se conserva; si
+     * no está (otro contexto recreó el esquema al arrancar), se vuelve a crear
+     * como al arrancar la aplicación.
+     */
     @BeforeEach
-    void limpiarRepositorios() {
-        repositorioPacientes.obtenerTodos()
-                .forEach(paciente -> repositorioPacientes.eliminar(paciente.getIdPaciente()));
-        repositorioTrabajadores.obtenerTodos()
-                .forEach(trabajador -> repositorioTrabajadores.eliminarTrabajador(trabajador.getIdTrabajador()));
+    void limpiarBaseDeDatos() {
+        String admin = entorno.getProperty(AdminInicial.PROP_USERNAME, "admin").trim();
+        BaseDeDatosDePruebas.vaciar(jdbc, admin);
+        if (!repositorioUsuarios.existePorUsername(admin)) {
+            adminInicial.run(new DefaultApplicationArguments());
+        }
     }
 
     /**
@@ -163,8 +184,7 @@ public abstract class MockMvcBaseTest {
 
     /**
      * Token del usuario vinculado al trabajador {@code idTrabajador}; si aún no
-     * tiene usuario, lo crea con el rol indicado y un username único (el
-     * repositorio de usuarios no se vacía entre tests).
+     * tiene usuario, lo crea con el rol indicado y un username único.
      */
     protected String tokenDeTrabajador(Rol rol, String idTrabajador) {
         Usuario usuario = repositorioUsuarios.buscarPorIdTrabajador(idTrabajador);

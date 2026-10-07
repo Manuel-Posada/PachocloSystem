@@ -1,33 +1,34 @@
 package com.pachoclosystem.pachoclosystem.service;
 
 import com.pachoclosystem.pachoclosystem.dto.RegistroResponse;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.pachoclosystem.pachoclosystem.repository.IHistorialIdempotenciaRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
- * Claves {@code Idempotency-Key} ya usadas al crear registros del historial, en
- * memoria (como el resto de datos: al reiniciar se pierden).
+ * Claves {@code Idempotency-Key} ya usadas al crear registros del historial. Se
+ * guardan en PostgreSQL ({@link IHistorialIdempotenciaRepository}), así que
+ * sobreviven a un reinicio; el cerrojo de cada clave está en la JVM (una sola
+ * instancia de PachocloSystem).
  *
  * <ul>
  *   <li>Cada clave recuerda con qué usuario, paciente y cuerpo (huella) se usó y,
  *       si se llegó a crear, el registro. Sin registro significa que el intento
  *       no se pudo confirmar y se puede repetir con la misma petición.</li>
  *   <li>Cada entrada caduca a las {@code historial.idempotencia.caducidad} (24 h
- *       por defecto) de guardarse.</li>
- *   <li>Como mucho {@code historial.idempotencia.max-entradas} (10 000 por
- *       defecto): al pasarse se descartan primero las caducadas y después las más
- *       antiguas. Una clave descartada se trataría como nueva.</li>
+ *       por defecto) de guardarse; al guardar se borran las caducadas. No hay
+ *       tope de entradas.</li>
+ *   <li>{@link #guardar} se une a la transacción en curso si la hay: así el
+ *       registro y su clave se guardan juntos o no se guarda ninguno.</li>
  *   <li>{@link #conClave(String, Supplier)} ejecuta con el cerrojo de una clave:
  *       las peticiones con la misma clave van de una en una. El cerrojo es de esa
  *       clave sola (dura mientras haya peticiones con ella), así que una petición
@@ -53,27 +54,19 @@ public class AlmacenIdempotenciaHistorial {
         private volatile int peticiones;
     }
 
+    private final IHistorialIdempotenciaRepository repositorio;
     private final Clock reloj;
     private final Duration caducidad;
-    private final int maximoEntradas;
-    /** En orden de inserción, que es el de tiempo: la primera es la más antigua. Se protege con su monitor. */
-    private final LinkedHashMap<String, Uso> usos = new LinkedHashMap<>();
     private final ConcurrentHashMap<String, Cerrojo> cerrojos = new ConcurrentHashMap<>();
 
-    @Autowired
-    public AlmacenIdempotenciaHistorial(@Value("${historial.idempotencia.caducidad:24h}") Duration caducidad,
-                                        @Value("${historial.idempotencia.max-entradas:10000}") int maximoEntradas) {
-        this(Clock.systemUTC(), caducidad, maximoEntradas);
-    }
-
-    AlmacenIdempotenciaHistorial(Clock reloj, Duration caducidad, int maximoEntradas) {
-        if (caducidad.isNegative() || caducidad.isZero() || maximoEntradas < 1) {
-            throw new IllegalStateException("La caducidad y el máximo de entradas de idempotencia "
-                    + "del historial deben ser positivos.");
+    public AlmacenIdempotenciaHistorial(IHistorialIdempotenciaRepository repositorio, Clock reloj,
+                                        @Value("${historial.idempotencia.caducidad:24h}") Duration caducidad) {
+        if (caducidad.isNegative() || caducidad.isZero()) {
+            throw new IllegalStateException("La caducidad de idempotencia del historial debe ser positiva.");
         }
+        this.repositorio = repositorio;
         this.reloj = reloj;
         this.caducidad = caducidad;
-        this.maximoEntradas = maximoEntradas;
     }
 
     /** Ejecuta {@code accion} con el cerrojo de la clave: nadie más con esa clave entra a la vez. */
@@ -94,31 +87,21 @@ public class AlmacenIdempotenciaHistorial {
 
     /** El uso guardado de esa clave, si existe y no ha caducado. */
     public Optional<Uso> buscar(String clave) {
-        synchronized (usos) {
-            Uso uso = usos.get(clave);
-            if (uso != null && caducado(uso)) {
-                usos.remove(clave);
-                return Optional.empty();
-            }
-            return Optional.ofNullable(uso);
-        }
+        return repositorio.buscarVigente(clave, limite())
+                .map(u -> new Uso(u.idUsuario(), u.idPaciente(), u.huella(), u.registro(), u.usadaEn()));
     }
 
     /** Guarda (o sustituye) el uso de una clave; {@code registro} null = sin confirmar. */
     public void guardar(String clave, String idUsuario, String idPaciente, String huella,
                         RegistroResponse registro) {
-        synchronized (usos) {
-            usos.remove(clave);
-            usos.put(clave, new Uso(idUsuario, idPaciente, huella, registro, reloj.instant()));
-            purgar();
-        }
+        Instant ahora = reloj.instant().truncatedTo(ChronoUnit.MICROS);
+        repositorio.guardar(clave, idUsuario, idPaciente, huella, registro, ahora);
+        repositorio.purgarCaducadas(ahora.minus(caducidad));
     }
 
-    /** Número de claves guardadas (para pruebas y diagnóstico). */
+    /** Número de claves vigentes (para pruebas y diagnóstico). */
     public int tamano() {
-        synchronized (usos) {
-            return usos.size();
-        }
+        return Math.toIntExact(repositorio.contarVigentes(limite()));
     }
 
     /** Peticiones con esa clave en curso o esperando su turno (para pruebas y diagnóstico). */
@@ -136,19 +119,8 @@ public class AlmacenIdempotenciaHistorial {
         return cerrojos.size();
     }
 
-    private void purgar() {
-        Iterator<Uso> iterador = usos.values().iterator();
-        while (iterador.hasNext()) {
-            Uso masAntiguo = iterador.next();
-            boolean sobra = caducado(masAntiguo) || usos.size() > maximoEntradas;
-            if (!sobra) {
-                break;
-            }
-            iterador.remove();
-        }
-    }
-
-    private boolean caducado(Uso uso) {
-        return !reloj.instant().isBefore(uso.usadaEn().plus(caducidad));
+    /** Una clave usada en este instante o antes está caducada. */
+    private Instant limite() {
+        return reloj.instant().minus(caducidad);
     }
 }

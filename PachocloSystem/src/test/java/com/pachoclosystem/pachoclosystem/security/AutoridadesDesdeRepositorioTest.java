@@ -45,11 +45,10 @@ class AutoridadesDesdeRepositorioTest extends MockMvcBaseTest {
         // El token original certifica DOCTOR.
         assertThat(jwtDecoder.decode(token).getClaimAsString("rol")).isEqualTo("DOCTOR");
 
-        // Cambio de rol directo en el repositorio conservando el id: Usuario no
-        // expone mutación de rol, así que se reemplaza el objeto almacenado.
-        Usuario conRolEnfermero = new Usuario(usuario.getIdUsuario(), usuario.getUsername(),
-                usuario.getPasswordHash(), Rol.ENFERMERO, usuario.getIdTrabajador());
-        assertThat(repositorioUsuarios.guardar(conRolEnfermero)).isTrue();
+        // Cambio de rol directo en el repositorio (sin pasar por el servicio ni
+        // tocar la versión del token), conservando el id y el trabajador.
+        assertThat(repositorioUsuarios.cambiarRol(usuario.getIdUsuario(), Rol.ENFERMERO,
+                usuario.getIdTrabajador())).isTrue();
 
         // El token no ha cambiado, pero la petición relee el repositorio.
         mockMvc.perform(get("/api/auth/me")

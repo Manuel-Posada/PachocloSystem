@@ -2,7 +2,6 @@ package com.pachoclosystem.pachoclosystem.repository;
 
 import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
-import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,15 +12,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Repositorio de usuarios en memoria basado en {@link ConcurrentHashMap}.
+ * Doble en memoria de {@link IUsuarioRepository} para los tests unitarios, sin
+ * base de datos ({@link ConcurrentHashMap}). Devuelve siempre el mismo objeto
+ * por usuario; la concurrencia real se prueba contra PostgreSQL.
  *
  * <p>Ningún método está {@code synchronized}: la unicidad de username y de
  * trabajador vinculado se resuelve con {@code putIfAbsent} sobre índices
  * auxiliares, operación atómica en las colecciones concurrentes. No se usa el
  * patrón leer-comprobar-escribir.</p>
  */
-@Repository
-public class UsuarioRepositoryImpl implements IUsuarioRepository {
+public class UsuarioRepositoryEnMemoria implements IUsuarioRepository {
 
     private static final String PREFIJO_ID = "USR";
 
@@ -122,8 +122,50 @@ public class UsuarioRepositoryImpl implements IUsuarioRepository {
     }
 
     @Override
+    public boolean desactivar(String idUsuario) {
+        Usuario usuario = buscarPorId(idUsuario);
+        if (usuario == null || !usuario.isActivo()) {
+            return false;
+        }
+        usuario.desactivar();
+        return true;
+    }
+
+    @Override
+    public void reactivar(String idUsuario) {
+        Usuario usuario = buscarPorId(idUsuario);
+        if (usuario != null) {
+            usuario.reactivar();
+        }
+    }
+
+    @Override
+    public void cambiarPassword(String idUsuario, String nuevoHash, boolean exigirCambio) {
+        Usuario usuario = buscarPorId(idUsuario);
+        if (usuario != null) {
+            usuario.cambiarPassword(nuevoHash, exigirCambio);
+        }
+    }
+
+    @Override
     public Usuario buscarPorId(String id) {
         return id == null ? null : usuarios.get(id);
+    }
+
+    @Override
+    public Usuario buscarPorIdParaActualizar(String id) {
+        return buscarPorId(id);
+    }
+
+    @Override
+    public long contarAdministradoresActivos() {
+        return usuarios.values().stream().filter(u -> u.getRol() == Rol.ADMIN && u.isActivo()).count();
+    }
+
+    /** Sin efecto en memoria: los tests unitarios no prueban la concurrencia. */
+    @Override
+    public void bloquearAdministracion() {
+        // Sin efecto.
     }
 
     @Override

@@ -8,8 +8,8 @@ import com.pachoclosystem.pachoclosystem.model.Enfermero;
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
 import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
-import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
-import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryEnMemoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -27,15 +27,15 @@ class UsuarioServiceGestionTest {
 
     private static final String PASSWORD_VALIDA = "clave-de-pruebas-10";
 
-    private UsuarioRepositoryImpl repositorio;
+    private UsuarioRepositoryEnMemoria repositorio;
     private TrabajadorService trabajadorService;
     private PasswordEncoder encoder;
     private UsuarioService servicio;
 
     @BeforeEach
     void preparar() {
-        repositorio = new UsuarioRepositoryImpl();
-        trabajadorService = new TrabajadorService(new TrabajadorRepositoryImpl(), repositorio);
+        repositorio = new UsuarioRepositoryEnMemoria();
+        trabajadorService = new TrabajadorService(new TrabajadorRepositoryEnMemoria(), repositorio);
         encoder = new BCryptPasswordEncoder();
         servicio = new UsuarioService(repositorio, trabajadorService, encoder);
     }

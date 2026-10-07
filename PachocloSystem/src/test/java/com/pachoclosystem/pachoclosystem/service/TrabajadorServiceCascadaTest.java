@@ -4,8 +4,8 @@ import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
-import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
-import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryEnMemoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -22,15 +22,15 @@ class TrabajadorServiceCascadaTest {
 
     private static final String PASSWORD_DE_PRUEBA = "password-de-prueba-12345";
 
-    private TrabajadorRepositoryImpl repositorioTrabajadores;
-    private UsuarioRepositoryImpl repositorioUsuarios;
+    private TrabajadorRepositoryEnMemoria repositorioTrabajadores;
+    private UsuarioRepositoryEnMemoria repositorioUsuarios;
     private TrabajadorService servicioTrabajadores;
     private UsuarioService servicioUsuarios;
 
     @BeforeEach
     void preparar() {
-        repositorioTrabajadores = new TrabajadorRepositoryImpl();
-        repositorioUsuarios = new UsuarioRepositoryImpl();
+        repositorioTrabajadores = new TrabajadorRepositoryEnMemoria();
+        repositorioUsuarios = new UsuarioRepositoryEnMemoria();
         servicioTrabajadores = new TrabajadorService(repositorioTrabajadores, repositorioUsuarios);
         servicioUsuarios = new UsuarioService(repositorioUsuarios, servicioTrabajadores,
                 new BCryptPasswordEncoder());

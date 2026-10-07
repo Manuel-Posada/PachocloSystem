@@ -10,6 +10,7 @@ import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
 import com.pachoclosystem.pachoclosystem.repository.IUsuarioRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,10 +55,15 @@ public class TrabajadorService {
         return trabajador;
     }
 
-    // En edición el id y el rol no cambian; se actualiza el mismo objeto.
+    // En edición el id y el rol no cambian. Se lee bloqueando la fila: una edición
+    // y un borrado simultáneos se aplican uno detrás de otro.
+    @Transactional
     public TrabajadorHospital editarTrabajador(String id, String nombre, String rol, String especialidad,
                                                NivelExperiencia nivel) {
-        TrabajadorHospital existente = obtenerTrabajador(id);
+        TrabajadorHospital existente = repositorio.buscarPorIdParaActualizar(id);
+        if (existente == null) {
+            throw noEncontrado(id);
+        }
 
         String rolActual = existente instanceof Doctor ? "Doctor" : "Enfermero";
         if (!rolActual.equals(rol)) {
@@ -71,15 +77,17 @@ public class TrabajadorService {
         } else if (existente instanceof Enfermero e) {
             e.setNivelExperiencia(nivel);
         }
-        repositorio.guardarTrabajador(existente);
+        if (!repositorio.actualizarTrabajador(existente)) {
+            throw noEncontrado(id);
+        }
         return existente;
     }
 
+    @Transactional
     public void eliminarTrabajador(String id) {
-        // La cascada se ejecuta ANTES del borrado: si desactivar falla, el
-        // trabajador no se elimina y la excepción se propaga (no hay borrado
-        // parcial). Si el trabajador no existe, la cascada no encuentra usuario
-        // y el borrado devuelve false, que se traduce en el 404 de siempre.
+        // Cascada y borrado en la misma transacción: si el borrado no encuentra el
+        // trabajador (404) o algo falla, la desactivación del usuario también se
+        // deshace. Si el trabajador no existe, la cascada no encuentra usuario.
         desactivarUsuarioVinculado(id);
         if (!repositorio.eliminarTrabajador(id)) {
             throw noEncontrado(id);
@@ -97,9 +105,8 @@ public class TrabajadorService {
     private void desactivarUsuarioVinculado(String idTrabajador) {
         Usuario usuario = usuarioRepository.buscarPorIdTrabajador(idTrabajador);
         if (usuario != null) {
-            // desactivar() es idempotente; el objeto vive en el mapa del
-            // repositorio, así que la desactivación queda persistida en memoria.
-            usuario.desactivar();
+            // Idempotente: si ya estaba inactivo no cambia nada (ni la versión de token).
+            usuarioRepository.desactivar(usuario.getIdUsuario());
         }
     }
 

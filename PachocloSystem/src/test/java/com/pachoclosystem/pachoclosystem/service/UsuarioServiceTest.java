@@ -8,8 +8,8 @@ import com.pachoclosystem.pachoclosystem.model.Enfermero;
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
 import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
-import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
-import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryEnMemoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -31,16 +31,16 @@ class UsuarioServiceTest {
 
     private static final String PASSWORD_VALIDA = "clave-de-pruebas-10";
 
-    private UsuarioRepositoryImpl repositorio;
+    private UsuarioRepositoryEnMemoria repositorio;
     private TrabajadorService trabajadorService;
     private PasswordEncoder encoder;
     private UsuarioService servicio;
 
     @BeforeEach
     void preparar() {
-        repositorio = new UsuarioRepositoryImpl();
-        trabajadorService = new TrabajadorService(new TrabajadorRepositoryImpl(),
-                new UsuarioRepositoryImpl());
+        repositorio = new UsuarioRepositoryEnMemoria();
+        trabajadorService = new TrabajadorService(new TrabajadorRepositoryEnMemoria(),
+                new UsuarioRepositoryEnMemoria());
         encoder = new BCryptPasswordEncoder();
         servicio = new UsuarioService(repositorio, trabajadorService, encoder);
     }
@@ -401,30 +401,9 @@ class UsuarioServiceTest {
         assertThat(uno.isActivo()).isTrue();
     }
 
-    @Test
-    void dosAdministradoresQueSeDesactivanALaVezNoDejanElSistemaSinAdministradores()
-            throws Exception {
-        for (int ronda = 0; ronda < 50; ronda++) {
-            UsuarioService servicioRonda = new UsuarioService(
-                    new UsuarioRepositoryImpl(), trabajadorService, new BCryptPasswordEncoder(4));
-            Usuario uno = servicioRonda.crearUsuario("admin.uno", PASSWORD_VALIDA, Rol.ADMIN, null);
-            Usuario dos = servicioRonda.crearUsuario("admin.dos", PASSWORD_VALIDA, Rol.ADMIN, null);
-            CountDownLatch salida = new CountDownLatch(1);
-            ExecutorService ejecutor = Executors.newFixedThreadPool(2);
-            try {
-                Future<?> a = ejecutor.submit(() -> desactivarIgnorandoConflicto(
-                        servicioRonda, salida, dos.getIdUsuario(), "admin.uno"));
-                Future<?> b = ejecutor.submit(() -> desactivarIgnorandoConflicto(
-                        servicioRonda, salida, uno.getIdUsuario(), "admin.dos"));
-                salida.countDown();
-                a.get(10, TimeUnit.SECONDS);
-                b.get(10, TimeUnit.SECONDS);
-            } finally {
-                ejecutor.shutdownNow();
-            }
-            assertThat(uno.isActivo() || dos.isActivo()).isTrue();
-        }
-    }
+    // La desactivación simultánea de dos administradores (invariante del último
+    // administrador bajo concurrencia) se prueba contra PostgreSQL real en
+    // UsuarioConcurrenciaIntegrationTest: el bloqueo es de la base de datos.
 
     @Test
     void desactivarUnUsuarioInexistenteLanzaNotFound() {
@@ -509,18 +488,5 @@ class UsuarioServiceTest {
     void restablecerPasswordDeUnUsuarioInexistenteLanzaNotFound() {
         assertThatExceptionOfType(NotFoundException.class)
                 .isThrownBy(() -> servicio.restablecerPassword("USR-0099", "nueva-clave-segura"));
-    }
-
-    private static void desactivarIgnorandoConflicto(UsuarioService servicioRonda,
-                                                     CountDownLatch salida, String id,
-                                                     String solicitante) {
-        try {
-            salida.await();
-            servicioRonda.desactivar(id, solicitante);
-        } catch (ConflictoException esperado) {
-            // Uno de los dos debe perder: es lo que se comprueba.
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 }

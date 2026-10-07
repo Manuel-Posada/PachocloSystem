@@ -7,6 +7,8 @@ Migrada desde una aplicación Swing con arquitectura MVC.
 
 - **Java 25** (`JAVA_HOME` debe apuntar a un JDK 25; el `pom.xml` fija `java.version=25`).
 - No hace falta instalar Maven: se usa el wrapper incluido.
+- **PostgreSQL** (probado con la 18) con las bases `pachoclosystem` y `pachoclosystem_test` (ver
+  [Base de datos](#base-de-datos)).
 
 ## Cómo arrancar
 
@@ -22,7 +24,58 @@ La API queda en `http://localhost:8080`. Otros comandos útiles:
 ./mvnw test                   # ejecutar pruebas
 ```
 
-> Los datos se guardan **en memoria**: se pierden al reiniciar la aplicación.
+Sin `PACHOCLOSYSTEM_DB_PASSWORD` (o sin PostgreSQL) la aplicación no arranca.
+
+## Base de datos
+
+PostgreSQL, con las tablas creadas por **Flyway** al arrancar (`src/main/resources/db/migration`):
+
+| Migración | Tabla | Contenido |
+|---|---|---|
+| `V1` | `pacientes` | Un paciente por fila; `activo = false` es la baja lógica. Ids `PAC-0001` de la secuencia `pacientes_id_seq` |
+| `V2` | `trabajadores` | Doctores y enfermeros en una tabla con la columna `tipo`. Ids `DOC-0001` y `ENF-0001` de sus propias secuencias |
+| `V3` | `usuarios` | Username único, hash BCrypt, versión de token, cambio de contraseña pendiente, rol y trabajador vinculado (único, sin clave foránea). Ids `USR-0001` |
+| `V4` | `registros_clinicos` | El historial. Cada registro guarda una **copia del autor** tal como era al firmarlo (sin clave foránea al trabajador) |
+| `V5` | `historial_idempotencia` | Claves `Idempotency-Key` del historial con el registro creado (JSONB) o sin él si el resultado fue incierto |
+
+| Variable de entorno | Propiedad | Por defecto |
+|---|---|---|
+| `PACHOCLOSYSTEM_DB_URL` | `spring.datasource.url` | `jdbc:postgresql://localhost:5432/pachoclosystem` |
+| `PACHOCLOSYSTEM_DB_USER` | `spring.datasource.username` | `pachoclosystem_app` |
+| `PACHOCLOSYSTEM_DB_PASSWORD` | `spring.datasource.password` | *(sin valor en el repo)* |
+| `PACHOCLOSYSTEM_DB_POOL` | `spring.datasource.hikari.maximum-pool-size` | `10` |
+
+Los tests usan **otra base**, `pachoclosystem_test` (`PACHOCLOSYSTEM_TEST_DB_URL`,
+`PACHOCLOSYSTEM_TEST_DB_USER` y `PACHOCLOSYSTEM_TEST_DB_PASSWORD`, en
+`src/test/resources/application.properties`). Cada contexto de Spring de los tests arranca con el
+esquema recreado y los tests MockMvc la vacían antes de cada prueba. Por seguridad se niegan a
+tocar una base cuyo nombre no termine en `_test`.
+
+Para crear las dos bases en un PostgreSQL local, como superusuario (cambie la contraseña):
+
+```sql
+CREATE ROLE pachoclosystem_app LOGIN PASSWORD '<contraseña>';
+CREATE DATABASE pachoclosystem OWNER pachoclosystem_app ENCODING 'UTF8' TEMPLATE template0;
+CREATE DATABASE pachoclosystem_test OWNER pachoclosystem_app ENCODING 'UTF8' TEMPLATE template0;
+```
+
+**Transacciones y concurrencia.** Las reglas que antes dependían de cerrojos en memoria las aplica
+ahora la base:
+
+- Username y trabajador vinculado únicos: restricciones `UNIQUE` (dos altas simultáneas, un `409`).
+- Último administrador activo: desactivar, activar y cambiar de rol van en una transacción con un
+  *advisory lock* de PostgreSQL y el usuario bloqueado (`FOR UPDATE`).
+- Cambios de contraseña: el usuario se bloquea (`FOR UPDATE`) y hash y versión de token cambian en un
+  solo `UPDATE`; el login lee hash y versión en una sola consulta, así que un login simultáneo con la
+  contraseña anterior nunca deja un token válido.
+- Editar, cambiar de habitación y dar de baja un paciente son un único `UPDATE ... WHERE activo`.
+- El registro clínico y su clave de idempotencia se guardan en la **misma transacción**; la salida de
+  stock en MedicamentosService se pide antes, fuera de la transacción.
+- Esperas acotadas: `connection-timeout` de 3 s y `lock_timeout` de 3 s.
+
+**Base de datos no disponible.** Con la aplicación en marcha, cualquier petición responde `503`
+"El servicio no puede acceder a sus datos en este momento. Vuelva a intentarlo más tarde.", también
+las que llevan un token válido (nunca `401`, que cerraría la sesión en el frontend).
 
 ## Estructura
 
@@ -30,7 +83,7 @@ La API queda en `http://localhost:8080`. Otros comandos útiles:
 src/main/java/com/pachoclosystem/pachoclosystem/
 ├── controller/   endpoints REST
 ├── service/      lógica de negocio y validaciones
-├── repository/   almacenamiento en memoria
+├── repository/   acceso a PostgreSQL (JdbcClient)
 ├── model/        entidades (Paciente, Doctor, Enfermero, RegistroClinico, Usuario, Rol, ...)
 ├── dto/          requests y responses
 ├── config/       configuración (seguridad, JWT, PasswordEncoder, admin inicial y cliente de medicamentos)
@@ -53,8 +106,8 @@ src/main/java/com/pachoclosystem/pachoclosystem/
 | DELETE | `/api/pacientes/{id}` | Baja lógica de un paciente (ver abajo) | ADMIN | 204 / 403 / 404 |
 
 **Baja lógica de pacientes.** `DELETE /api/pacientes/{id}` marca al paciente
-como inactivo en lugar de borrarlo: el objeto y su historial clínico se
-conservan en memoria. A partir de ahí el paciente se comporta como
+como inactivo en lugar de borrarlo: el paciente y su historial clínico se
+conservan en la base de datos. A partir de ahí el paciente se comporta como
 inexistente (404 en `GET`/`PUT`/`PATCH`/historial y en un segundo `DELETE`) y
 no se reactiva. Las bajas dobles devuelven 404. Sus registros dejan de
 aparecer en el historial general. Si se da de baja mientras se espera la salida
@@ -158,14 +211,17 @@ curl -X POST localhost:8080/api/pacientes/PAC-0001/historial \
 - **Sin la cabecera**, todo funciona exactamente como antes (sin reintentos y con los mismos
   mensajes).
 
-Las claves se guardan **en memoria** (como el resto de datos):
+Las claves se guardan en **PostgreSQL** (tabla `historial_idempotencia`), así que sobreviven a los
+reinicios; el registro y su clave se guardan juntos o no se guarda ninguno. Las peticiones con la
+misma clave se ordenan con un cerrojo en la JVM, por lo que se asume **una sola instancia** de
+PachocloSystem.
 
 | Propiedad | Por defecto | Para qué |
 |---|---|---|
 | `historial.idempotencia.caducidad` | `24h` | Cuánto tiempo se recuerda cada clave |
-| `historial.idempotencia.max-entradas` | `10000` | Cuántas claves como máximo; al pasarse se descartan las caducadas y luego las más antiguas |
 
-Una clave caducada o descartada se trata como nueva. "Sin riesgo de descontar dos veces" se cumple
+No hay tope de claves: las caducadas se borran al guardar una nueva. Una clave caducada se trata
+como nueva. "Sin riesgo de descontar dos veces" se cumple
 mientras MedicamentosService recuerde la clave: 24 h por defecto. MedicamentosService las guarda en
 PostgreSQL, así que sobreviven a sus reinicios.
 
@@ -274,10 +330,11 @@ descontado sin registro:
 
 ```bash
 # Terminal 1
-cd MedicamentosService && MEDICAMENTOS_API_KEY=<clave-del-servicio> ./mvnw spring-boot:run
+cd MedicamentosService && MEDICAMENTOS_API_KEY=<clave-del-servicio> MEDICAMENTOS_DB_PASSWORD=<contraseña> \
+  ./mvnw spring-boot:run
 # Terminal 2
 cd PachocloSystem && MEDICAMENTOS_API_KEY=<clave-del-servicio> ADMIN_PASSWORD=<contraseña-admin> \
-  JWT_SECRET=<secreto-jwt-32-bytes> ./mvnw spring-boot:run
+  JWT_SECRET=<secreto-jwt-32-bytes> PACHOCLOSYSTEM_DB_PASSWORD=<contraseña> ./mvnw spring-boot:run
 
 # Terminal 3: login y llamadas
 TOKEN=$(curl -s -X POST localhost:8080/api/auth/login -H 'Content-Type: application/json' \
@@ -293,7 +350,7 @@ curl localhost:8081/api/medicamentos                                     # 401: 
 ## Usuarios, roles y autenticación
 
 Modelo de usuarios (`Rol`: `ADMIN`, `DOCTOR`, `ENFERMERO`; entidad `Usuario`,
-repositorio en memoria, servicio con reglas de negocio) y creación de un
+repositorio en PostgreSQL, servicio con reglas de negocio) y creación de un
 administrador inicial al arrancar. La autenticación es **stateless con JWT**:
 todos los endpoints de `/api/**`, salvo el login, exigen un token bearer
 válido, y cada operación exige un rol (ver [Permisos por rol](#permisos-por-rol)).
@@ -440,8 +497,8 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
   la nueva sea distinta y cumpla la política (`400` si no); responde `204`,
   quita el cambio pendiente y revoca el token usado: hay que volver a iniciar
   sesión.
-- Los usuarios viven **en memoria**: al reiniciar solo se recrea el
-  administrador inicial.
+- Los usuarios se guardan en PostgreSQL y sobreviven a los reinicios; un
+  token sigue valiendo tras un reinicio si `JWT_SECRET` no cambia.
 
 ### Variables de entorno del administrador inicial
 
@@ -450,6 +507,9 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
 | `ADMIN_USERNAME` | `app.admin.username` | `admin` | Username del administrador inicial (se normaliza a minúsculas; debe cumplir `^[a-z0-9._-]{3,30}$`). |
 | `ADMIN_PASSWORD` | `app.admin.password` | *(sin valor en el repo)* | Contraseña en claro del administrador. |
 
+- El administrador solo se crea si **no existe** en la base: `ADMIN_PASSWORD`
+  se aplica únicamente la primera vez. Después, cambiarla en el entorno no
+  cambia la contraseña guardada (se cambia desde la aplicación).
 - Si `ADMIN_PASSWORD` **está definida**, se usa tal cual y **nunca se escribe en
   el log**. Si no cumple la política de contraseña (menos de 10 caracteres, más
   de 72 bytes o igual al username), la aplicación **no arranca** y muestra un
@@ -583,8 +643,7 @@ Comportamiento:
 
 ### Advertencia
 
-> Los usuarios se guardan **en memoria**: se pierden al reiniciar la aplicación.
-> Si no se define `ADMIN_PASSWORD`, la contraseña aleatoria **queda registrada en
-> el log**; esa contraseña solo debe usarse en **desarrollo** y el log no debe
-> compartirse. Para cualquier otro entorno, define `ADMIN_PASSWORD` y ten en
-> cuenta que, aun así, los datos no sobreviven a un reinicio.
+> Si no se define `ADMIN_PASSWORD` al crear el administrador, la contraseña
+> aleatoria **queda registrada en el log**; esa contraseña solo debe usarse en
+> **desarrollo** y el log no debe compartirse. Para cualquier otro entorno,
+> define `ADMIN_PASSWORD` antes del primer arranque.

@@ -24,29 +24,29 @@ public class PacienteService {
         return paciente;
     }
 
+    /** Cada modificación es atómica en el repositorio y solo se aplica a pacientes activos (si no, 404). */
     public Paciente editarPaciente(String id, String nuevoNombre, int nuevaEdad, int nuevaHabitacion) {
-        Paciente paciente = obtenerPaciente(id);
-        paciente.actualizarDatos(nuevoNombre.trim(), nuevaEdad, nuevaHabitacion);
-        repositorio.guardarPaciente(paciente);
-        return paciente;
+        if (!repositorio.actualizarDatos(id, nuevoNombre.trim(), nuevaEdad, nuevaHabitacion)) {
+            throw noEncontrado(id);
+        }
+        return obtenerPaciente(id);
     }
 
     public Paciente editarHabitacion(String id, int nuevaHabitacion) {
-        Paciente paciente = obtenerPaciente(id);
-        paciente.actualizarDatos(nuevaHabitacion);
-        repositorio.guardarPaciente(paciente);
-        return paciente;
-    }
-
-    public void eliminarPaciente(String id) {
-        Paciente paciente = repositorio.buscarPorId(id);
-        if (paciente == null || !paciente.isActivo()) {
+        if (!repositorio.actualizarHabitacion(id, nuevaHabitacion)) {
             throw noEncontrado(id);
         }
-        // Soft delete: el paciente y su historial se conservan en memoria; solo se
-        // marca inactivo (idempotente: un segundo DELETE da 404, igual que hoy).
-        paciente.desactivar();
-        repositorio.guardarPaciente(paciente);
+        return obtenerPaciente(id);
+    }
+
+    /**
+     * Soft delete: el paciente y su historial se conservan; solo se marca
+     * inactivo. Un segundo DELETE, también si llega a la vez, da 404.
+     */
+    public void eliminarPaciente(String id) {
+        if (!repositorio.darDeBaja(id)) {
+            throw noEncontrado(id);
+        }
     }
 
     public Paciente obtenerPaciente(String id) {

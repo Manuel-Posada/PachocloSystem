@@ -2,7 +2,7 @@ package com.pachoclosystem.pachoclosystem.security;
 
 import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
-import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryEnMemoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -21,13 +21,13 @@ class TokenTrasCambioDePasswordTest {
 
     private static final Instant EMITIDO = Instant.parse("2026-10-07T10:00:00Z");
 
-    private UsuarioRepositoryImpl repositorio;
+    private UsuarioRepositoryEnMemoria repositorio;
     private JwtUsuarioAuthenticationConverter conversor;
     private Usuario usuario;
 
     @BeforeEach
     void preparar() {
-        repositorio = new UsuarioRepositoryImpl();
+        repositorio = new UsuarioRepositoryEnMemoria();
         conversor = new JwtUsuarioAuthenticationConverter(repositorio);
         usuario = new Usuario("USR-0001", "ana.torres", "$2a$10$hash-inicial", Rol.ADMIN, null);
         repositorio.guardar(usuario);

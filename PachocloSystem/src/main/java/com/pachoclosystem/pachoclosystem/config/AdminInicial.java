@@ -28,8 +28,9 @@ import java.security.SecureRandom;
  * </ul>
  *
  * <p>La contraseña del entorno nunca se escribe en el log, y el hash nunca se
- * loguea. Si el usuario ya existe, no se vuelve a crear (el arranque es
- * repetible dentro del mismo conjunto de datos en memoria).</p>
+ * loguea. Si el usuario ya existe en la base de datos, no se vuelve a crear ni
+ * se modifica: {@code ADMIN_PASSWORD} solo se aplica la primera vez, al crearlo
+ * (después, la contraseña se cambia desde la aplicación).</p>
  */
 @Component
 public class AdminInicial implements ApplicationRunner {

@@ -3,11 +3,14 @@ package com.pachoclosystem.pachoclosystem.exception;
 import com.pachoclosystem.pachoclosystem.dto.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -125,6 +128,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> salidaNoConfirmada(SalidaNoConfirmadaException ex) {
         LOG.warn("Salida de stock sin confirmar: {}", ex.getMessage());
         return respuesta(HttpStatus.SERVICE_UNAVAILABLE, List.of(MENSAJE_SALIDA_NO_CONFIRMADA));
+    }
+
+    /**
+     * 503: PostgreSQL no está disponible (sin conexión, sin transacción o fallo
+     * transitorio como un {@code lock_timeout}). Mensaje genérico; la transacción
+     * se deshizo, así que repetir la petición es seguro.
+     */
+    @ExceptionHandler({DataAccessResourceFailureException.class, CannotCreateTransactionException.class,
+            TransientDataAccessException.class})
+    public ResponseEntity<ErrorResponse> baseDeDatosNoDisponible(Exception ex) {
+        LOG.warn("Base de datos no disponible: {}", ex.getMessage());
+        return respuesta(HttpStatus.SERVICE_UNAVAILABLE, List.of(BaseDeDatosNoDisponible.MENSAJE));
     }
 
     /** 502: el servicio de medicamentos respondió algo que no se puede trasladar al cliente. */

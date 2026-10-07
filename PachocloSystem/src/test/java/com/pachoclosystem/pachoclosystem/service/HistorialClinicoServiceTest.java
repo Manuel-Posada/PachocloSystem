@@ -10,9 +10,10 @@ import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
 import com.pachoclosystem.pachoclosystem.model.Paciente;
 import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
-import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryImpl;
-import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
-import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.RegistroClinicoRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryEnMemoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,19 +29,21 @@ import static org.mockito.Mockito.mock;
 /** Reglas de negocio del historial clínico, sin contexto Spring. */
 class HistorialClinicoServiceTest {
 
-    private PacienteRepositoryImpl repositorioPacientes;
-    private TrabajadorRepositoryImpl repositorioTrabajadores;
+    private PacienteRepositoryEnMemoria repositorioPacientes;
+    private TrabajadorRepositoryEnMemoria repositorioTrabajadores;
+    private RegistroClinicoRepositoryEnMemoria repositorioRegistros;
     private PacienteService servicioPacientes;
     private TrabajadorService servicioTrabajadores;
     private HistorialClinicoService servicio;
 
     @BeforeEach
     void preparar() {
-        repositorioPacientes = new PacienteRepositoryImpl();
-        repositorioTrabajadores = new TrabajadorRepositoryImpl();
+        repositorioPacientes = new PacienteRepositoryEnMemoria();
+        repositorioTrabajadores = new TrabajadorRepositoryEnMemoria();
         servicioPacientes = new PacienteService(repositorioPacientes);
-        servicioTrabajadores = new TrabajadorService(repositorioTrabajadores, new UsuarioRepositoryImpl());
-        servicio = new HistorialClinicoService(repositorioPacientes, repositorioTrabajadores);
+        servicioTrabajadores = new TrabajadorService(repositorioTrabajadores, new UsuarioRepositoryEnMemoria());
+        repositorioRegistros = new RegistroClinicoRepositoryEnMemoria(repositorioPacientes);
+        servicio = new HistorialClinicoService(repositorioPacientes, repositorioTrabajadores, repositorioRegistros);
     }
 
     private Paciente paciente(String nombre) {
@@ -84,7 +87,7 @@ class HistorialClinicoServiceTest {
         assertThat(registro.autor().idTrabajador()).isEqualTo(d.getIdTrabajador());
         assertThat(registro.autor().nombreCompleto()).isEqualTo("Carlos Mena");
         assertThat(registro.autor().rol()).isEqualTo("Doctor");
-        assertThat(p.obtenerHistorial()).hasSize(1);
+        assertThat(repositorioRegistros.listarPorPaciente(p.getIdPaciente())).hasSize(1);
     }
 
     @Test
@@ -269,7 +272,7 @@ class HistorialClinicoServiceTest {
             return null;
         }).when(cliente).registrarSalida(anyString(), anyInt());
         HistorialClinicoService conStock = new HistorialClinicoService(
-                repositorioPacientes, repositorioTrabajadores, cliente);
+                repositorioPacientes, repositorioTrabajadores, repositorioRegistros, cliente);
 
         conStock.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(), TipoRegistro.MEDICACION,
                 "Paracetamol 500 mg via oral", null, "MED-0001", 2);
