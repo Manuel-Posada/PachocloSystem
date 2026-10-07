@@ -36,4 +36,86 @@ body {
   margin: 0;
   height: 100%;
 }
-/* You can add global styles to this file, and also import other style files */
+
+// Formularios dentro de diálogos (pacientes, trabajadores, medicamentos).
+.campo-completo {
+  width: 100%;
+}
+
+.fila-campos {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 16px;
+
+  > * {
+    flex: 1 1 140px;
+  }
+}
+
+// Pantallas de lista CRUD (pacientes, trabajadores, medicamentos).
+.lista-encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+
+  h1 {
+    margin: 0;
+    font: var(--mat-sys-headline-small);
+  }
+}
+
+.lista-busqueda {
+  width: 100%;
+  max-width: 400px;
+  margin-top: 16px;
+}
+
+// Reserva el alto de la barra de progreso para que la tabla no salte al cargar.
+.lista-progreso {
+  height: 4px;
+  margin: 8px 0;
+}
+
+.lista-tabla {
+  overflow-x: auto;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+
+  .celda-numero {
+    text-align: end;
+  }
+
+  .celda-acciones {
+    white-space: nowrap;
+    text-align: end;
+  }
+}
+
+.lista-estado {
+  padding: 24px 16px;
+  border-radius: 8px;
+  text-align: center;
+  background-color: var(--mat-sys-surface-container);
+  color: var(--mat-sys-on-surface-variant);
+
+  p {
+    margin: 0 0 8px;
+  }
+
+  &.lista-estado-error {
+    background-color: var(--mat-sys-error-container);
+    color: var(--mat-sys-on-error-container);
+  }
+}
+
+// Texto solo para lectores de pantalla.
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
