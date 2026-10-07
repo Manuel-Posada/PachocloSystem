@@ -96,3 +96,21 @@ Orden: F0 → F1 → (F2, F3 y F4 pueden ir en paralelo) → F5 → F6 → F7.
 - **Q7. Sesión:** ¿es aceptable volver a iniciar sesión cada 30 min (no hay refresh), o hay que añadir refresh token o alargar la expiración?
 - **Q8. Tests E2E:** ¿Playwright entra en el alcance? ¿Hay CI (GitHub Actions) donde correr los tests del frontend?
 - **Q9. Versiones:** ¿última estable de Angular con Node 24 (es el que tienes instalado), o alguna versión fija?
+
+## 5. Decisiones tomadas
+
+| # | Decisión |
+|---|---|
+| Q1 | Mismo origen. En desarrollo, proxy de Angular; sin CORS (no se hace B1). |
+| Q2 | Se harán B2 (endpoints de usuarios) y B3 (reglas por rol), como PRs de backend separados antes de F6. Hasta entonces el frontend no los toca. |
+| Q3 | Los roles se aplicarán en el backend. De momento la UI no oculta nada por rol. |
+| Q4 | Hasta B3, la UI rellena `idAutor` con `me.idTrabajador`. El admin no puede crear registros de historial, solo consultarlos. |
+| Q5 | Angular Material. |
+| Q6 | UI solo en español, sin i18n. Nombres de dominio en español y sufijos de Angular en inglés (`PacienteService`, `LoginComponent`, `authGuard`). |
+| Q7 | Sesión de 30 min sin refresh; se avisa al usuario 5 min antes de que expire. |
+| Q8 | Playwright queda para F7, solo en local. |
+| Q9 | Última estable de Angular (22.2.1), compatible con Node 24 (exige `^24.15.0`; instalado 24.20.0). |
+
+**Notas de implementación**
+- **Rama:** `feature-frontend-angular`, que parte de `integracion-medicamentos`. No se pudo usar `feature/frontend-angular` porque ya existe una rama `feature`, y Git no admite una rama y una "carpeta" de ramas con el mismo nombre.
+- **Sin archivo `environment`:** se omitió el que F0 preveía. Todas las URLs son relativas (`/api/...`): en desarrollo las resuelve el proxy y en producción el mismo origen, así que no hay nada que configurar por entorno.
