@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -197,7 +198,9 @@ public class UsuarioService {
         if (!errores.isEmpty()) {
             throw new SolicitudInvalidaException(errores);
         }
-        usuario.cambiarPasswordHash(passwordEncoder.encode(nuevaPasswordEnClaro));
+        // Los tokens emitidos con la contraseña anterior dejan de valer (ver
+        // JwtUsuarioAuthenticationConverter), también los del propio solicitante.
+        usuario.cambiarPasswordHash(passwordEncoder.encode(nuevaPasswordEnClaro), Instant.now());
         return usuario;
     }
 

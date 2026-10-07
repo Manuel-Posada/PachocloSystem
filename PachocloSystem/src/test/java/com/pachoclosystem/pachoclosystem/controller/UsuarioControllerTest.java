@@ -218,6 +218,42 @@ class UsuarioControllerTest extends MockMvcBaseTest {
     }
 
     @Test
+    void restablecerLaPasswordInvalidaLosTokensAnterioresYElLoginNuevoVale() throws Exception {
+        String username = crearAdmin();
+        String tokenAnterior = leer(login(username, PASSWORD).andReturn(), "$.token");
+
+        perform(patch("/api/usuarios/{id}/password", idDe(username))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"otra-clave-nueva-1\"}"))
+                .andExpect(status().isNoContent());
+
+        comprobar401Uniforme(conToken(get("/api/auth/me"), tokenAnterior));
+        String tokenNuevo = leer(login(username, "otra-clave-nueva-1").andReturn(), "$.token");
+        mockMvc.perform(conToken(get("/api/auth/me"), tokenNuevo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value(username));
+    }
+
+    @Test
+    void unAdminQueRestableceSuPropiaPasswordDebeVolverAIniciarSesion() throws Exception {
+        String username = crearAdmin();
+        String suToken = leer(login(username, PASSWORD).andReturn(), "$.token");
+
+        // Restablece su propia contraseña con su propio token: la operación se completa...
+        mockMvc.perform(conToken(patch("/api/usuarios/{id}/password", idDe(username)), suToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"otra-clave-nueva-1\"}"))
+                .andExpect(status().isNoContent());
+
+        // ...pero ese token deja de valer, también para seguir administrando.
+        comprobar401Uniforme(conToken(get("/api/usuarios"), suToken));
+        login(username, PASSWORD).andExpect(status().isUnauthorized());
+        String tokenNuevo = leer(login(username, "otra-clave-nueva-1").andReturn(), "$.token");
+        mockMvc.perform(conToken(get("/api/usuarios"), tokenNuevo))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void restablecerAplicaLaPoliticaSinDevolverLaPassword() throws Exception {
         String username = crearAdmin();
 
@@ -331,6 +367,22 @@ class UsuarioControllerTest extends MockMvcBaseTest {
         return mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(username, password)));
+    }
+
+    private static MockHttpServletRequestBuilder conToken(MockHttpServletRequestBuilder peticion,
+                                                          String token) {
+        return peticion.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+    }
+
+    private void comprobar401Uniforme(MockHttpServletRequestBuilder peticion) throws Exception {
+        MvcResult resultado = mockMvc.perform(peticion)
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, "Bearer"))
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.error").value("Unauthorized"))
+                .andExpect(jsonPath("$.mensajes[0]").value("Debe autenticarse para acceder a este recurso."))
+                .andReturn();
+        assertThat(cuerpo(resultado)).doesNotContain("Exception").doesNotContain("credenciales");
     }
 
     private static String cuerpo(MvcResult resultado) throws Exception {

@@ -230,10 +230,14 @@ curl http://localhost:8080/api/pacientes -H "Authorization: Bearer eyJhbGciOiJIU
   uniforme junto con `WWW-Authenticate: Bearer`; nunca se exponen detalles
   internos del token. El 403 responde `"No tiene permisos para realizar esta
   operación."`.
-- El token (HS256) contiene `sub`, `username`, `rol` e `idTrabajador` (si
-  aplica), pero la autorización **se relee del repositorio en cada petición**:
-  si el usuario se desactiva (por ejemplo, al eliminar su trabajador), su token
-  deja de valer de inmediato.
+- El token (HS256) contiene `sub`, `username`, `rol`, `idTrabajador` (si
+  aplica) y `credenciales` (marca de la contraseña con la que se emitió), pero
+  la autorización **se relee del repositorio en cada petición**: si el usuario
+  se desactiva (por ejemplo, al eliminar su trabajador) o se restablece su
+  contraseña, su token deja de valer de inmediato. La marca registra el momento
+  del cambio al milisegundo y se compara por igualdad, no con `iat` (que solo
+  tiene segundos), así que tampoco vale un token emitido en el mismo segundo
+  justo antes del cambio.
 
 ### Gestión de usuarios — `/api/usuarios` (solo ADMIN)
 
@@ -266,8 +270,11 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
 - **Activar:** un doctor o enfermero solo se reactiva si su trabajador sigue
   existiendo, es de su tipo y sigue vinculado a él; si no, `409`.
 - **Restablecer contraseña:** el ADMIN fija una nueva para cualquier usuario
-  (activo o no), con la misma política. Cambiar la propia contraseña aún no
-  existe.
+  (activo o no), con la misma política. **Todos los tokens emitidos antes del
+  cambio dejan de valer** (`401`): el usuario debe volver a iniciar sesión. Esto
+  incluye al propio ADMIN si restablece su contraseña: la petición se completa,
+  pero su token deja de valer en la siguiente y debe iniciar sesión con la nueva.
+  Cambiar la propia contraseña (con la actual) aún no existe.
 - Los usuarios viven **en memoria**: al reiniciar solo se recrea el
   administrador inicial.
 

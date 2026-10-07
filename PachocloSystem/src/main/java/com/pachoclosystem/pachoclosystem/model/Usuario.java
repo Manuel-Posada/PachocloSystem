@@ -2,6 +2,8 @@ package com.pachoclosystem.pachoclosystem.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -20,8 +22,8 @@ public class Usuario {
 
     private final String idUsuario;
     private final String username;
-    /** Cambia solo al restablecer la contraseña. */
-    private volatile String passwordHash;
+    /** Hash y momento del último cambio, siempre juntos: cambian solo al restablecer la contraseña. */
+    private volatile Credenciales credenciales;
     private final Rol rol;
     private final String idTrabajador;
     private volatile boolean activo;
@@ -29,7 +31,7 @@ public class Usuario {
     public Usuario(String idUsuario, String username, String passwordHash, Rol rol, String idTrabajador) {
         this.idUsuario = idUsuario;
         this.username = normalizarUsername(username);
-        this.passwordHash = passwordHash;
+        this.credenciales = new Credenciales(passwordHash, null);
         this.rol = rol;
         this.idTrabajador = idTrabajador;
         this.activo = true;
@@ -55,7 +57,17 @@ public class Usuario {
      */
     @JsonIgnore
     public String getPasswordHash() {
-        return passwordHash;
+        return credenciales.hash();
+    }
+
+    /**
+     * Instantánea del hash y de su marca, leídas a la vez: el login comprueba la
+     * contraseña contra este hash y pone esta marca en el token, de modo que un
+     * login con la contraseña anterior nunca produce un token con la marca nueva.
+     */
+    @JsonIgnore
+    public Credenciales getCredenciales() {
+        return credenciales;
     }
 
     public Rol getRol() {
@@ -84,9 +96,37 @@ public class Usuario {
         this.activo = true;
     }
 
-    /** Sustituye el hash BCrypt (restablecer contraseña). Nunca recibe la contraseña en claro. */
-    public void cambiarPasswordHash(String nuevoHash) {
-        this.passwordHash = Objects.requireNonNull(nuevoHash);
+    /**
+     * Sustituye el hash BCrypt (restablecer contraseña) y anota cuándo, al
+     * milisegundo. La marca es estrictamente creciente aunque dos cambios caigan
+     * en el mismo milisegundo o el reloj retroceda, porque los tokens se validan
+     * por igualdad con ella. Nunca recibe la contraseña en claro.
+     */
+    public synchronized void cambiarPasswordHash(String nuevoHash, Instant ahora) {
+        Instant anterior = credenciales.cambiadasEn();
+        Instant cuando = ahora.truncatedTo(ChronoUnit.MILLIS);
+        if (anterior != null && !cuando.isAfter(anterior)) {
+            cuando = anterior.plusMillis(1);
+        }
+        this.credenciales = new Credenciales(Objects.requireNonNull(nuevoHash), cuando);
+    }
+
+    /**
+     * Hash BCrypt y momento de su último cambio ({@code null} si nunca se ha
+     * restablecido). {@link #marca()} identifica esta versión de las
+     * credenciales dentro del token JWT.
+     */
+    public record Credenciales(String hash, Instant cambiadasEn) {
+
+        /** Milisegundos del último cambio, o 0 si la contraseña es la del alta. */
+        public long marca() {
+            return cambiadasEn == null ? 0L : cambiadasEn.toEpochMilli();
+        }
+
+        @Override
+        public String toString() {
+            return "Credenciales{cambiadasEn=" + cambiadasEn + "}";
+        }
     }
 
     @Override
