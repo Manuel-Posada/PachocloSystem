@@ -13,9 +13,11 @@ import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.IPacienteRepository;
+import com.pachoclosystem.pachoclosystem.repository.IRegistroClinicoRepository;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 @Service
@@ -42,21 +45,37 @@ public class HistorialClinicoService {
 
     private final IPacienteRepository repositorioPacientes;
     private final ITrabajadoresRepository repositorioTrabajadores;
+    private final IRegistroClinicoRepository repositorioRegistros;
+    /** Transacción corta en la que se guarda el registro (sin transacción en los tests unitarios). */
+    private final TransactionOperations transacciones;
     /** Para descontar stock en registros de MEDICACION; null en tests unitarios sin Spring. */
     private final MedicamentosClient clienteMedicamentos;
 
     public HistorialClinicoService(IPacienteRepository repositorioPacientes,
-                                   ITrabajadoresRepository repositorioTrabajadores) {
-        this(repositorioPacientes, repositorioTrabajadores, null);
+                                   ITrabajadoresRepository repositorioTrabajadores,
+                                   IRegistroClinicoRepository repositorioRegistros) {
+        this(repositorioPacientes, repositorioTrabajadores, repositorioRegistros, null);
+    }
+
+    public HistorialClinicoService(IPacienteRepository repositorioPacientes,
+                                   ITrabajadoresRepository repositorioTrabajadores,
+                                   IRegistroClinicoRepository repositorioRegistros,
+                                   MedicamentosClient clienteMedicamentos) {
+        this(repositorioPacientes, repositorioTrabajadores, repositorioRegistros, clienteMedicamentos,
+                TransactionOperations.withoutTransaction());
     }
 
     @Autowired
     public HistorialClinicoService(IPacienteRepository repositorioPacientes,
                                    ITrabajadoresRepository repositorioTrabajadores,
-                                   MedicamentosClient clienteMedicamentos) {
+                                   IRegistroClinicoRepository repositorioRegistros,
+                                   MedicamentosClient clienteMedicamentos,
+                                   TransactionOperations transacciones) {
         this.repositorioPacientes = repositorioPacientes;
         this.repositorioTrabajadores = repositorioTrabajadores;
+        this.repositorioRegistros = repositorioRegistros;
         this.clienteMedicamentos = clienteMedicamentos;
+        this.transacciones = transacciones;
     }
 
     /**
@@ -95,6 +114,21 @@ public class HistorialClinicoService {
                                                 TipoRegistro tipo, String contenido,
                                                 SignosVitalesRequest signos, String idMedicamento,
                                                 Integer cantidad, String claveIdempotencia) {
+        return agregarRegistroComo(usuario, idPaciente, idAutorDeclarado, tipo, contenido, signos,
+                idMedicamento, cantidad, claveIdempotencia, null);
+    }
+
+    /**
+     * Como el anterior, y además ejecuta {@code enLaMismaTransaccion} con el
+     * registro creado dentro de la transacción en la que se guarda: si esa acción
+     * falla, el registro tampoco queda guardado. Lo usa la idempotencia para
+     * guardar su clave a la vez que el registro.
+     */
+    public RegistroResponse agregarRegistroComo(Usuario usuario, String idPaciente, String idAutorDeclarado,
+                                                TipoRegistro tipo, String contenido,
+                                                SignosVitalesRequest signos, String idMedicamento,
+                                                Integer cantidad, String claveIdempotencia,
+                                                Consumer<RegistroResponse> enLaMismaTransaccion) {
         String idAutor = usuario.getIdTrabajador();
         if (idAutor == null) {
             throw new AccesoDenegadoException(
@@ -109,7 +143,7 @@ public class HistorialClinicoService {
             throw new AccesoDenegadoException("Su rol no puede crear registros de tipo " + tipo + ".");
         }
         return agregarRegistroPaciente(idPaciente, idAutor, tipo, contenido, signos, idMedicamento, cantidad,
-                claveIdempotencia);
+                claveIdempotencia, enLaMismaTransaccion);
     }
 
     public RegistroResponse agregarRegistroPaciente(String idPaciente, String idAutor, TipoRegistro tipo,
@@ -127,17 +161,23 @@ public class HistorialClinicoService {
                                                     String contenido, SignosVitalesRequest signos,
                                                     String idMedicamento, Integer cantidad) {
         return agregarRegistroPaciente(idPaciente, idAutor, tipo, contenido, signos, idMedicamento, cantidad,
-                null);
+                null, null);
     }
 
     /**
      * Con {@code claveIdempotencia}, la salida de stock se pide con esa clave y se
      * reintenta una vez si no responde; sin ella (null), la salida de siempre.
+     *
+     * <p>La salida de stock se pide <strong>fuera</strong> de cualquier
+     * transacción (no se retiene una conexión durante la llamada remota); después,
+     * el registro se guarda en una transacción corta. Si el paciente se da de baja
+     * entre medias, el registro se añade igualmente y el paciente sigue de baja.</p>
      */
     private RegistroResponse agregarRegistroPaciente(String idPaciente, String idAutor, TipoRegistro tipo,
                                                      String contenido, SignosVitalesRequest signos,
                                                      String idMedicamento, Integer cantidad,
-                                                     String claveIdempotencia) {
+                                                     String claveIdempotencia,
+                                                     Consumer<RegistroResponse> enLaMismaTransaccion) {
         validarMedicacion(tipo, idMedicamento, cantidad);
         String contenidoFinal = construirContenido(tipo, contenido, signos);
 
@@ -160,9 +200,14 @@ public class HistorialClinicoService {
         }
 
         RegistroClinico registro = new RegistroClinico(tipo, contenidoFinal, autor, medicamento, cantidad);
-        paciente.agregarRegistro(registro);
-        repositorioPacientes.guardarPaciente(paciente);
-        return RegistroResponse.from(paciente, registro);
+        return transacciones.execute(estado -> {
+            repositorioRegistros.insertar(paciente.getIdPaciente(), registro);
+            RegistroResponse creado = RegistroResponse.from(paciente, registro);
+            if (enLaMismaTransaccion != null) {
+                enLaMismaTransaccion.accept(creado);
+            }
+            return creado;
+        });
     }
 
     /** Todos los registros de todos los pacientes, ordenados por fecha. filtro: todos | paciente | autor. */
@@ -172,15 +217,10 @@ public class HistorialClinicoService {
             throw new SolicitudInvalidaException("El filtro debe ser todos, paciente o autor.");
         }
 
+        // El historial global excluye los registros de pacientes dados de baja.
         List<RegistroResponse> resultado = new ArrayList<>();
-        for (Paciente paciente : repositorioPacientes.obtenerTodos()) {
-            // El historial global excluye los registros de pacientes dados de baja.
-            if (!paciente.isActivo()) {
-                continue;
-            }
-            for (RegistroClinico registro : paciente.obtenerHistorial()) {
-                resultado.add(RegistroResponse.from(paciente, registro));
-            }
+        for (IRegistroClinicoRepository.RegistroDePaciente fila : repositorioRegistros.listarDePacientesActivos()) {
+            resultado.add(RegistroResponse.from(fila.idPaciente(), fila.nombrePaciente(), fila.registro()));
         }
         resultado.sort(Comparator.comparing(RegistroResponse::fecha));
         return aplicarFiltro(resultado, modo, texto);
@@ -189,7 +229,7 @@ public class HistorialClinicoService {
     /** Registros de un paciente; si hay texto, filtra por autor (como la vista de un paciente). */
     public List<RegistroResponse> obtenerRegistrosPorPaciente(String idPaciente, String texto) {
         Paciente paciente = buscarPacienteActivo(idPaciente);
-        List<RegistroResponse> registros = paciente.obtenerHistorial().stream()
+        List<RegistroResponse> registros = repositorioRegistros.listarPorPaciente(idPaciente).stream()
                 .map(r -> RegistroResponse.from(paciente, r))
                 .toList();
         return aplicarFiltro(registros, "autor", texto);

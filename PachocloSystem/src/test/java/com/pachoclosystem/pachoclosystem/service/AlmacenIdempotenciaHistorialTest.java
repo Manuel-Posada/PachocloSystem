@@ -2,6 +2,7 @@ package com.pachoclosystem.pachoclosystem.service;
 
 import com.pachoclosystem.pachoclosystem.dto.RegistroResponse;
 import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
+import com.pachoclosystem.pachoclosystem.repository.HistorialIdempotenciaRepositoryEnMemoria;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -18,7 +19,11 @@ import java.util.function.BooleanSupplier;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
-/** Caducidad, límite de entradas y cerrojos del almacén de claves del historial. */
+/**
+ * Caducidad y cerrojos del almacén de claves del historial, con el estado en un
+ * doble en memoria. El estado en PostgreSQL lo prueba
+ * {@code HistorialIdempotenciaRepositoryJdbcTest}.
+ */
 class AlmacenIdempotenciaHistorialTest {
 
     /** Reloj que avanza a mano. */
@@ -50,13 +55,13 @@ class AlmacenIdempotenciaHistorialTest {
 
     private final RelojManual reloj = new RelojManual();
 
-    private AlmacenIdempotenciaHistorial almacen(Duration caducidad, int maximo) {
-        return new AlmacenIdempotenciaHistorial(reloj, caducidad, maximo);
+    private AlmacenIdempotenciaHistorial almacen(Duration caducidad) {
+        return new AlmacenIdempotenciaHistorial(new HistorialIdempotenciaRepositoryEnMemoria(), reloj, caducidad);
     }
 
     @Test
     void guardaYDevuelveElUso() {
-        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24), 10);
+        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24));
 
         almacen.guardar("clave-uno-0000000", "USR-0001", "PAC-0001", "huella", REGISTRO);
 
@@ -72,7 +77,7 @@ class AlmacenIdempotenciaHistorialTest {
 
     @Test
     void unUsoSinConfirmarSeSustituyeAlCrearElRegistro() {
-        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24), 10);
+        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24));
 
         almacen.guardar("clave-uno-0000000", "USR-0001", "PAC-0001", "huella", null);
         assertThat(almacen.buscar("clave-uno-0000000").orElseThrow().registro()).isNull();
@@ -84,7 +89,7 @@ class AlmacenIdempotenciaHistorialTest {
 
     @Test
     void unaClaveCaducaALas24Horas() {
-        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24), 10);
+        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24));
         almacen.guardar("clave-uno-0000000", "USR-0001", "PAC-0001", "huella", REGISTRO);
 
         reloj.avanzar(Duration.ofHours(24).minusSeconds(1));
@@ -96,24 +101,22 @@ class AlmacenIdempotenciaHistorialTest {
     }
 
     @Test
-    void alPasarseDelLimiteDescartaLasMasAntiguas() {
-        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24), 3);
+    void sinTopeDeEntradasConservaTodasLasVigentes() {
+        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24));
 
-        for (int i = 1; i <= 5; i++) {
+        for (int i = 1; i <= 50; i++) {
             almacen.guardar("clave-" + i + "-0000000000", "USR-0001", "PAC-0001", "huella-" + i, REGISTRO);
             reloj.avanzar(Duration.ofMinutes(1));
         }
 
-        assertThat(almacen.tamano()).isEqualTo(3);
-        assertThat(almacen.buscar("clave-1-0000000000")).isEmpty();
-        assertThat(almacen.buscar("clave-2-0000000000")).isEmpty();
-        assertThat(almacen.buscar("clave-3-0000000000")).isPresent();
-        assertThat(almacen.buscar("clave-5-0000000000")).isPresent();
+        assertThat(almacen.tamano()).isEqualTo(50);
+        assertThat(almacen.buscar("clave-1-0000000000")).isPresent();
+        assertThat(almacen.buscar("clave-50-0000000000")).isPresent();
     }
 
     @Test
     void alGuardarSePurganLasCaducadasAunqueNoSeConsulten() {
-        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(1), 100);
+        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(1));
         almacen.guardar("vieja-1-0000000000", "USR-0001", "PAC-0001", "huella", REGISTRO);
         almacen.guardar("vieja-2-0000000000", "USR-0001", "PAC-0001", "huella", REGISTRO);
 
@@ -125,7 +128,7 @@ class AlmacenIdempotenciaHistorialTest {
 
     @Test
     void laMismaClaveEsperaYOtraClaveNo() throws Exception {
-        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24), 10);
+        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24));
         CountDownLatch dentro = new CountDownLatch(1);
         CountDownLatch soltar = new CountDownLatch(1);
 
@@ -155,7 +158,7 @@ class AlmacenIdempotenciaHistorialTest {
 
     @Test
     void elCerrojoSeSueltaAunqueLaAccionFalle() {
-        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24), 10);
+        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24));
 
         try {
             almacen.conClave("clave-uno-0000000", () -> {
@@ -172,7 +175,7 @@ class AlmacenIdempotenciaHistorialTest {
 
     @Test
     void losCerrojosSeLiberanAlTerminarYNoQuedanTrasCaducarLaClave() {
-        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24), 10);
+        AlmacenIdempotenciaHistorial almacen = almacen(Duration.ofHours(24));
 
         for (int i = 1; i <= 50; i++) {
             String clave = "clave-" + i + "-0000000000";
@@ -181,8 +184,8 @@ class AlmacenIdempotenciaHistorialTest {
                 return null;
             });
         }
-        // Las claves se guardan (hasta el límite), pero ningún cerrojo sobrevive a su petición.
-        assertThat(almacen.tamano()).isEqualTo(10);
+        // Las claves se guardan, pero ningún cerrojo sobrevive a su petición.
+        assertThat(almacen.tamano()).isEqualTo(50);
         assertThat(almacen.cerrojosActivos()).isZero();
 
         // Tras caducar, la clave es nueva y su cerrojo vuelve a crearse y a borrarse.
@@ -201,8 +204,8 @@ class AlmacenIdempotenciaHistorialTest {
 
     @Test
     void rechazaUnaConfiguracionSinSentido() {
-        assertThatIllegalStateException().isThrownBy(() -> almacen(Duration.ZERO, 10));
-        assertThatIllegalStateException().isThrownBy(() -> almacen(Duration.ofHours(1), 0));
+        assertThatIllegalStateException().isThrownBy(() -> almacen(Duration.ZERO));
+        assertThatIllegalStateException().isThrownBy(() -> almacen(Duration.ofHours(-1)));
     }
 
     private static void esperar(CountDownLatch senal) {

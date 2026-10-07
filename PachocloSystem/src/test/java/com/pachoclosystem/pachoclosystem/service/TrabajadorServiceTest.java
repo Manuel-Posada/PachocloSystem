@@ -12,9 +12,10 @@ import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
-import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryImpl;
-import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
-import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.RegistroClinicoRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryEnMemoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -27,17 +28,17 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 /** Reglas de negocio de los trabajadores, sin contexto Spring. */
 class TrabajadorServiceTest {
 
-    private PacienteRepositoryImpl repositorioPacientes;
-    private TrabajadorRepositoryImpl repositorio;
-    private UsuarioRepositoryImpl repositorioUsuarios;
+    private PacienteRepositoryEnMemoria repositorioPacientes;
+    private TrabajadorRepositoryEnMemoria repositorio;
+    private UsuarioRepositoryEnMemoria repositorioUsuarios;
     private PacienteService servicioPacientes;
     private TrabajadorService servicio;
 
     @BeforeEach
     void preparar() {
-        repositorioPacientes = new PacienteRepositoryImpl();
-        repositorio = new TrabajadorRepositoryImpl();
-        repositorioUsuarios = new UsuarioRepositoryImpl();
+        repositorioPacientes = new PacienteRepositoryEnMemoria();
+        repositorio = new TrabajadorRepositoryEnMemoria();
+        repositorioUsuarios = new UsuarioRepositoryEnMemoria();
         servicioPacientes = new PacienteService(repositorioPacientes);
         servicio = new TrabajadorService(repositorio, repositorioUsuarios);
     }
@@ -213,7 +214,7 @@ class TrabajadorServiceTest {
         Enfermero enfermero = (Enfermero) servicio.registrarTrabajador(
                 "Maria Lopez", "Enfermero", null, NivelExperiencia.AVANZADO);
         HistorialClinicoService historial = new HistorialClinicoService(
-                repositorioPacientes, repositorio);
+                repositorioPacientes, repositorio, new RegistroClinicoRepositoryEnMemoria(repositorioPacientes));
 
         RegistroResponse registro = historial.agregarRegistroPaciente(
                 paciente.getIdPaciente(), enfermero.getIdTrabajador(), TipoRegistro.SIGNOS_VITALES, null,

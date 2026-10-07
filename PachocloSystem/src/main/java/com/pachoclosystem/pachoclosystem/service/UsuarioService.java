@@ -11,6 +11,7 @@ import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.IUsuarioRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -33,12 +34,6 @@ public class UsuarioService {
     private final IUsuarioRepository repositorio;
     private final TrabajadorService trabajadorService;
     private final PasswordEncoder passwordEncoder;
-    /**
-     * Serializa los cambios que pueden dejar el sistema sin administradores
-     * activos (activar, desactivar y cambiar de rol): sin él, dos
-     * administradores podrían desactivarse o degradarse a la vez el uno al otro.
-     */
-    private final Object cerrojoAdministracion = new Object();
 
     public UsuarioService(IUsuarioRepository repositorio, TrabajadorService trabajadorService,
                           PasswordEncoder passwordEncoder) {
@@ -156,21 +151,24 @@ public class UsuarioService {
      * pide o el último administrador activo. Sus tokens dejan de valer de
      * inmediato y no vuelven a valer aunque se reactive (sube la versión).
      */
+    @Transactional
     public Usuario desactivar(String idUsuario, String usernameSolicitante) {
-        Usuario usuario = obtener(idUsuario);
-        synchronized (cerrojoAdministracion) {
-            if (!usuario.isActivo()) {
-                return usuario;
-            }
-            if (usuario.getUsername().equals(Usuario.normalizarUsername(usernameSolicitante))) {
-                throw new ConflictoException("No puede desactivar su propio usuario.");
-            }
-            if (usuario.getRol() == Rol.ADMIN && contarAdministradoresActivos() <= 1) {
-                throw new ConflictoException("No se puede desactivar al último administrador activo.");
-            }
-            usuario.desactivar();
+        // Las operaciones que pueden dejar el sistema sin administradores activos
+        // (desactivar, activar, cambiar de rol) se serializan con un bloqueo de
+        // PostgreSQL: dos administradores no pueden desactivarse a la vez el uno al otro.
+        repositorio.bloquearAdministracion();
+        Usuario usuario = obtenerParaActualizar(idUsuario);
+        if (!usuario.isActivo()) {
             return usuario;
         }
+        if (usuario.getUsername().equals(Usuario.normalizarUsername(usernameSolicitante))) {
+            throw new ConflictoException("No puede desactivar su propio usuario.");
+        }
+        if (usuario.getRol() == Rol.ADMIN && repositorio.contarAdministradoresActivos() <= 1) {
+            throw new ConflictoException("No se puede desactivar al último administrador activo.");
+        }
+        repositorio.desactivar(idUsuario);
+        return obtener(idUsuario);
     }
 
     /**
@@ -178,18 +176,18 @@ public class UsuarioService {
      * del alta: un doctor o enfermero necesita que su trabajador siga existiendo,
      * sea de su tipo y siga vinculado a él. Si no, 409.
      */
+    @Transactional
     public Usuario activar(String idUsuario) {
-        Usuario usuario = obtener(idUsuario);
-        synchronized (cerrojoAdministracion) {
-            if (usuario.isActivo()) {
-                return usuario;
-            }
-            if (usuario.getRol() != Rol.ADMIN) {
-                comprobarTrabajadorVigente(usuario);
-            }
-            usuario.reactivar();
+        repositorio.bloquearAdministracion();
+        Usuario usuario = obtenerParaActualizar(idUsuario);
+        if (usuario.isActivo()) {
             return usuario;
         }
+        if (usuario.getRol() != Rol.ADMIN) {
+            comprobarTrabajadorVigente(usuario);
+        }
+        repositorio.reactivar(idUsuario);
+        return obtener(idUsuario);
     }
 
     /**
@@ -199,27 +197,28 @@ public class UsuarioService {
      * administrador activo. Los permisos se releen en cada petición, así que el
      * cambio se aplica de inmediato sin revocar los tokens.
      */
+    @Transactional
     public Usuario cambiarRol(String idUsuario, Rol nuevoRol, String idTrabajador) {
         String trabajador = normalizarTrabajador(idTrabajador);
-        synchronized (cerrojoAdministracion) {
-            Usuario usuario = obtener(idUsuario);
-            List<String> errores = validarVinculo(nuevoRol, trabajador);
-            if (!errores.isEmpty()) {
-                throw new SolicitudInvalidaException(errores);
-            }
-            if (nuevoRol != Rol.ADMIN) {
-                validarTrabajador(nuevoRol, trabajador, idUsuario);
-            }
-            if (usuario.getRol() == Rol.ADMIN && nuevoRol != Rol.ADMIN && usuario.isActivo()
-                    && contarAdministradoresActivos() <= 1) {
-                throw new ConflictoException("No se puede quitar el rol ADMIN al último administrador activo.");
-            }
-            // El repositorio reserva el trabajador y libera el anterior de forma atómica.
-            if (!repositorio.cambiarRol(idUsuario, nuevoRol, trabajador)) {
-                throw trabajadorOcupado(trabajador);
-            }
-            return usuario;
+        repositorio.bloquearAdministracion();
+        Usuario usuario = obtenerParaActualizar(idUsuario);
+        List<String> errores = validarVinculo(nuevoRol, trabajador);
+        if (!errores.isEmpty()) {
+            throw new SolicitudInvalidaException(errores);
         }
+        if (nuevoRol != Rol.ADMIN) {
+            validarTrabajador(nuevoRol, trabajador, idUsuario);
+        }
+        if (usuario.getRol() == Rol.ADMIN && nuevoRol != Rol.ADMIN && usuario.isActivo()
+                && repositorio.contarAdministradoresActivos() <= 1) {
+            throw new ConflictoException("No se puede quitar el rol ADMIN al último administrador activo.");
+        }
+        // La restricción UNIQUE de la base reserva el trabajador: si otro usuario lo
+        // tomó a la vez, el cambio no se aplica.
+        if (!repositorio.cambiarRol(idUsuario, nuevoRol, trabajador)) {
+            throw trabajadorOcupado(trabajador);
+        }
+        return obtener(idUsuario);
     }
 
     /**
@@ -228,14 +227,15 @@ public class UsuarioService {
      * el siguiente acceso. Los tokens emitidos antes dejan de valer, también los
      * del propio solicitante si se restablece la suya.
      */
+    @Transactional
     public Usuario restablecerPassword(String idUsuario, String nuevaPasswordEnClaro) {
-        Usuario usuario = obtener(idUsuario);
+        Usuario usuario = obtenerParaActualizar(idUsuario);
         List<String> errores = validarPassword(nuevaPasswordEnClaro, usuario.getUsername());
         if (!errores.isEmpty()) {
             throw new SolicitudInvalidaException(errores);
         }
-        usuario.cambiarPassword(passwordEncoder.encode(nuevaPasswordEnClaro), true);
-        return usuario;
+        repositorio.cambiarPassword(idUsuario, passwordEncoder.encode(nuevaPasswordEnClaro), true);
+        return obtener(idUsuario);
     }
 
     /**
@@ -243,8 +243,11 @@ public class UsuarioService {
      * sea distinta y cumpla la política, y quita el cambio pendiente. Los tokens
      * emitidos antes (incluido el de esta petición) dejan de valer.
      */
+    @Transactional
     public Usuario cambiarPasswordPropia(String idUsuario, String passwordActual, String passwordNueva) {
-        Usuario usuario = obtener(idUsuario);
+        // Bloqueo de la fila: la contraseña actual se comprueba contra el hash que
+        // se va a sustituir, sin que otro cambio se cuele entre medias.
+        Usuario usuario = obtenerParaActualizar(idUsuario);
         if (passwordActual == null || !passwordEncoder.matches(passwordActual, usuario.getPasswordHash())) {
             // Mensaje genérico: nunca reproduce la contraseña.
             throw new SolicitudInvalidaException("La contraseña actual no es correcta.");
@@ -256,14 +259,17 @@ public class UsuarioService {
         if (!errores.isEmpty()) {
             throw new SolicitudInvalidaException(errores);
         }
-        usuario.cambiarPassword(passwordEncoder.encode(passwordNueva), false);
-        return usuario;
+        repositorio.cambiarPassword(idUsuario, passwordEncoder.encode(passwordNueva), false);
+        return obtener(idUsuario);
     }
 
-    private long contarAdministradoresActivos() {
-        return repositorio.listarTodos().stream()
-                .filter(u -> u.getRol() == Rol.ADMIN && u.isActivo())
-                .count();
+    /** Lee y bloquea al usuario hasta el final de la transacción; 404 si no existe. */
+    private Usuario obtenerParaActualizar(String idUsuario) {
+        Usuario usuario = repositorio.buscarPorIdParaActualizar(idUsuario);
+        if (usuario == null) {
+            throw new NotFoundException("No se encontró el usuario " + idUsuario + ".");
+        }
+        return usuario;
     }
 
     private void comprobarTrabajadorVigente(Usuario usuario) {
@@ -281,7 +287,7 @@ public class UsuarioService {
                     : trabajador instanceof Enfermero;
             if (!tipoCorrecto) {
                 motivo = "su trabajador " + idTrabajador + " ya no es de su rol";
-            } else if (repositorio.buscarPorIdTrabajador(idTrabajador) != usuario) {
+            } else if (!vinculadoA(idTrabajador, usuario)) {
                 motivo = "su trabajador " + idTrabajador + " está vinculado a otro usuario";
             }
         }
@@ -289,6 +295,12 @@ public class UsuarioService {
             throw new ConflictoException(
                     "No se puede activar el usuario " + usuario.getUsername() + ": " + motivo + ".");
         }
+    }
+
+    /** ¿El trabajador sigue vinculado a ese usuario? (se compara por id: cada lectura es un objeto nuevo) */
+    private boolean vinculadoA(String idTrabajador, Usuario usuario) {
+        Usuario vinculado = repositorio.buscarPorIdTrabajador(idTrabajador);
+        return vinculado != null && vinculado.getIdUsuario().equals(usuario.getIdUsuario());
     }
 
     /** Devuelve el usuario; si no existe lanza {@link NotFoundException}. */

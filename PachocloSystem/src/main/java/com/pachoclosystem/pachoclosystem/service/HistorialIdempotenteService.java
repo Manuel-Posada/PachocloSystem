@@ -36,7 +36,8 @@ import java.util.regex.Pattern;
  *
  * <p>Qué queda guardado con la clave según cómo acabe la petición:</p>
  * <ul>
- *   <li><b>Registro creado:</b> la clave con el registro (para devolverlo).</li>
+ *   <li><b>Registro creado:</b> la clave con el registro (para devolverlo), en
+ *       la misma transacción que el registro: o se guardan los dos o ninguno.</li>
  *   <li><b>Fallo que no cambió nada</b> (400, 403, 404 o 409, ya sean de aquí o
  *       de MedicamentosService): nada. La clave no se consume y un reintento se
  *       vuelve a evaluar, como en las salidas de MedicamentosService.</li>
@@ -88,10 +89,11 @@ public class HistorialIdempotenteService {
                 // Intento anterior sin confirmar: se repite con la misma clave.
             }
             try {
+                // La clave completada se guarda en la misma transacción que el registro.
                 RegistroResponse creado = historial.agregarRegistroComo(usuario, idPaciente, request.idAutor(),
                         request.tipo(), request.contenido(), request.signosVitales(), request.idMedicamento(),
-                        request.cantidad(), clave);
-                almacen.guardar(clave, idUsuario, idPaciente, huella, creado);
+                        request.cantidad(), clave,
+                        registro -> almacen.guardar(clave, idUsuario, idPaciente, huella, registro));
                 return new Resultado(creado, false);
             } catch (SolicitudInvalidaException | AccesoDenegadoException | NotFoundException
                      | ConflictoException sinCambios) {
@@ -99,7 +101,12 @@ public class HistorialIdempotenteService {
                 throw sinCambios;
             } catch (RuntimeException incierto) {
                 if (previo.isEmpty()) {
-                    almacen.guardar(clave, idUsuario, idPaciente, huella, null);
+                    try {
+                        almacen.guardar(clave, idUsuario, idPaciente, huella, null);
+                    } catch (RuntimeException sinGuardar) {
+                        // Sin base de datos no se puede ligar la clave: sale el error original.
+                        incierto.addSuppressed(sinGuardar);
+                    }
                 }
                 throw incierto;
             }

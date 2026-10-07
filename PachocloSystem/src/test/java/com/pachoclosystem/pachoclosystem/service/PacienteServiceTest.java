@@ -2,7 +2,7 @@ package com.pachoclosystem.pachoclosystem.service;
 
 import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
 import com.pachoclosystem.pachoclosystem.model.Paciente;
-import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryEnMemoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -12,12 +12,12 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 /** Reglas de negocio de los pacientes, sin contexto Spring. */
 class PacienteServiceTest {
 
-    private PacienteRepositoryImpl repositorio;
+    private PacienteRepositoryEnMemoria repositorio;
     private PacienteService servicio;
 
     @BeforeEach
     void preparar() {
-        repositorio = new PacienteRepositoryImpl();
+        repositorio = new PacienteRepositoryEnMemoria();
         servicio = new PacienteService(repositorio);
     }
 

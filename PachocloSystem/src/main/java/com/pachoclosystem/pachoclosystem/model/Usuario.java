@@ -51,6 +51,18 @@ public class Usuario {
         this.activo = true;
     }
 
+    /**
+     * Reconstruye un usuario ya guardado, con su estado completo (lo usa el
+     * repositorio al leer de la base de datos).
+     */
+    public static Usuario restaurar(String idUsuario, String username, Credenciales credenciales, Rol rol,
+                                    String idTrabajador, boolean activo) {
+        Usuario usuario = new Usuario(idUsuario, username, credenciales.hash(), rol, idTrabajador);
+        usuario.credenciales = credenciales;
+        usuario.activo = activo;
+        return usuario;
+    }
+
     /** El username se guarda siempre en minúsculas (la unicidad es case-insensitive). */
     public static String normalizarUsername(String username) {
         return username == null ? null : username.trim().toLowerCase(Locale.ROOT);

@@ -20,11 +20,11 @@ class UsuarioRepositoryTest {
     /** Hash de mentira: el repositorio no mira la contraseña. */
     private static final String HASH_DE_MENTIRA = "$2a$10$de.mentira.para.el.repositorio";
 
-    private UsuarioRepositoryImpl repositorio;
+    private UsuarioRepositoryEnMemoria repositorio;
 
     @BeforeEach
     void preparar() {
-        repositorio = new UsuarioRepositoryImpl();
+        repositorio = new UsuarioRepositoryEnMemoria();
     }
 
     @Test

@@ -21,10 +21,14 @@ public record RegistroResponse(String idRegistro, String idPaciente, String nomb
     }
 
     public static RegistroResponse from(Paciente p, RegistroClinico r) {
+        return from(p.getIdPaciente(), p.getNombre(), r);
+    }
+
+    public static RegistroResponse from(String idPaciente, String nombrePaciente, RegistroClinico r) {
         MedicacionResponse medicacion = r.getIdMedicamento() == null
                 ? null
                 : new MedicacionResponse(r.getIdMedicamento(), r.getCantidad());
-        return new RegistroResponse(r.getIdRegistro(), p.getIdPaciente(), p.getNombre(),
+        return new RegistroResponse(r.getIdRegistro(), idPaciente, nombrePaciente,
                 r.getFecha(), r.getTipo(), TrabajadorResponse.from(r.getAutor()), r.getContenido(),
                 medicacion);
     }

@@ -1,23 +1,27 @@
 package com.pachoclosystem.pachoclosystem.model;
 
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-
+/**
+ * Paciente. Su historial clínico está aparte
+ * ({@code IRegistroClinicoRepository}): leer un paciente no carga sus registros.
+ */
 public class Paciente {
 
-    private String idPaciente;
+    private final String idPaciente;
     private volatile String nombre;
     private volatile int edad;
     private volatile int habitacion;
-    private volatile boolean activo = true;
-    private List<RegistroClinico> registros;
+    private volatile boolean activo;
 
     public Paciente(String idPaciente, String nombre, int edad, int habitacion) {
+        this(idPaciente, nombre, edad, habitacion, true);
+    }
+
+    public Paciente(String idPaciente, String nombre, int edad, int habitacion, boolean activo) {
         this.idPaciente = idPaciente;
         this.nombre = nombre;
         this.edad = edad;
         this.habitacion = habitacion;
-        this.registros = new CopyOnWriteArrayList<>();
+        this.activo = activo;
     }
 
     public void actualizarDatos(int nuevaHabitacion) {
@@ -31,14 +35,6 @@ public class Paciente {
         this.habitacion = nuevaHabitacion;
     }
 
-    public List<RegistroClinico> obtenerHistorial() {
-        return this.registros;
-    }
-
-    public void agregarRegistro(RegistroClinico registro) {
-        this.registros.add(registro);
-    }
-
     public String getIdPaciente() {
         return idPaciente;
     }
@@ -50,7 +46,7 @@ public class Paciente {
 
     /**
      * Soft delete: marca al paciente como inactivo de forma idempotente. El
-     * paciente (y su historial) permanece en el repositorio; no hay reactivación.
+     * paciente (y su historial) se conserva; no hay reactivación.
      */
     public void desactivar() {
         this.activo = false;
@@ -71,6 +67,6 @@ public class Paciente {
     @Override
     public String toString() {
         return "ID: " + idPaciente + " | Nombre: " + nombre + " | Edad: " + edad
-                + " | Habitación: " + habitacion + " | Registros: " + registros.size();
+                + " | Habitación: " + habitacion;
     }
 }

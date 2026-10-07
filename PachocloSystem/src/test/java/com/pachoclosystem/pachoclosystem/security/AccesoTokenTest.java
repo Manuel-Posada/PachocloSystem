@@ -151,7 +151,7 @@ class AccesoTokenTest extends MockMvcBaseTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk());
 
-        usuario.desactivar();
+        repositorioUsuarios.desactivar(usuario.getIdUsuario());
 
         mockMvc.perform(get("/api/pacientes")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))

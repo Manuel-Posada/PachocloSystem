@@ -6,8 +6,8 @@ import ch.qos.logback.core.read.ListAppender;
 import com.pachoclosystem.pachoclosystem.exception.SolicitudInvalidaException;
 import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
-import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
-import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryEnMemoria;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryEnMemoria;
 import com.pachoclosystem.pachoclosystem.service.TrabajadorService;
 import com.pachoclosystem.pachoclosystem.service.UsuarioService;
 import org.junit.jupiter.api.AfterEach;
@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
  */
 class AdminInicialTest {
 
-    private UsuarioRepositoryImpl repositorio;
+    private UsuarioRepositoryEnMemoria repositorio;
     private UsuarioService servicio;
     private MockEnvironment entorno;
     private AdminInicial adminInicial;
@@ -38,9 +38,9 @@ class AdminInicialTest {
 
     @BeforeEach
     void preparar() {
-        repositorio = new UsuarioRepositoryImpl();
+        repositorio = new UsuarioRepositoryEnMemoria();
         servicio = new UsuarioService(repositorio,
-                new TrabajadorService(new TrabajadorRepositoryImpl(), new UsuarioRepositoryImpl()),
+                new TrabajadorService(new TrabajadorRepositoryEnMemoria(), new UsuarioRepositoryEnMemoria()),
                 new BCryptPasswordEncoder());
         entorno = new MockEnvironment();
         adminInicial = new AdminInicial(servicio, repositorio, entorno);

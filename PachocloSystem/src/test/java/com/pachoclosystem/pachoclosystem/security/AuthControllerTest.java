@@ -98,7 +98,7 @@ class AuthControllerTest extends MockMvcBaseTest {
         String enfermera = registrarEnfermero("Maria Lopez", NivelExperiencia.AVANZADO);
         String username = "inactiva." + System.nanoTime();
         usuarioService.crearUsuario(username, PASSWORD_USUARIO, Rol.ENFERMERO, enfermera);
-        repositorioUsuarios.buscarPorUsername(username).desactivar();
+        repositorioUsuarios.desactivar(repositorioUsuarios.buscarPorUsername(username).getIdUsuario());
 
         MvcResult resultado = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

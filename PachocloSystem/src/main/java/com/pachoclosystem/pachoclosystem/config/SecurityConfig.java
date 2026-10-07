@@ -1,6 +1,7 @@
 package com.pachoclosystem.pachoclosystem.config;
 
 import com.pachoclosystem.pachoclosystem.model.Rol;
+import com.pachoclosystem.pachoclosystem.security.BaseDeDatosNoDisponibleFilter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +20,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.web.cors.CorsConfigurationSource;
 
@@ -129,7 +131,9 @@ public class SecurityConfig {
                         .accessDeniedHandler(accesoDenegado)
                         .jwt(jwt -> jwt
                                 .decoder(decoder)
-                                .jwtAuthenticationConverter(conversor)));
+                                .jwtAuthenticationConverter(conversor)))
+                // 503 (nunca 401) si la base de datos falla al releer el usuario del token.
+                .addFilterBefore(new BaseDeDatosNoDisponibleFilter(), BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 }
