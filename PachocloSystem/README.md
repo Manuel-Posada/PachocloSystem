@@ -70,7 +70,7 @@ Un Doctor requiere `especialidad`; un Enfermero requiere `nivelExperiencia` (`NO
 |---|---|---|---|
 | GET | `/api/historial?filtro=&q=` | Todos los registros ordenados por fecha. `filtro`: `todos` (defecto), `paciente` o `autor` | 200 / 400 |
 | GET | `/api/pacientes/{id}/historial?q=` | Registros de un paciente; `q` filtra por autor | 200 / 404 |
-| POST | `/api/pacientes/{id}/historial` | Agrega un registro firmado por el usuario autenticado | 201 / 400 / 403 / 404 |
+| POST | `/api/pacientes/{id}/historial` | Agrega un registro firmado por el usuario autenticado. Cabecera opcional `Idempotency-Key` (ver [Registros idempotentes](#registros-idempotentes-idempotency-key)) | 201 / 400 / 403 / 404 / 409 / 502 / 503 |
 
 Cuerpo de `POST /api/pacientes/{id}/historial`:
 
@@ -110,6 +110,73 @@ Lo puede pedir cualquiera que pueda crear el registro (doctor o enfermero), aunq
 { "tipo": "MEDICACION", "contenido": "Paracetamol 500 mg vía oral",
   "idMedicamento": "MED-0001", "cantidad": 2 }
 ```
+
+#### Registros idempotentes (`Idempotency-Key`)
+
+Si la respuesta de un `POST /api/pacientes/{id}/historial` se pierde (red, doble clic, timeout),
+repetirlo crearía un segundo registro y, en `MEDICACION` con descuento, descontaría dos veces. Con la
+cabecera opcional `Idempotency-Key` la repetición es segura, **para cualquier tipo de registro**:
+
+```bash
+curl -X POST localhost:8080/api/pacientes/PAC-0001/historial \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 8f14e45f-ceea-4672-a5b1-7a0c3c9e2f01" \
+  -d '{"tipo":"MEDICACION","contenido":"Paracetamol 500 mg vía oral","idMedicamento":"MED-0001","cantidad":2}'
+```
+
+- **Formato:** de 16 a 100 caracteres: letras sin tilde, dígitos, guion o guion bajo (un UUID
+  sirve), el mismo que MedicamentosService. Si no cumple: `400`.
+- **Misma clave, mismo usuario, mismo paciente y mismo cuerpo:** `201` con el **mismo registro**
+  que la primera vez y la cabecera `Idempotency-Replayed: true`, sin crear otro ni volver a
+  descontar stock. Es el registro de entonces, aunque después haya cambiado algo.
+- **Misma clave con otro cuerpo, otro paciente u otro usuario:** `409` "La clave de idempotencia ya
+  se usó para otra petición.", sin ningún dato del registro original.
+- El cuerpo se compara ya interpretado: los espacios o el orden de los campos del JSON no cuentan;
+  cualquier valor distinto (incluido enviar u omitir `idAutor`) sí.
+- **Peticiones simultáneas con la misma clave:** se atienden de una en una; se crea un solo
+  registro y todas reciben ese registro.
+- **Con descuento de stock**, la misma clave se reenvía a la salida de MedicamentosService (que
+  tampoco descuenta dos veces con ella). Si la salida no responde (timeout o error de E/S), se
+  reintenta **una vez** con la misma clave. Si tampoco responde: `503` "No se pudo confirmar; puede
+  reintentar sin riesgo de descontar dos veces.".
+- **Un fallo que no cambió nada** (`400`, `403`, `404` o `409`, propios o de MedicamentosService,
+  como stock insuficiente) **no consume la clave**: el reintento se vuelve a evaluar.
+- **Un fallo con resultado incierto** (el `503` anterior, un `502` de MedicamentosService o un
+  error interno después de una salida hecha) deja la clave ligada a esa petición, sin registro:
+  repetir **la misma petición con la misma clave** vuelve a intentarlo sin descontar dos veces;
+  cualquier otra combinación recibe `409`.
+- **Sin la cabecera**, todo funciona exactamente como antes (sin reintentos y con los mismos
+  mensajes).
+
+Las claves se guardan **en memoria** (como el resto de datos):
+
+| Propiedad | Por defecto | Para qué |
+|---|---|---|
+| `historial.idempotencia.caducidad` | `24h` | Cuánto tiempo se recuerda cada clave |
+| `historial.idempotencia.max-entradas` | `10000` | Cuántas claves como máximo; al pasarse se descartan las caducadas y luego las más antiguas |
+
+Una clave caducada o descartada se trata como nueva. "Sin riesgo de descontar dos veces" se cumple
+mientras MedicamentosService recuerde la clave (24 h por defecto y sin reiniciarse).
+
+**Para el frontend (cliente de la API), lo que cambia:**
+
+1. `POST /api/pacientes/{id}/historial` acepta la cabecera opcional `Idempotency-Key`. Generar una
+   clave nueva (p. ej. `crypto.randomUUID()`) por cada registro que el usuario quiere crear
+   (al abrir el formulario o al pulsar Guardar por primera vez) y **reutilizarla** en los
+   reintentos y dobles envíos de ese mismo registro. Una clave nueva solo cuando el usuario empieza
+   otro registro o cambia los datos.
+2. Respuesta nueva `201` con `Idempotency-Replayed: true`: el registro ya existía. El cuerpo es el
+   mismo `RegistroResponse`; se trata como un alta correcta.
+3. Código nuevo `409` "La clave de idempotencia ya se usó para otra petición.": la clave se reutilizó
+   con otros datos. Generar una clave nueva si el usuario cambió los datos a propósito.
+4. Mensaje nuevo en `503` (solo con clave): "No se pudo confirmar; puede reintentar sin riesgo de
+   descontar dos veces." Ofrecer reintentar **con la misma clave y el mismo cuerpo**.
+5. Código nuevo `400` "La cabecera Idempotency-Key debe tener entre 16 y 100 caracteres: letras sin
+   tilde, dígitos, guion o guion bajo (por ejemplo, un UUID)." si la clave no tiene el formato.
+6. Sin enviar la cabecera no cambia nada: mismos códigos, cuerpos y mensajes que antes.
+7. El frontend usa el proxy de desarrollo (mismo origen), así que no hace falta configurar CORS
+   para enviar `Idempotency-Key` ni para leer `Idempotency-Replayed`. Si algún día se sirve desde
+   otro origen, habrá que permitir la primera y exponer la segunda.
 
 ### Medicamentos — `/api/medicamentos`
 
@@ -165,14 +232,22 @@ la tiene definida, rechaza (401) cualquier llamada directa sin ella.
 | 404, 400 o 409 | El mismo código y los mismos mensajes |
 | 401/403 (clave distinta), 5xx o una respuesta ilegible | 502 "El servicio de medicamentos respondió de forma inesperada." |
 | No responde (caído, conexión rechazada o timeout) | 503 "El servicio de medicamentos no está disponible. Vuelva a intentarlo más tarde." |
+| Salida de un registro con `Idempotency-Key` que no responde ni al reintento | 503 "No se pudo confirmar; puede reintentar sin riesgo de descontar dos veces." |
 
 **Registros de medicación.** Con `idMedicamento` y `cantidad`, primero se hace la salida de stock
 en MedicamentosService y solo si sale bien se guarda el registro; si la salida falla (medicamento
 inexistente, stock insuficiente, vencido o servicio caído) no se crea el registro.
 
-> **Límite conocido:** si MedicamentosService aplica la salida pero su respuesta no llega a tiempo
-> (timeout de lectura), el stock queda descontado sin registro y el cliente recibe 503. Resolverlo
-> del todo (clave de idempotencia o compensación) queda fuera del alcance de este proyecto.
+Si la salida se hace pero su respuesta no llega a tiempo (timeout de lectura), el stock queda
+descontado sin registro:
+
+- **Con `Idempotency-Key`** se resuelve: la clave viaja a MedicamentosService, el registro se
+  reintenta una vez con ella y, si aun así no hay respuesta, el `503` invita a repetir la petición
+  con la misma clave, que crea el registro sin un segundo descuento. Lo mismo si el registro no se
+  pudiera guardar después de una salida hecha (ver
+  [Registros idempotentes](#registros-idempotentes-idempotency-key)).
+- **Sin la cabecera** sigue siendo un límite conocido: el cliente recibe `503`, el stock queda
+  descontado sin registro y un reintento descontaría otra vez.
 
 **Prueba manual con los dos servicios** (Git Bash, dos terminales):
 
