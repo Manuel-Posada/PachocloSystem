@@ -37,7 +37,7 @@ npm run build           # build de producción en dist/frontend
 
 ```
 src/app/
-├── core/       sesión (AuthService, interceptores, guards), errores de la API (ApiError) y notificaciones
+├── core/       sesión (AuthService, interceptores, guards), errores de la API (ApiError), roles y notificaciones
 ├── shared/     piezas reutilizables (validadores, errores de formulario, diálogo de confirmación)
 ├── layout/     marco de la app autenticada (barra superior y menú lateral)
 └── features/   pantallas: login, 404 y módulos (pacientes, trabajadores, ...)
@@ -48,7 +48,7 @@ Convención: nombres de dominio en español y sufijos de Angular en inglés
 
 ## Patrón de los módulos CRUD
 
-Pacientes (`features/pacientes/`) es la referencia para trabajadores y medicamentos:
+Pacientes (`features/pacientes/`) es la referencia; trabajadores ya lo sigue y medicamentos lo seguirá:
 
 - **`<entidad>.service.ts`**: solo HTTP (listar con `?q=`, registrar, editar, eliminar). Sin estado.
 - **`<entidad>s-lista`**: guarda el estado en signals (`cargando`, `errores`, datos y filtro).
@@ -59,6 +59,12 @@ Pacientes (`features/pacientes/`) es la referencia para trabajadores y medicamen
   mensajes que el backend). Guardan ellos mismos, así un 400 se muestra dentro del formulario con
   `<app-errores-formulario>`, y se cierran con la entidad guardada.
 - **Borrado**: `confirmar()` (`shared/confirmacion-dialogo`) y después `NotificacionService`.
+
+## Roles
+
+El backend usa dos formatos: `'ADMIN' | 'DOCTOR' | 'ENFERMERO'` para usuarios (login, `/me`, JWT) y
+`'Doctor' | 'Enfermero'` para trabajadores. `core/roles.ts` es el único sitio que los convierte
+(`rolDeUsuario`, `rolDeTrabajador`) y les pone etiqueta (`etiquetaRol`).
 
 ## Sesión y errores
 
