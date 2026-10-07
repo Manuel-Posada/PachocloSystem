@@ -41,6 +41,10 @@ final class MatrizAutorizacion {
             new Endpoint(HttpMethod.POST, "/api/auth/login", Acceso.PUBLICO),
             new Endpoint(HttpMethod.GET, "/api/auth/me", Acceso.AUTENTICADO),
 
+            // Cambio de contraseña propia: lo permite cualquier identidad
+            // autenticada (incluso con la contraseña pendiente de cambio).
+            new Endpoint(HttpMethod.POST, "/api/auth/password", Acceso.AUTENTICADO),
+
             // Pacientes: lectura autenticada; alta/edición DOCTOR; baja ADMIN.
             new Endpoint(HttpMethod.GET, "/api/pacientes", Acceso.AUTENTICADO),
             new Endpoint(HttpMethod.GET, "/api/pacientes/{id}", Acceso.AUTENTICADO),
@@ -59,7 +63,15 @@ final class MatrizAutorizacion {
             new Endpoint(HttpMethod.GET, "/api/trabajadores/{id}", Acceso.AUTENTICADO),
             new Endpoint(HttpMethod.POST, "/api/trabajadores", Acceso.ADMIN),
             new Endpoint(HttpMethod.PUT, "/api/trabajadores/{id}", Acceso.ADMIN),
-            new Endpoint(HttpMethod.DELETE, "/api/trabajadores/{id}", Acceso.ADMIN));
+            new Endpoint(HttpMethod.DELETE, "/api/trabajadores/{id}", Acceso.ADMIN),
+
+            // Usuarios: toda la gestión es solo de ADMIN.
+            new Endpoint(HttpMethod.GET, "/api/usuarios", Acceso.ADMIN),
+            new Endpoint(HttpMethod.GET, "/api/usuarios/{id}", Acceso.ADMIN),
+            new Endpoint(HttpMethod.POST, "/api/usuarios", Acceso.ADMIN),
+            new Endpoint(HttpMethod.PATCH, "/api/usuarios/{id}/rol", Acceso.ADMIN),
+            new Endpoint(HttpMethod.PATCH, "/api/usuarios/{id}/estado", Acceso.ADMIN),
+            new Endpoint(HttpMethod.POST, "/api/usuarios/{id}/password-reset", Acceso.ADMIN));
 
     /** Claves {@code VERBO patrón} de todos los endpoints de la matriz. */
     static Set<String> claves() {

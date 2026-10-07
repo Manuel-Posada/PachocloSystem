@@ -78,10 +78,10 @@ public class SecurityConfig {
                         // Identidad: cualquier usuario autenticado puede verse a sí mismo.
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
 
-                        // El cambio de contraseña (pendiente u ordinario) lo permite la
-                        // identidad autenticada; se registra en el Paso 4.
-
-                        // Las rutas de negocio exigen un rol real (ADMIN/DOCTOR/ENFERMERO),
+                        // Cambio de contraseña propia: lo permite la identidad
+                        // autenticada (incluido quien aún debe cambiarla tras un
+                        // alta o un reset temporal).
+                        .requestMatchers(HttpMethod.POST, "/api/auth/password").authenticated()
                         // no basta con estar autenticado: quien aún debe cambiar su contraseña
                         // (única autoridad CAMBIO_PASSWORD_PENDIENTE) recibe 403 con el aviso
                         // correspondiente hasta completar el cambio.
@@ -114,6 +114,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/trabajadores").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/trabajadores/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/trabajadores/**").hasRole("ADMIN")
+
+                        // Usuarios: toda la gestión es solo de ADMIN.
+                        .requestMatchers("/api/usuarios", "/api/usuarios/**").hasRole("ADMIN")
 
                         // Ningún endpoint real depende de esta red final: se conserva
                         // para que las rutas inexistentes sigan dando 401 sin token y
