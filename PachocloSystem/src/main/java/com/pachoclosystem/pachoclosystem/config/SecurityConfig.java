@@ -1,6 +1,7 @@
 package com.pachoclosystem.pachoclosystem.config;
 
 import com.pachoclosystem.pachoclosystem.model.Rol;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -19,6 +20,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
  * Cadena de filtros de seguridad stateless con tokens JWT (HS256) y resource
@@ -31,9 +33,14 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  * en una regla solo-ADMIN, de modo que un endpoint nuevo sin regla propia queda
  * cerrado para los demás roles. Las reglas que dependen del cuerpo (el tipo de
  * registro del historial y el autor) están en {@code HistorialClinicoService}.
- * Todo el estado de
- * autenticación vive en el token <em>bearer</em>: sin sesiones HTTP, sin login
- * por formulario, sin Basic auth.</p>
+ *
+ * <p>Un usuario con la contraseña pendiente de cambio solo tiene la autoridad
+ * {@code CAMBIO_PASSWORD_PENDIENTE} (ver {@code JwtUsuarioAuthenticationConverter}):
+ * puede leer {@code /api/auth/me} y cambiar su contraseña, y todo lo que exige
+ * un rol le responde 403.</p>
+ *
+ * <p>Todo el estado de autenticación vive en el token <em>bearer</em>: sin
+ * sesiones HTTP, sin login por formulario, sin Basic auth.</p>
  */
 @Configuration
 @EnableWebSecurity
@@ -68,18 +75,28 @@ public class SecurityConfig {
                                         JwtDecoder decoder,
                                         Converter<Jwt, ? extends AbstractAuthenticationToken> conversor,
                                         AuthenticationEntryPoint puntoDeEntrada,
-                                        AccessDeniedHandler accesoDenegado) throws Exception {
+                                        AccessDeniedHandler accesoDenegado,
+                                        @Qualifier("corsConfigurationSource") CorsConfigurationSource corsFuente)
+            throws Exception {
         http
                 // API stateless protegida con token bearer: no hay cookies ni sesiones,
                 // así que no hay estado que un ataque CSRF pueda aprovechar; se desactiva.
                 .csrf(csrf -> csrf.disable())
+                // CORS por orígenes explícitos (CorsConfiguracion): las preflight OPTIONS
+                // de un origen permitido se resuelven aquí, antes de la autenticación, y
+                // no exigen token. Con app.cors.origenes vacío no se emite ninguna
+                // cabecera Access-Control-Allow-*.
+                .cors(cors -> cors.configurationSource(corsFuente))
                 .sessionManagement(sesiones -> sesiones.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .formLogin(login -> login.disable())
                 .httpBasic(basica -> basica.disable())
                 .logout(cierre -> cierre.disable())
                 .authorizeHttpRequests(peticiones -> peticiones
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        .requestMatchers("/api/auth/me").authenticated()
+                        // Identidad y cambio de contraseña propia: cualquier usuario
+                        // autenticado, también con la contraseña pendiente de cambio.
+                        .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/password").authenticated()
                         .requestMatchers("/api/usuarios/**").hasRole(ADMIN)
                         // Pacientes e historial clínico.
                         .requestMatchers(HttpMethod.GET, "/api/pacientes/**", "/api/historial")
@@ -90,7 +107,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/pacientes/*/historial").hasAnyRole(TODOS)
                         .requestMatchers(HttpMethod.POST, "/api/pacientes").hasAnyRole(ADMIN, DOCTOR)
                         .requestMatchers(HttpMethod.PUT, "/api/pacientes/*").hasAnyRole(ADMIN, DOCTOR)
-                        // DELETE (borra también el historial) y cualquier ruta sin regla propia.
+                        // DELETE (baja lógica) y cualquier ruta sin regla propia.
                         .requestMatchers("/api/pacientes/**", "/api/historial/**").hasRole(ADMIN)
                         // Trabajadores.
                         .requestMatchers(HttpMethod.GET, "/api/trabajadores/**").hasAnyRole(ADMIN, DOCTOR)

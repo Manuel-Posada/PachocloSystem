@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, invitadoGuard, permisoGuard } from './core/auth/auth.guard';
+import { authGuard, invitadoGuard, permisoGuard, sesionGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
@@ -7,6 +7,15 @@ export const routes: Routes = [
     title: 'Iniciar sesión · PachocloSystem',
     canActivate: [invitadoGuard],
     loadComponent: () => import('./features/login/login.component').then((m) => m.LoginComponent),
+  },
+  {
+    path: 'cambiar-password',
+    title: 'Cambiar contraseña · PachocloSystem',
+    canActivate: [sesionGuard],
+    loadComponent: () =>
+      import('./features/cambiar-password/cambiar-password.component').then(
+        (m) => m.CambiarPasswordComponent,
+      ),
   },
   {
     path: '',

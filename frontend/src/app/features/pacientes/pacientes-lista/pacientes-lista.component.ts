@@ -88,11 +88,12 @@ export class PacientesListaComponent {
 
   protected eliminar(paciente: Paciente): void {
     confirmar(this.dialogo, {
-      titulo: 'Eliminar paciente',
+      titulo: 'Dar de baja al paciente',
       mensaje:
-        `Se eliminará a ${paciente.nombre} (${paciente.idPaciente}) junto con todo su ` +
-        'historial clínico. Esta acción no se puede deshacer.',
-      accion: 'Eliminar',
+        `Se dará de baja a ${paciente.nombre} (${paciente.idPaciente}): dejará de aparecer en ` +
+        'la lista y en el historial, aunque su historial clínico se conserva. Esta acción no se ' +
+        'puede deshacer.',
+      accion: 'Dar de baja',
     })
       .pipe(
         filter(Boolean),
@@ -100,7 +101,7 @@ export class PacientesListaComponent {
       )
       .subscribe({
         next: () => {
-          this.notificaciones.exito(`Paciente ${paciente.idPaciente} eliminado.`);
+          this.notificaciones.exito(`Paciente ${paciente.idPaciente} dado de baja.`);
           this.recargar();
         },
         error: (error: unknown) => {

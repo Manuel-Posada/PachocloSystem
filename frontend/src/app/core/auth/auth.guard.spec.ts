@@ -7,11 +7,12 @@ import {
   provideRouter,
 } from '@angular/router';
 import { PermisosService } from '../permisos';
-import { authGuard, invitadoGuard, permisoGuard } from './auth.guard';
+import { authGuard, invitadoGuard, permisoGuard, sesionGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 
 describe('guards de sesión', () => {
   let autenticado = false;
+  let pendiente = false;
   let permitido = false;
   const ruta = {} as ActivatedRouteSnapshot;
   const estado = { url: '/trabajadores' } as RouterStateSnapshot;
@@ -20,7 +21,10 @@ describe('guards de sesión', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        { provide: AuthService, useValue: { autenticado: () => autenticado } },
+        {
+          provide: AuthService,
+          useValue: { autenticado: () => autenticado, debeCambiarPassword: () => pendiente },
+        },
         { provide: PermisosService, useValue: { puede: () => permitido } },
       ],
     });
@@ -32,12 +36,28 @@ describe('guards de sesión', () => {
 
   it('authGuard deja pasar con sesión', () => {
     autenticado = true;
+    pendiente = false;
     expect(ejecutar(authGuard)).toBe(true);
   });
 
   it('authGuard sin sesión lleva al login con la ruta pedida', () => {
     autenticado = false;
     expect(url(ejecutar(authGuard))).toBe('/login?returnUrl=%2Ftrabajadores');
+  });
+
+  it('authGuard con la contraseña pendiente lleva a cambiarla', () => {
+    autenticado = true;
+    pendiente = true;
+    expect(url(ejecutar(authGuard))).toBe('/cambiar-password');
+  });
+
+  it('sesionGuard deja pasar con sesión aunque el cambio esté pendiente y, sin ella, al login', () => {
+    autenticado = true;
+    pendiente = true;
+    expect(ejecutar(sesionGuard)).toBe(true);
+
+    autenticado = false;
+    expect(url(ejecutar(sesionGuard))).toBe('/login');
   });
 
   it('permisoGuard deja pasar con el permiso y, sin él, lleva al inicio', () => {

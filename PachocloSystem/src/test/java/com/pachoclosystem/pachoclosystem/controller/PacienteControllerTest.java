@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.controller;
 
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
@@ -30,7 +31,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteDevuelve201ConLocationYBody() throws Exception {
-        MvcResult resultado = perform(post("/api/pacientes")
+        MvcResult resultado = performComo(Rol.DOCTOR, post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":30,"habitacion":101}"""))
@@ -82,7 +83,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
     void editarPacienteDevuelve200ConDatosActualizados() throws Exception {
         String id = registrarPaciente("Ana Torres", 30, 101);
 
-        perform(put("/api/pacientes/{id}", id)
+        performComo(Rol.DOCTOR, put("/api/pacientes/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Maria Torres","edad":31,"habitacion":205}"""))
@@ -97,7 +98,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
     void editarHabitacionDevuelve200YElRestoNoCambia() throws Exception {
         String id = registrarPaciente("Ana Torres", 30, 101);
 
-        perform(patch("/api/pacientes/{id}/habitacion", id)
+        performComo(Rol.DOCTOR, patch("/api/pacientes/{id}/habitacion", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"habitacion":310}"""))
@@ -132,7 +133,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void editarPacienteInexistenteDevuelve404ConErrorResponse() throws Exception {
-        perform(put("/api/pacientes/{id}", "PAC-9999")
+        performComo(Rol.DOCTOR, put("/api/pacientes/{id}", "PAC-9999")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":30,"habitacion":101}"""))
@@ -144,7 +145,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void editarHabitacionDePacienteInexistenteDevuelve404ConErrorResponse() throws Exception {
-        perform(patch("/api/pacientes/{id}/habitacion", "PAC-9999")
+        performComo(Rol.DOCTOR, patch("/api/pacientes/{id}/habitacion", "PAC-9999")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"habitacion":310}"""))
@@ -165,7 +166,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteConNombreInvalidoDevuelve400() throws Exception {
-        perform(post("/api/pacientes")
+        performComo(Rol.DOCTOR, post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"12345","edad":30,"habitacion":101}"""))
@@ -179,7 +180,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteConEdadFueraDeRangoDevuelve400() throws Exception {
-        perform(post("/api/pacientes")
+        performComo(Rol.DOCTOR, post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":200,"habitacion":101}"""))
@@ -190,7 +191,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteConHabitacionFueraDeRangoDevuelve400() throws Exception {
-        perform(post("/api/pacientes")
+        performComo(Rol.DOCTOR, post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Ana Torres","edad":30,"habitacion":0}"""))
@@ -201,7 +202,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
 
     @Test
     void registrarPacienteSinCamposObligatoriosDevuelve400ConMensajesOrdenados() throws Exception {
-        perform(post("/api/pacientes")
+        performComo(Rol.DOCTOR, post("/api/pacientes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -217,7 +218,7 @@ class PacienteControllerTest extends MockMvcBaseTest {
     void editarHabitacionInvalidaDevuelve400() throws Exception {
         String id = registrarPaciente("Ana Torres", 30, 101);
 
-        perform(patch("/api/pacientes/{id}/habitacion", id)
+        performComo(Rol.DOCTOR, patch("/api/pacientes/{id}/habitacion", id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"habitacion":1000}"""))

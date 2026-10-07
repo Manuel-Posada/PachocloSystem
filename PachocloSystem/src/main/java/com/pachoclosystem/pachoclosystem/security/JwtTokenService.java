@@ -16,15 +16,15 @@ import java.time.Instant;
  *
  * <p>Claims: {@code sub}=idUsuario, {@code username}, {@code rol},
  * {@code idTrabajador} (solo si el usuario está vinculado a un trabajador),
- * {@value #CLAIM_CREDENCIALES} (marca de la contraseña con la que se emitió,
- * ver {@link Usuario.Credenciales#marca()}), {@code iss}, {@code iat} y
+ * {@value #CLAIM_VERSION} (versión de token con la que se emitió, ver
+ * {@link Usuario.Credenciales#version()}), {@code iss}, {@code iat} y
  * {@code exp}. Ni la contraseña ni el hash se incluyen jamás en un token.</p>
  */
 @Service
 public class JwtTokenService {
 
-    /** Marca de las credenciales con las que se emitió el token. */
-    public static final String CLAIM_CREDENCIALES = "credenciales";
+    /** Versión de token del usuario al emitirlo; cambia con la contraseña y al desactivar. */
+    public static final String CLAIM_VERSION = "ver";
 
     private final JwtEncoder codificador;
     private final ClaveFirmaJwt firma;
@@ -41,8 +41,8 @@ public class JwtTokenService {
 
     /**
      * Token ligado a unas credenciales concretas: el login pasa las mismas que
-     * usó para comprobar la contraseña. Si después se restablece la contraseña,
-     * el token deja de valer.
+     * usó para comprobar la contraseña. Si después cambia la versión (cambio de
+     * contraseña o desactivación), el token deja de valer.
      */
     public String generarToken(Usuario usuario, Usuario.Credenciales credenciales) {
         Instant ahora = Instant.now();
@@ -50,7 +50,7 @@ public class JwtTokenService {
                 .subject(usuario.getIdUsuario())
                 .claim("username", usuario.getUsername())
                 .claim("rol", usuario.getRol().name())
-                .claim(CLAIM_CREDENCIALES, credenciales.marca())
+                .claim(CLAIM_VERSION, credenciales.version())
                 .issuer(firma.emisor())
                 .issuedAt(ahora)
                 .expiresAt(ahora.plus(firma.expiracion()));

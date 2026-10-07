@@ -2,8 +2,6 @@ package com.pachoclosystem.pachoclosystem.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -14,6 +12,18 @@ import java.util.regex.Pattern;
  * <p>Guarda <strong>únicamente</strong> el hash BCrypt de la contraseña; la
  * contraseña en claro nunca se almacena ni se muestra. Ni {@code toString()}
  * ni la serialización JSON incluyen el hash.</p>
+ *
+ * <p>El hash, la versión de token y el cambio pendiente viven juntos en un
+ * {@link Credenciales} inmutable que se sustituye entero: el login lo lee una
+ * sola vez, comprueba la contraseña contra ese hash y pone esa versión en el
+ * token, así un cambio de contraseña simultáneo nunca produce un token con la
+ * versión nueva validado con la contraseña anterior. Cambiar la contraseña y
+ * desactivar incrementan la versión (revocan los tokens emitidos antes);
+ * {@link #reactivar()} no la restaura.</p>
+ *
+ * <p>El rol y el trabajador vinculado solo cambian con
+ * {@link #cambiarRol(Rol, String)}, que valida su coherencia; no hay setters
+ * genéricos.</p>
  */
 public class Usuario {
 
@@ -22,16 +32,20 @@ public class Usuario {
 
     private final String idUsuario;
     private final String username;
-    /** Hash y momento del último cambio, siempre juntos: cambian solo al restablecer la contraseña. */
     private volatile Credenciales credenciales;
-    private final Rol rol;
-    private final String idTrabajador;
+    private volatile Rol rol;
+    private volatile String idTrabajador;
     private volatile boolean activo;
 
     public Usuario(String idUsuario, String username, String passwordHash, Rol rol, String idTrabajador) {
+        this(idUsuario, username, passwordHash, rol, idTrabajador, false);
+    }
+
+    public Usuario(String idUsuario, String username, String passwordHash, Rol rol, String idTrabajador,
+                   boolean debeCambiarPassword) {
         this.idUsuario = idUsuario;
         this.username = normalizarUsername(username);
-        this.credenciales = new Credenciales(passwordHash, null);
+        this.credenciales = new Credenciales(passwordHash, 0, debeCambiarPassword);
         this.rol = rol;
         this.idTrabajador = idTrabajador;
         this.activo = true;
@@ -61,9 +75,8 @@ public class Usuario {
     }
 
     /**
-     * Instantánea del hash y de su marca, leídas a la vez: el login comprueba la
-     * contraseña contra este hash y pone esta marca en el token, de modo que un
-     * login con la contraseña anterior nunca produce un token con la marca nueva.
+     * Instantánea del hash, la versión de token y el cambio pendiente, leídos a
+     * la vez (ver la descripción de la clase).
      */
     @JsonIgnore
     public Credenciales getCredenciales() {
@@ -83,57 +96,99 @@ public class Usuario {
         return activo;
     }
 
-    /**
-     * Desactivar y activar son los únicos cambios de estado. Las reglas (no
-     * autodesactivarse, no dejar sin administradores, trabajador vigente al
-     * activar) las aplica {@code UsuarioService}.
-     */
-    public void desactivar() {
-        this.activo = false;
+    /** Si es {@code true}, el usuario debe cambiar la contraseña antes de operar. */
+    public boolean isDebeCambiarPassword() {
+        return credenciales.debeCambiarPassword();
     }
 
-    public void activar() {
-        this.activo = true;
+    /** Versión de token vigente: los tokens con otra versión no valen. */
+    public long getVersionToken() {
+        return credenciales.version();
     }
 
     /**
-     * Sustituye el hash BCrypt (restablecer contraseña) y anota cuándo, al
-     * milisegundo. La marca es estrictamente creciente aunque dos cambios caigan
-     * en el mismo milisegundo o el reloj retroceda, porque los tokens se validan
-     * por igualdad con ella. Nunca recibe la contraseña en claro.
+     * Desactiva el usuario y revoca sus tokens. Idempotente: solo la primera
+     * desactivación incrementa la versión. Las reglas (no autodesactivarse, no
+     * dejar sin administradores) las aplica {@code UsuarioService}.
      */
-    public synchronized void cambiarPasswordHash(String nuevoHash, Instant ahora) {
-        Instant anterior = credenciales.cambiadasEn();
-        Instant cuando = ahora.truncatedTo(ChronoUnit.MILLIS);
-        if (anterior != null && !cuando.isAfter(anterior)) {
-            cuando = anterior.plusMillis(1);
+    public synchronized void desactivar() {
+        if (activo) {
+            activo = false;
+            credenciales = credenciales.conNuevaVersion();
         }
-        this.credenciales = new Credenciales(Objects.requireNonNull(nuevoHash), cuando);
     }
 
     /**
-     * Hash BCrypt y momento de su último cambio ({@code null} si nunca se ha
-     * restablecido). {@link #marca()} identifica esta versión de las
-     * credenciales dentro del token JWT.
+     * Reactiva el usuario (idempotente). No restaura la versión: los tokens
+     * emitidos antes de la desactivación siguen revocados. La comprobación del
+     * trabajador vigente la hace {@code UsuarioService}.
      */
-    public record Credenciales(String hash, Instant cambiadasEn) {
+    public synchronized void reactivar() {
+        activo = true;
+    }
 
-        /** Milisegundos del último cambio, o 0 si la contraseña es la del alta. */
-        public long marca() {
-            return cambiadasEn == null ? 0L : cambiadasEn.toEpochMilli();
+    /**
+     * Cambia rol y trabajador vinculado comprobando la coherencia del modelo:
+     * un ADMIN no puede tener trabajador y el resto de roles sí requieren uno.
+     * La existencia, el tipo y la unicidad del trabajador los valida el
+     * servicio (y el repositorio, el índice por trabajador).
+     *
+     * @throws IllegalArgumentException si la combinación rol/trabajador es incoherente
+     */
+    public synchronized void cambiarRol(Rol nuevoRol, String idTrabajador) {
+        if (nuevoRol == null) {
+            throw new IllegalArgumentException("El rol es obligatorio.");
+        }
+        String trabajador = (idTrabajador == null || idTrabajador.isBlank()) ? null : idTrabajador.trim();
+        if (nuevoRol == Rol.ADMIN && trabajador != null) {
+            throw new IllegalArgumentException(
+                    "El usuario administrador no puede estar vinculado a un trabajador.");
+        }
+        if (nuevoRol != Rol.ADMIN && trabajador == null) {
+            throw new IllegalArgumentException(
+                    "El usuario con rol " + nuevoRol + " debe estar vinculado a un trabajador.");
+        }
+        this.rol = nuevoRol;
+        this.idTrabajador = trabajador;
+    }
+
+    /**
+     * Sustituye el hash (nunca la contraseña en claro), incrementa la versión de
+     * token y fija si el usuario debe cambiarla en el siguiente acceso.
+     *
+     * @param nuevoHash    hash BCrypt de la nueva contraseña
+     * @param exigirCambio {@code true} para obligar al usuario a cambiarla
+     */
+    public synchronized void cambiarPassword(String nuevoHash, boolean exigirCambio) {
+        if (nuevoHash == null || nuevoHash.isBlank()) {
+            throw new IllegalArgumentException("El hash de la contraseña es obligatorio.");
+        }
+        credenciales = new Credenciales(nuevoHash, credenciales.version() + 1, exigirCambio);
+    }
+
+    /**
+     * Hash BCrypt, versión de token (claim {@code ver}) y si hay un cambio de
+     * contraseña pendiente. Inmutable: cada cambio crea uno nuevo.
+     */
+    public record Credenciales(String hash, long version, boolean debeCambiarPassword) {
+
+        Credenciales conNuevaVersion() {
+            return new Credenciales(hash, version + 1, debeCambiarPassword);
         }
 
         @Override
         public String toString() {
-            return "Credenciales{cambiadasEn=" + cambiadasEn + "}";
+            return "Credenciales{version=" + version + ", debeCambiarPassword=" + debeCambiarPassword + "}";
         }
     }
 
     @Override
     public String toString() {
+        Credenciales actuales = credenciales;
         return "Usuario{idUsuario='" + idUsuario + "', username='" + username + "', rol=" + rol
                 + ", idTrabajador=" + (idTrabajador == null ? "null" : "'" + idTrabajador + "'")
-                + ", activo=" + activo + "}";
+                + ", activo=" + activo + ", debeCambiarPassword=" + actuales.debeCambiarPassword()
+                + ", versionToken=" + actuales.version() + "}";
     }
 
     @Override

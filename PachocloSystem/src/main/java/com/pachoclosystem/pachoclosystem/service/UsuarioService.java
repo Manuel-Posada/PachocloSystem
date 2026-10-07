@@ -13,7 +13,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -35,11 +34,11 @@ public class UsuarioService {
     private final TrabajadorService trabajadorService;
     private final PasswordEncoder passwordEncoder;
     /**
-     * Serializa los cambios de estado (activar/desactivar): sin él, dos
-     * administradores podrían desactivarse a la vez el uno al otro y dejar el
-     * sistema sin ninguno.
+     * Serializa los cambios que pueden dejar el sistema sin administradores
+     * activos (activar, desactivar y cambiar de rol): sin él, dos
+     * administradores podrían desactivarse o degradarse a la vez el uno al otro.
      */
-    private final Object cerrojoEstados = new Object();
+    private final Object cerrojoAdministracion = new Object();
 
     public UsuarioService(IUsuarioRepository repositorio, TrabajadorService trabajadorService,
                           PasswordEncoder passwordEncoder) {
@@ -49,16 +48,28 @@ public class UsuarioService {
     }
 
     /**
+     * Crea un usuario sin cambio de contraseña obligatorio (arranque y tests).
+     * Las altas por la API usan la sobrecarga con {@code debeCambiarPassword=true}.
+     */
+    public Usuario crearUsuario(String username, String passwordEnClaro, Rol rol, String idTrabajador) {
+        return crearUsuario(username, passwordEnClaro, rol, idTrabajador, false);
+    }
+
+    /**
      * Crea un usuario con la contraseña hasheada con BCrypt.
      *
      * <p>Reglas: username válido y único (case-insensitive), contraseña que
      * cumpla la política (ver {@link #validarPassword}), los administradores no se vinculan a un trabajador y
      * los doctores/enfermeros sí, a un trabajador existente del tipo correcto y
      * que todavía no tenga usuario.</p>
+     *
+     * @param debeCambiarPassword {@code true} para que el usuario solo pueda
+     *                            cambiar su contraseña hasta hacerlo
      */
-    public Usuario crearUsuario(String username, String passwordEnClaro, Rol rol, String idTrabajador) {
+    public Usuario crearUsuario(String username, String passwordEnClaro, Rol rol, String idTrabajador,
+                                boolean debeCambiarPassword) {
         String usernameNormalizado = Usuario.normalizarUsername(username);
-        String trabajador = (idTrabajador == null || idTrabajador.isBlank()) ? null : idTrabajador.trim();
+        String trabajador = normalizarTrabajador(idTrabajador);
 
         List<String> errores = new ArrayList<>();
         if (usernameNormalizado == null || !Usuario.PATRON_USERNAME.matcher(usernameNormalizado).matches()) {
@@ -66,19 +77,13 @@ public class UsuarioService {
                     + "minúsculas, dígitos, punto, guion bajo o guion.");
         }
         errores.addAll(validarPassword(passwordEnClaro, usernameNormalizado));
-        if (rol == null) {
-            errores.add("Debe seleccionar un rol (ADMIN, DOCTOR o ENFERMERO).");
-        } else if (rol == Rol.ADMIN && trabajador != null) {
-            errores.add("El usuario administrador no puede estar vinculado a un trabajador.");
-        } else if (trabajador == null && rol != Rol.ADMIN) {
-            errores.add("El usuario con rol " + rol + " debe estar vinculado a un trabajador.");
-        }
+        errores.addAll(validarVinculo(rol, trabajador));
         if (!errores.isEmpty()) {
             throw new SolicitudInvalidaException(errores);
         }
 
         if (rol != Rol.ADMIN) {
-            validarTrabajador(rol, trabajador);
+            validarTrabajador(rol, trabajador, null);
         }
 
         // Aviso temprano para el caso habitual; la garantía de unicidad sigue siendo
@@ -89,7 +94,7 @@ public class UsuarioService {
 
         String id = repositorio.generarNuevoId();
         Usuario usuario = new Usuario(id, usernameNormalizado, passwordEncoder.encode(passwordEnClaro),
-                rol, trabajador);
+                rol, trabajador, debeCambiarPassword);
         if (!repositorio.guardar(usuario)) {
             throw usuarioDuplicado(usernameNormalizado);
         }
@@ -148,12 +153,12 @@ public class UsuarioService {
 
     /**
      * Desactiva un usuario (idempotente). 409 si es el propio usuario que lo
-     * pide o el último administrador activo. Sus tokens dejan de valer en la
-     * siguiente petición: la autenticación relee el usuario cada vez.
+     * pide o el último administrador activo. Sus tokens dejan de valer de
+     * inmediato y no vuelven a valer aunque se reactive (sube la versión).
      */
     public Usuario desactivar(String idUsuario, String usernameSolicitante) {
         Usuario usuario = obtener(idUsuario);
-        synchronized (cerrojoEstados) {
+        synchronized (cerrojoAdministracion) {
             if (!usuario.isActivo()) {
                 return usuario;
             }
@@ -175,22 +180,53 @@ public class UsuarioService {
      */
     public Usuario activar(String idUsuario) {
         Usuario usuario = obtener(idUsuario);
-        synchronized (cerrojoEstados) {
+        synchronized (cerrojoAdministracion) {
             if (usuario.isActivo()) {
                 return usuario;
             }
             if (usuario.getRol() != Rol.ADMIN) {
                 comprobarTrabajadorVigente(usuario);
             }
-            usuario.activar();
+            usuario.reactivar();
             return usuario;
         }
     }
 
     /**
-     * Sustituye la contraseña de un usuario (activo o no) por una nueva que
-     * cumpla la política. La contraseña en claro no se guarda ni aparece en
-     * los mensajes.
+     * Cambia el rol y el trabajador vinculado, con las mismas reglas de vínculo
+     * que el alta (400 si son incoherentes, 404 si el trabajador no existe).
+     * 409 si el trabajador ya es de otro usuario o si se degradaría al último
+     * administrador activo. Los permisos se releen en cada petición, así que el
+     * cambio se aplica de inmediato sin revocar los tokens.
+     */
+    public Usuario cambiarRol(String idUsuario, Rol nuevoRol, String idTrabajador) {
+        String trabajador = normalizarTrabajador(idTrabajador);
+        synchronized (cerrojoAdministracion) {
+            Usuario usuario = obtener(idUsuario);
+            List<String> errores = validarVinculo(nuevoRol, trabajador);
+            if (!errores.isEmpty()) {
+                throw new SolicitudInvalidaException(errores);
+            }
+            if (nuevoRol != Rol.ADMIN) {
+                validarTrabajador(nuevoRol, trabajador, idUsuario);
+            }
+            if (usuario.getRol() == Rol.ADMIN && nuevoRol != Rol.ADMIN && usuario.isActivo()
+                    && contarAdministradoresActivos() <= 1) {
+                throw new ConflictoException("No se puede quitar el rol ADMIN al último administrador activo.");
+            }
+            // El repositorio reserva el trabajador y libera el anterior de forma atómica.
+            if (!repositorio.cambiarRol(idUsuario, nuevoRol, trabajador)) {
+                throw trabajadorOcupado(trabajador);
+            }
+            return usuario;
+        }
+    }
+
+    /**
+     * Restablecimiento por un ADMIN: sustituye la contraseña de un usuario
+     * (activo o no) por una que cumpla la política y le obliga a cambiarla en
+     * el siguiente acceso. Los tokens emitidos antes dejan de valer, también los
+     * del propio solicitante si se restablece la suya.
      */
     public Usuario restablecerPassword(String idUsuario, String nuevaPasswordEnClaro) {
         Usuario usuario = obtener(idUsuario);
@@ -198,9 +234,29 @@ public class UsuarioService {
         if (!errores.isEmpty()) {
             throw new SolicitudInvalidaException(errores);
         }
-        // Los tokens emitidos con la contraseña anterior dejan de valer (ver
-        // JwtUsuarioAuthenticationConverter), también los del propio solicitante.
-        usuario.cambiarPasswordHash(passwordEncoder.encode(nuevaPasswordEnClaro), Instant.now());
+        usuario.cambiarPassword(passwordEncoder.encode(nuevaPasswordEnClaro), true);
+        return usuario;
+    }
+
+    /**
+     * Cambio de la contraseña propia: comprueba la actual, exige que la nueva
+     * sea distinta y cumpla la política, y quita el cambio pendiente. Los tokens
+     * emitidos antes (incluido el de esta petición) dejan de valer.
+     */
+    public Usuario cambiarPasswordPropia(String idUsuario, String passwordActual, String passwordNueva) {
+        Usuario usuario = obtener(idUsuario);
+        if (passwordActual == null || !passwordEncoder.matches(passwordActual, usuario.getPasswordHash())) {
+            // Mensaje genérico: nunca reproduce la contraseña.
+            throw new SolicitudInvalidaException("La contraseña actual no es correcta.");
+        }
+        if (passwordActual.equals(passwordNueva)) {
+            throw new SolicitudInvalidaException("La nueva contraseña debe ser diferente de la actual.");
+        }
+        List<String> errores = validarPassword(passwordNueva, usuario.getUsername());
+        if (!errores.isEmpty()) {
+            throw new SolicitudInvalidaException(errores);
+        }
+        usuario.cambiarPassword(passwordEncoder.encode(passwordNueva), false);
         return usuario;
     }
 
@@ -245,8 +301,32 @@ public class UsuarioService {
         return usuario;
     }
 
-    /** Valida que el trabajador vinculado exista y sea del tipo que exige el rol. */
-    private void validarTrabajador(Rol rol, String idTrabajador) {
+    private static String normalizarTrabajador(String idTrabajador) {
+        return (idTrabajador == null || idTrabajador.isBlank()) ? null : idTrabajador.trim();
+    }
+
+    /** Coherencia rol/trabajador: el ADMIN sin trabajador, los demás con uno. */
+    private static List<String> validarVinculo(Rol rol, String trabajador) {
+        if (rol == null) {
+            return List.of("Debe seleccionar un rol (ADMIN, DOCTOR o ENFERMERO).");
+        }
+        if (rol == Rol.ADMIN && trabajador != null) {
+            return List.of("El usuario administrador no puede estar vinculado a un trabajador.");
+        }
+        if (rol != Rol.ADMIN && trabajador == null) {
+            return List.of("El usuario con rol " + rol + " debe estar vinculado a un trabajador.");
+        }
+        return List.of();
+    }
+
+    /**
+     * Valida que el trabajador vinculado exista y sea del tipo que exige el rol,
+     * y que no tenga ya <em>otro</em> usuario.
+     *
+     * @param idUsuarioPropietario usuario que puede conservar el trabajador
+     *                             ({@code null} en el alta)
+     */
+    private void validarTrabajador(Rol rol, String idTrabajador, String idUsuarioPropietario) {
         // Reutiliza el servicio existente: si no existe, lanza NotFoundException
         // con su mensaje habitual ("No se encontró el trabajador X.").
         TrabajadorHospital trabajador = trabajadorService.obtenerTrabajador(idTrabajador);
@@ -259,10 +339,14 @@ public class UsuarioService {
             throw new SolicitudInvalidaException(
                     "El trabajador " + idTrabajador + " no es un Enfermero.");
         }
-        if (repositorio.buscarPorIdTrabajador(idTrabajador) != null) {
+        Usuario ocupante = repositorio.buscarPorIdTrabajador(idTrabajador);
+        if (ocupante != null && !ocupante.getIdUsuario().equals(idUsuarioPropietario)) {
             // 409: el vínculo es único y no se libera al desactivar (ver activar()).
-            throw new ConflictoException(
-                    "El trabajador " + idTrabajador + " ya tiene un usuario.");
+            throw trabajadorOcupado(idTrabajador);
         }
+    }
+
+    private static ConflictoException trabajadorOcupado(String idTrabajador) {
+        return new ConflictoException("El trabajador " + idTrabajador + " ya tiene un usuario.");
     }
 }

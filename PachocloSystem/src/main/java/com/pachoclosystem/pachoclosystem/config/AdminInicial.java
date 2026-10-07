@@ -21,7 +21,10 @@ import java.security.SecureRandom;
  *   <li>{@code app.admin.password} (o la variable {@code ADMIN_PASSWORD}): si
  *       está definida se usa tal cual (mínimo 10 caracteres); si no lo está, se
  *       genera una contraseña aleatoria temporal que se muestra <strong>una
- *       sola vez</strong> en el log a nivel WARN.</li>
+ *       sola vez</strong> en el log a nivel WARN. En ambos casos el arranque
+ *       crea el administrador; solo cuando la contraseña es aleatoria la cuenta
+ *       queda bloqueada (cambio de contraseña obligatorio en el primer acceso),
+ *       porque esa contraseña ha quedado escrita en el log.</li>
  * </ul>
  *
  * <p>La contraseña del entorno nunca se escribe en el log, y el hash nunca se
@@ -75,11 +78,15 @@ public class AdminInicial implements ApplicationRunner {
 
         // Si el username de la propiedad no es válido, crearUsuario lanza
         // SolicitudInvalidaException y el arranque falla con su mensaje.
-        usuarioService.crearUsuario(username, password, Rol.ADMIN, null);
+        // Con contraseña aleatoria la cuenta nace con el cambio obligatorio:
+        // esa contraseña ha quedado en el log, así que debe sustituirse en el
+        // primer acceso. Con la contraseña del entorno no se exige el cambio.
+        usuarioService.crearUsuario(username, password, Rol.ADMIN, null, passwordGenerada);
 
         if (passwordGenerada) {
             LOG.warn("Se ha creado el usuario administrador '{}' con una contraseña ALEATORIA TEMPORAL: "
-                            + "'{}'. Es la única vez que aparece: cópiala ahora y cámbiala en cuanto puedas. "
+                            + "'{}'. Es la única vez que aparece: cópiala ahora. La cuenta nace BLOQUEADA "
+                            + "y no podrá operar hasta que cambie esta contraseña en el primer acceso. "
                             + "Queda registrada en el log, por lo que solo debe usarse en desarrollo "
                             + "(define la variable de entorno ADMIN_PASSWORD para evitarlo).",
                     username, password);

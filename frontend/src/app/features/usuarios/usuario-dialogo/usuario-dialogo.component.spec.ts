@@ -30,13 +30,21 @@ describe('UsuarioDialogoComponent', () => {
   ];
   /** DOC-0001 ya tiene usuario (desactivado): el vínculo no se libera. */
   const existentes: Usuario[] = [
-    { idUsuario: 'USR-0001', username: 'admin', rol: 'ADMIN', idTrabajador: null, activo: true },
+    {
+      idUsuario: 'USR-0001',
+      username: 'admin',
+      rol: 'ADMIN',
+      idTrabajador: null,
+      activo: true,
+      debeCambiarPassword: false,
+    },
     {
       idUsuario: 'USR-0002',
       username: 'eva.mora',
       rol: 'DOCTOR',
       idTrabajador: 'DOC-0001',
       activo: false,
+      debeCambiarPassword: false,
     },
   ];
   const usuarios = {

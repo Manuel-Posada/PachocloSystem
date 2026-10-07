@@ -17,7 +17,7 @@ export type Permiso =
   /** Registrar y editar pacientes. */
   | 'pacientes.escribir'
   | 'pacientes.habitacion'
-  /** Eliminar pacientes (borra también su historial). */
+  /** Dar de baja pacientes (baja lógica: se conserva su historial). */
   | 'pacientes.eliminar'
   /** Crear registros de historial (además hace falta un trabajador vinculado). */
   | 'historial.crear'

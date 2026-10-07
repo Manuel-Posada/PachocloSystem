@@ -23,6 +23,10 @@
     }
   </button>
   <mat-menu #menuUsuario="matMenu" xPosition="before">
+    <a mat-menu-item routerLink="/cambiar-password">
+      <mat-icon>password</mat-icon>
+      <span>Cambiar contraseña</span>
+    </a>
     <button mat-menu-item type="button" (click)="cerrarSesion()">
       <mat-icon>logout</mat-icon>
       <span>Cerrar sesión</span>

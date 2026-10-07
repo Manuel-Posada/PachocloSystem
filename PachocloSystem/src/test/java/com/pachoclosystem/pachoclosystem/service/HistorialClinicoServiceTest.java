@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.service;
 
+import com.pachoclosystem.pachoclosystem.client.MedicamentosClient;
 import com.pachoclosystem.pachoclosystem.dto.RegistroResponse;
 import com.pachoclosystem.pachoclosystem.dto.SignosVitalesRequest;
 import com.pachoclosystem.pachoclosystem.exception.NotFoundException;
@@ -11,6 +12,7 @@ import com.pachoclosystem.pachoclosystem.model.TipoRegistro;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.repository.PacienteRepositoryImpl;
 import com.pachoclosystem.pachoclosystem.repository.TrabajadorRepositoryImpl;
+import com.pachoclosystem.pachoclosystem.repository.UsuarioRepositoryImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +20,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 /** Reglas de negocio del historial clínico, sin contexto Spring. */
 class HistorialClinicoServiceTest {
@@ -33,7 +39,7 @@ class HistorialClinicoServiceTest {
         repositorioPacientes = new PacienteRepositoryImpl();
         repositorioTrabajadores = new TrabajadorRepositoryImpl();
         servicioPacientes = new PacienteService(repositorioPacientes);
-        servicioTrabajadores = new TrabajadorService(repositorioTrabajadores);
+        servicioTrabajadores = new TrabajadorService(repositorioTrabajadores, new UsuarioRepositoryImpl());
         servicio = new HistorialClinicoService(repositorioPacientes, repositorioTrabajadores);
     }
 
@@ -233,6 +239,60 @@ class HistorialClinicoServiceTest {
         assertThatExceptionOfType(NotFoundException.class)
                 .isThrownBy(() -> servicio.obtenerRegistrosPorPaciente("PAC-9999", null))
                 .withMessage("No se encontró el paciente PAC-9999.");
+    }
+
+    @Test
+    void historialDePacienteDadoDeBajaLanzaNotFoundYNoAdmiteNuevosRegistros() {
+        Paciente p = paciente("Ana Torres");
+        TrabajadorHospital d = doctor("Carlos Mena");
+        servicio.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(),
+                TipoRegistro.DIAGNOSTICO, "Hipertension leve", null);
+        servicioPacientes.eliminarPaciente(p.getIdPaciente());
+
+        assertThatExceptionOfType(NotFoundException.class)
+                .isThrownBy(() -> servicio.obtenerRegistrosPorPaciente(p.getIdPaciente(), null))
+                .withMessage("No se encontró el paciente " + p.getIdPaciente() + ".");
+        assertThatExceptionOfType(NotFoundException.class)
+                .isThrownBy(() -> servicio.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(),
+                        TipoRegistro.DIAGNOSTICO, "Otra observacion", null))
+                .withMessage("No se encontró el paciente " + p.getIdPaciente() + ".");
+    }
+
+    @Test
+    void darDeBajaAlPacienteDuranteLaSalidaDeStockNoLoVuelveACrear() {
+        Paciente p = paciente("Ana Torres");
+        TrabajadorHospital d = doctor("Carlos Mena");
+        MedicamentosClient cliente = mock(MedicamentosClient.class);
+        // Mientras se espera la salida de stock, un ADMIN da de baja al paciente.
+        doAnswer(invocacion -> {
+            servicioPacientes.eliminarPaciente(p.getIdPaciente());
+            return null;
+        }).when(cliente).registrarSalida(anyString(), anyInt());
+        HistorialClinicoService conStock = new HistorialClinicoService(
+                repositorioPacientes, repositorioTrabajadores, cliente);
+
+        conStock.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(), TipoRegistro.MEDICACION,
+                "Paracetamol 500 mg via oral", null, "MED-0001", 2);
+
+        assertThat(servicioPacientes.listarPacientes(null)).isEmpty();
+        assertThatExceptionOfType(NotFoundException.class)
+                .isThrownBy(() -> servicioPacientes.obtenerPaciente(p.getIdPaciente()));
+    }
+
+    @Test
+    void elHistorialGlobalExcluyeLosRegistrosDePacientesDadosDeBaja() {
+        Paciente activo = paciente("Ana Torres");
+        Paciente dadoDeBaja = paciente("Bruno Diaz");
+        TrabajadorHospital d = doctor("Carlos Mena");
+        servicio.agregarRegistroPaciente(activo.getIdPaciente(), d.getIdTrabajador(),
+                TipoRegistro.DIAGNOSTICO, "Diagnostico de Ana", null);
+        servicio.agregarRegistroPaciente(dadoDeBaja.getIdPaciente(), d.getIdTrabajador(),
+                TipoRegistro.EVOLUCION, "Evolucion de Bruno", null);
+        servicioPacientes.eliminarPaciente(dadoDeBaja.getIdPaciente());
+
+        List<RegistroResponse> historial = servicio.obtenerTodosLosRegistros("todos", null);
+        assertThat(historial).hasSize(1);
+        assertThat(historial.get(0).idPaciente()).isEqualTo(activo.getIdPaciente());
     }
 
     @Test

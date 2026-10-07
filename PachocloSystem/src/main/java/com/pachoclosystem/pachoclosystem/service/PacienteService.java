@@ -39,23 +39,29 @@ public class PacienteService {
     }
 
     public void eliminarPaciente(String id) {
-        if (!repositorio.eliminar(id)) {
+        Paciente paciente = repositorio.buscarPorId(id);
+        if (paciente == null || !paciente.isActivo()) {
             throw noEncontrado(id);
         }
+        // Soft delete: el paciente y su historial se conservan en memoria; solo se
+        // marca inactivo (idempotente: un segundo DELETE da 404, igual que hoy).
+        paciente.desactivar();
+        repositorio.guardarPaciente(paciente);
     }
 
     public Paciente obtenerPaciente(String id) {
         Paciente paciente = repositorio.buscarPorId(id);
-        if (paciente == null) {
+        if (paciente == null || !paciente.isActivo()) {
             throw noEncontrado(id);
         }
         return paciente;
     }
 
-    /** Lista pacientes; si hay texto, filtra por id o nombre (sin distinguir mayúsculas). */
+    /** Lista pacientes activos; si hay texto, filtra por id o nombre (sin distinguir mayúsculas). */
     public List<Paciente> listarPacientes(String texto) {
         String filtro = texto == null ? "" : texto.trim().toLowerCase(Locale.ROOT);
         return repositorio.obtenerTodos().stream()
+                .filter(Paciente::isActivo)
                 .filter(p -> filtro.isEmpty()
                         || p.getIdPaciente().toLowerCase(Locale.ROOT).contains(filtro)
                         || p.getNombre().toLowerCase(Locale.ROOT).contains(filtro))
