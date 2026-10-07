@@ -50,12 +50,12 @@ export interface SignosVitales {
 
 /**
  * `RegistroRequest`. SIGNOS_VITALES lleva `signosVitales`; el resto, `contenido`.
+ * Sin autor: el backend firma con el trabajador del usuario autenticado.
  * `idMedicamento` y `cantidad`, los dos o ninguno y solo en MEDICACION,
  * descuentan stock antes de guardar el registro.
  */
 export interface RegistroRequest {
   tipo: TipoRegistro;
-  idAutor: string;
   contenido: string | null;
   signosVitales: SignosVitales | null;
   idMedicamento: string | null;

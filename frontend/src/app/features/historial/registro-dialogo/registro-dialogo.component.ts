@@ -14,6 +14,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatRadioModule } from '@angular/material/radio';
 import { merge, startWith } from 'rxjs';
+import { PermisosService } from '../../../core/permisos';
 import { ApiError, mensajesDeError } from '../../../core/http/api-error';
 import { ErroresFormularioComponent } from '../../../shared/errores-formulario/errores-formulario.component';
 import {
@@ -38,8 +39,8 @@ import { HistorialService } from '../historial.service';
 
 export interface DatosRegistroDialogo {
   paciente: Paciente;
-  /** Trabajador del usuario actual (`me.idTrabajador`): regla provisional hasta B3. */
-  idAutor: string;
+  /** Trabajador del usuario actual, solo para mostrarlo: el backend firma con él. */
+  autor: string;
 }
 
 const MENSAJE_PRESION = 'La presión diastólica debe ser menor que la sistólica.';
@@ -173,7 +174,10 @@ export class RegistroDialogoComponent {
   protected readonly enviando = signal(false);
   protected readonly errores = signal<readonly string[]>([]);
 
-  protected readonly tipos = TIPOS_REGISTRO;
+  /** El enfermero no crea diagnósticos (403 en el backend): ni siquiera se ofrece. */
+  protected readonly tipos = TIPOS_REGISTRO.filter(
+    (tipo) => tipo !== 'DIAGNOSTICO' || inject(PermisosService).puede('historial.diagnosticar'),
+  );
   protected readonly etiquetasTipo = ETIQUETAS_TIPO;
   protected readonly primerError = primerError;
   protected readonly signos = this.formulario.controls.signos.controls;
@@ -252,7 +256,6 @@ export class RegistroDialogoComponent {
     const descuenta = tipo === 'MEDICACION' && v.descontarStock;
     return {
       tipo,
-      idAutor: this.datos.idAutor,
       contenido: esSignos ? null : v.contenido.trim(),
       signosVitales: esSignos
         ? {

@@ -37,7 +37,6 @@ describe('HistorialService', () => {
   it('crea un registro con POST', () => {
     const registro: RegistroRequest = {
       tipo: 'MEDICACION',
-      idAutor: 'DOC-0001',
       contenido: 'Paracetamol 500 mg vía oral',
       signosVitales: null,
       idMedicamento: 'MED-0001',

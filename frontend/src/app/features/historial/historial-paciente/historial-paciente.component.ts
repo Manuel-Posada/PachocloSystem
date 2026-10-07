@@ -125,7 +125,7 @@ export class HistorialPacienteComponent {
     }
     this.dialogo
       .open<RegistroDialogoComponent, DatosRegistroDialogo, Registro>(RegistroDialogoComponent, {
-        data: { paciente, idAutor },
+        data: { paciente, autor: idAutor },
         width: '640px',
         maxWidth: '95vw',
       })

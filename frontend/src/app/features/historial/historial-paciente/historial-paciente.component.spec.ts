@@ -108,7 +108,7 @@ describe('HistorialPacienteComponent', () => {
 
     expect(dialogo.open).toHaveBeenCalledWith(
       RegistroDialogoComponent,
-      expect.objectContaining({ data: { paciente: ana, idAutor: 'DOC-0001' } }),
+      expect.objectContaining({ data: { paciente: ana, autor: 'DOC-0001' } }),
     );
     expect(notificaciones.exito).toHaveBeenCalledWith('Registro añadido al historial.');
     expect(historial.listarDePaciente).toHaveBeenCalledTimes(2);

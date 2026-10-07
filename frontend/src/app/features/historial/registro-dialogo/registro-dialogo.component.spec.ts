@@ -2,16 +2,20 @@ import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Observable, of, throwError } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
+import { PermisosService } from '../../../core/permisos';
 import { Medicamento } from '../../medicamentos/medicamento.models';
 import { MedicamentoService } from '../../medicamentos/medicamento.service';
 import { Registro, RegistroRequest } from '../historial.models';
 import { HistorialService } from '../historial.service';
 import { DatosRegistroDialogo, RegistroDialogoComponent } from './registro-dialogo.component';
 
+/** Si el rol simulado puede crear diagnósticos (el enfermero no). */
+let diagnostica = true;
+
 describe('RegistroDialogoComponent', () => {
   const datos: DatosRegistroDialogo = {
     paciente: { idPaciente: 'PAC-0001', nombre: 'Ana Ruiz', edad: 40, habitacion: 12 },
-    idAutor: 'DOC-0001',
+    autor: 'DOC-0001',
   };
   const creado = { idRegistro: 'r1' } as Registro;
   const servicio = { crear: vi.fn<(id: string, r: RegistroRequest) => Observable<Registro>>() };
@@ -25,6 +29,7 @@ describe('RegistroDialogoComponent', () => {
         { provide: MedicamentoService, useValue: { listar: vi.fn() } },
         { provide: MatDialogRef, useValue: dialogo },
         { provide: MAT_DIALOG_DATA, useValue: datos },
+        { provide: PermisosService, useValue: { puede: () => diagnostica } },
       ],
     });
     const fixture = TestBed.createComponent(RegistroDialogoComponent);
@@ -69,7 +74,20 @@ describe('RegistroDialogoComponent', () => {
     saturacion: '98',
   };
 
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    diagnostica = true;
+  });
+
+  it('a quien no puede diagnosticar (enfermero) no se le ofrece el tipo DIAGNOSTICO', async () => {
+    diagnostica = false;
+    const { elemento } = await renderizar();
+
+    const tipos = Array.from(elemento.querySelectorAll('mat-radio-button')).map((r) =>
+      r.textContent?.trim(),
+    );
+    expect(tipos).toEqual(['Evolución', 'Medicación', 'Signos vitales']);
+  });
 
   it('pide elegir el tipo antes de nada', async () => {
     const { enviar, errores } = await renderizar();
@@ -105,7 +123,6 @@ describe('RegistroDialogoComponent', () => {
 
     expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', {
       tipo: 'DIAGNOSTICO',
-      idAutor: 'DOC-0001',
       contenido: 'Hipertensión leve',
       signosVitales: null,
       idMedicamento: null,
@@ -165,7 +182,6 @@ describe('RegistroDialogoComponent', () => {
 
     expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', {
       tipo: 'SIGNOS_VITALES',
-      idAutor: 'DOC-0001',
       contenido: null,
       signosVitales: {
         temperatura: 36.5,
@@ -202,7 +218,7 @@ describe('RegistroDialogoComponent', () => {
 describe('RegistroDialogoComponent · medicación', () => {
   const datos: DatosRegistroDialogo = {
     paciente: { idPaciente: 'PAC-0001', nombre: 'Ana Ruiz', edad: 40, habitacion: 12 },
-    idAutor: 'DOC-0001',
+    autor: 'DOC-0001',
   };
   const creado = { idRegistro: 'r1' } as Registro;
   const servicio = { crear: vi.fn<(id: string, r: RegistroRequest) => Observable<Registro>>() };
@@ -226,7 +242,6 @@ describe('RegistroDialogoComponent · medicación', () => {
     );
   const sinDescuento: RegistroRequest = {
     tipo: 'MEDICACION',
-    idAutor: 'DOC-0001',
     contenido: 'Paracetamol 500 mg vía oral',
     signosVitales: null,
     idMedicamento: null,
@@ -242,6 +257,7 @@ describe('RegistroDialogoComponent · medicación', () => {
         { provide: MedicamentoService, useValue: inventario },
         { provide: MatDialogRef, useValue: dialogo },
         { provide: MAT_DIALOG_DATA, useValue: datos },
+        { provide: PermisosService, useValue: { puede: () => diagnostica } },
       ],
     });
     const fixture = TestBed.createComponent(RegistroDialogoComponent);
