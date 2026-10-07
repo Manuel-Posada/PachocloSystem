@@ -249,6 +249,11 @@ descontado sin registro:
 - **Sin la cabecera** sigue siendo un límite conocido: el cliente recibe `503`, el stock queda
   descontado sin registro y un reintento descontaría otra vez.
 
+> **Límite conocido:** el paciente se lee antes de la salida de stock y se vuelve a guardar después.
+> Si un ADMIN borra al paciente mientras se espera la salida (con clave puede tardar el doble por el
+> reintento: hasta 2 × (`timeout-conexion` + `timeout-lectura`)), al guardar el registro **el
+> paciente se vuelve a crear** con su historial. Pasa con y sin `Idempotency-Key`.
+
 **Prueba manual con los dos servicios** (Git Bash, dos terminales):
 
 ```bash
