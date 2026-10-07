@@ -431,6 +431,10 @@ class HistorialClinicoControllerTest extends MockMvcBaseTest {
         perform(get("/api/pacientes/{id}/historial", paciente))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].tipo").value("SIGNOS_VITALES"))
+                .andExpect(jsonPath("$[0].contenido").value(
+                        "Signos vitales - Temp: 36.5°C | FC: 80 lpm | PA: 120/80 mmHg"
+                                + " | FR: 16 rpm | SpO2: 98%"))
                 .andExpect(jsonPath("$[0].autor.idTrabajador").value(enfermero))
                 .andExpect(jsonPath("$[0].autor.nombreCompleto").value("Maria Lopez"))
                 .andExpect(jsonPath("$[0].autor.rol").value("Enfermero"));
