@@ -102,9 +102,9 @@ Orden: F0 → F1 → (F2, F3 y F4 pueden ir en paralelo) → F5 → F6 → F7.
 | # | Decisión |
 |---|---|
 | Q1 | Mismo origen. En desarrollo, proxy de Angular; sin CORS (no se hace B1). |
-| Q2 | Se harán B2 (endpoints de usuarios) y B3 (reglas por rol), como PRs de backend separados antes de F6. Hasta entonces el frontend no los toca. |
-| Q3 | Los roles se aplicarán en el backend. De momento la UI no oculta nada por rol. |
-| Q4 | Hasta B3, la UI rellena `idAutor` con `me.idTrabajador`. El admin no puede crear registros de historial, solo consultarlos. |
+| Q2 | Se harán B2 (endpoints de usuarios) y B3 (reglas por rol), como PRs de backend separados antes de F6. Hasta entonces el frontend no los toca. **Estado final:** B2 y B3 se hicieron en el backend (`/api/usuarios`, solo ADMIN, y reglas por rol en `SecurityConfig`). F6 se implementó con la pantalla Usuarios (`/usuarios`): el admin crea usuarios de doctores y enfermeros, restablece contraseñas y los activa o desactiva. |
+| Q3 | Los roles se aplicarán en el backend. De momento la UI no oculta nada por rol. **Estado final:** el backend aplica los roles (tabla "Permisos por rol" de su README) y, tras F6, la UI también oculta por rol lo que no se puede hacer (`core/permisos.ts`, que copia esa tabla). El backend sigue siendo quien decide: un 403 se muestra como cualquier otro error. Aquel "de momento no oculta nada" quedó superado. |
+| Q4 | Hasta B3, la UI rellena `idAutor` con `me.idTrabajador`. El admin no puede crear registros de historial, solo consultarlos. **Estado final:** con B3 el backend firma cada registro con el trabajador del usuario autenticado y el frontend ya no envía `idAutor` (el backend lo sigue aceptando por compatibilidad). El admin, sin trabajador vinculado, solo consulta el historial, como se había previsto. |
 | Q5 | Angular Material. |
 | Q6 | UI solo en español, sin i18n. Nombres de dominio en español y sufijos de Angular en inglés (`PacienteService`, `LoginComponent`, `authGuard`). |
 | Q7 | Sesión de 30 min sin refresh; se avisa al usuario 5 min antes de que expire. |
