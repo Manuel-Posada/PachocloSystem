@@ -23,8 +23,9 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  * Cadena de filtros de seguridad stateless con tokens JWT (HS256) y resource
  * server de OAuth2 (Nimbus).
  *
- * <p>Solo {@code POST /api/auth/login} es público; el resto de {@code /api/**}
- * exige estar autenticado (aún no hay autorización por rol). Todo el estado de
+ * <p>Solo {@code POST /api/auth/login} es público; {@code /api/usuarios/**}
+ * exige el rol ADMIN y el resto de {@code /api/**} solo estar autenticado (las
+ * reglas por rol del resto llegan con B3). Todo el estado de
  * autenticación vive en el token <em>bearer</em>: sin sesiones HTTP, sin login
  * por formulario, sin Basic auth.</p>
  */
@@ -67,6 +68,7 @@ public class SecurityConfig {
                 .logout(cierre -> cierre.disable())
                 .authorizeHttpRequests(peticiones -> peticiones
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers("/api/usuarios/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 // 401 y 403 con el cuerpo de error uniforme de la API
                 // (ErrorResponse, sin trazas ni detalles internos).

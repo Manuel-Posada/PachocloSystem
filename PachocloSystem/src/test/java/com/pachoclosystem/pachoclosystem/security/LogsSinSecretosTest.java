@@ -14,9 +14,11 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -76,12 +78,7 @@ class LogsSinSecretosTest extends MockMvcBaseTest {
         mockMvc.perform(get("/api/pacientes"))
                 .andExpect(status().isUnauthorized());
 
-        List<String> mensajes = appenders.stream()
-                .flatMap(appender -> appender.list.stream())
-                .map(ILoggingEvent::getFormattedMessage)
-                .toList();
-
-        assertThat(mensajes).allSatisfy(mensaje -> {
+        assertThat(mensajesLogueados()).allSatisfy(mensaje -> {
             assertThat(mensaje)
                     .doesNotContain(PASSWORD_ADMIN)
                     .doesNotContain(SECRETO_JWT)
@@ -90,11 +87,58 @@ class LogsSinSecretosTest extends MockMvcBaseTest {
         });
     }
 
+    @Test
+    void laGestionDeUsuariosNoLogueaContrasenasNiHashes() throws Exception {
+        String inicial = "inicial-que-no-debe-salir-1";
+        String nueva = "nueva-que-no-debe-salir-22";
+        String username = "logs." + UUID.randomUUID().toString().substring(0, 8);
+
+        MvcResult alta = perform(post("/api/usuarios")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"username":"%s","password":"%s","rol":"ADMIN"}""".formatted(username, inicial)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String id = leer(alta, "$.idUsuario");
+
+        // Cuerpo malformado que contiene una contraseña (lo registra GlobalExceptionHandler).
+        perform(post("/api/usuarios")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"otro.x\",\"password\":\"" + nueva + "\", rol}"))
+                .andExpect(status().isBadRequest());
+        // Contraseña que no cumple la política, y restablecimiento correcto.
+        perform(patch("/api/usuarios/{id}/password", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"corta-123\"}"))
+                .andExpect(status().isBadRequest());
+        perform(patch("/api/usuarios/{id}/password", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"" + nueva + "\"}"))
+                .andExpect(status().isNoContent());
+
+        // El cuerpo malformado sí se registra: el test comprueba que sin la contraseña.
+        assertThat(mensajesLogueados()).anyMatch(m -> m.contains("Cuerpo de petición no legible"));
+        assertThat(mensajesLogueados()).allSatisfy(mensaje -> assertThat(mensaje)
+                .doesNotContain(inicial)
+                .doesNotContain(nueva)
+                .doesNotContain("corta-123")
+                .doesNotContain("$2a$10$"));
+    }
+
+    private List<String> mensajesLogueados() {
+        return appenders.stream()
+                .flatMap(appender -> appender.list.stream())
+                .map(ILoggingEvent::getFormattedMessage)
+                .toList();
+    }
+
     private List<Logger> loggersCapturados() {
         return List.of(
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.security"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.config.ClaveFirmaJwt"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.controller.AuthController"),
+                (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.controller.UsuarioController"),
+                (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.service.UsuarioService"),
                 (Logger) LoggerFactory.getLogger("com.pachoclosystem.pachoclosystem.exception.GlobalExceptionHandler"));
     }
 }

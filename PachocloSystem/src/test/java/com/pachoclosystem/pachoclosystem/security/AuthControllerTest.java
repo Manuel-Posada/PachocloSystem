@@ -144,6 +144,7 @@ class AuthControllerTest extends MockMvcBaseTest {
                 .andExpect(jsonPath("$.idUsuario").value(idAdmin))
                 .andExpect(jsonPath("$.username").value("admin"))
                 .andExpect(jsonPath("$.rol").value("ADMIN"))
+                .andExpect(jsonPath("$.activo").value(true))
                 .andReturn();
 
         assertThat(resultado.getResponse().getContentAsString())
