@@ -1,19 +1,18 @@
 package com.pachoclosystem.medicamentos.service;
 
+import com.pachoclosystem.medicamentos.PostgresTestBase;
 import com.pachoclosystem.medicamentos.exception.ConflictoException;
 import com.pachoclosystem.medicamentos.exception.SolicitudInvalidaException;
 import com.pachoclosystem.medicamentos.model.DatosMedicamento;
 import com.pachoclosystem.medicamentos.model.Presentacion;
-import com.pachoclosystem.medicamentos.repository.MedicamentoRepositoryImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -25,25 +24,25 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-/** Salidas con clave de idempotencia, sin contexto Spring y con la fecha fijada. */
-class SalidasIdempotentesServiceTest {
+/**
+ * Salidas con clave de idempotencia contra PostgreSQL real (claves, bloqueo y
+ * transacciones de verdad), con la fecha fijada.
+ */
+class SalidasIdempotentesServiceTest extends PostgresTestBase {
 
-    private static final LocalDate HOY = LocalDate.of(2026, 6, 15);
     private static final String CLAVE = "8f14e45f-ceea-4672-a5b1-7a0c3c9e2f01";
 
-    private MedicamentoRepositoryImpl repositorio;
+    @Autowired
     private MedicamentoService medicamentos;
+
+    @Autowired
     private SalidasIdempotentesService salidas;
+
     private String dolex;
     private String amoxil;
 
     @BeforeEach
     void preparar() {
-        repositorio = new MedicamentoRepositoryImpl();
-        Clock reloj = Clock.fixed(HOY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
-        medicamentos = new MedicamentoService(repositorio, reloj);
-        salidas = new SalidasIdempotentesService(medicamentos,
-                new AlmacenIdempotencia(reloj, Duration.ofHours(24), 10_000));
         dolex = registrar("Dolex", "L-1", 20, HOY.plusYears(1));
         amoxil = registrar("Amoxil", "L-2", 20, HOY.plusYears(1));
     }
@@ -110,6 +109,26 @@ class SalidasIdempotentesServiceTest {
 
         assertThat(reintento.repetida()).isFalse();
         assertThat(stock(dolex)).isEqualTo(5);
+    }
+
+    @Test
+    void laClaveSeRecuerda24HorasYDespuesSeTrataComoNueva() {
+        salidas.registrarSalida(dolex, 3, CLAVE);
+
+        // Un instante antes de las 24 h: sigue siendo la misma salida (y otra cantidad da 409).
+        reloj.avanzar(Duration.ofHours(24).minusMillis(1));
+        assertThat(salidas.registrarSalida(dolex, 3, CLAVE).repetida()).isTrue();
+        assertThatExceptionOfType(ConflictoException.class)
+                .isThrownBy(() -> salidas.registrarSalida(dolex, 5, CLAVE));
+        assertThat(stock(dolex)).isEqualTo(17);
+
+        // A las 24 h caduca: la misma clave hace una salida nueva y vuelve a descontar.
+        reloj.avanzar(Duration.ofMillis(1));
+        SalidasIdempotentesService.Resultado nueva = salidas.registrarSalida(dolex, 5, CLAVE);
+        assertThat(nueva.repetida()).isFalse();
+        assertThat(stock(dolex)).isEqualTo(12);
+        assertThat(jdbc.sql("SELECT count(*) FROM idempotencia_salidas").query(Long.class).single())
+                .isEqualTo(1L);
     }
 
     @Test

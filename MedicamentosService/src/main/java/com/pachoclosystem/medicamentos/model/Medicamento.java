@@ -26,8 +26,10 @@ public class Medicamento {
     }
 
     /**
-     * Resta unidades del stock. Comprobar y descontar ocurre bajo el mismo
-     * bloqueo, así que dos salidas simultáneas nunca dejan el stock en negativo.
+     * Resta unidades del stock si alcanzan. Entre peticiones, lo que impide que
+     * dos salidas simultáneas dejen el stock en negativo es el bloqueo de fila
+     * con el que {@code MedicamentoService} lee el medicamento; la restricción
+     * {@code cantidad_stock >= 0} de la base es la última defensa.
      */
     public synchronized void retirarStock(int cantidad) {
         if (cantidad > cantidadStock) {

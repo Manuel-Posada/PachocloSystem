@@ -4,8 +4,9 @@ Sistema de gestión de un hospital: pacientes, trabajadores (doctores y enfermer
 clínico, inventario de medicamentos y usuarios con roles. Nació como una aplicación Swing con
 arquitectura MVC y hoy son tres procesos que se hablan por HTTP.
 
-> Proyecto de desarrollo y aprendizaje: **todos los datos viven en memoria** y se pierden al
-> reiniciar (ver [Limitaciones conocidas](#limitaciones-conocidas)).
+> Proyecto de desarrollo y aprendizaje: el inventario de medicamentos se guarda en
+> **PostgreSQL**; el resto de datos (pacientes, trabajadores, usuarios e historial) aún vive **en
+> memoria** y se pierde al reiniciar (ver [Limitaciones conocidas](#limitaciones-conocidas)).
 
 ## Arquitectura
 
@@ -37,6 +38,9 @@ Cómo se comunican:
 
 - **Java 25** (`JAVA_HOME` apuntando a un JDK 25). No hace falta instalar Maven: cada servicio
   incluye su wrapper (`mvnw`).
+- **PostgreSQL** (probado con la 18) para MedicamentosService, con las bases `medicamentos` y
+  `medicamentos_test` y el rol `medicamentos_app` (ver el
+  [README de MedicamentosService](MedicamentosService/README.md#base-de-datos)).
 - **Node** `^22.22.3`, `^24.15.0` o `>=26` (lo exige Angular 22), con npm.
 - Git Bash o PowerShell en Windows; también vale cualquier shell POSIX.
 
@@ -48,6 +52,7 @@ desarrollo**: use los suyos y no los guarde en el repositorio.
 | Variable | Dónde | Ejemplo | Notas |
 |---|---|---|---|
 | `MEDICAMENTOS_API_KEY` | los dos servicios | `clave-servicio-ejemplo` | Debe ser **igual** en ambos. |
+| `MEDICAMENTOS_DB_PASSWORD` | MedicamentosService | `<contraseña-de-medicamentos_app>` | Contraseña del rol de PostgreSQL. Sin ella el servicio no arranca. |
 | `ADMIN_PASSWORD` | PachocloSystem | `admin-ejemplo-2026` | Mínimo 10 caracteres. Si se omite, se genera una aleatoria y se imprime una vez en el log (WARN). |
 | `JWT_SECRET` | PachocloSystem | `secreto-jwt-ejemplo-solo-desarrollo` | Mínimo 32 bytes. Si se omite, los tokens no sobreviven a un reinicio. |
 
@@ -61,7 +66,7 @@ umbrales de ese límite. Detalle en el [README de PachocloSystem](PachocloSystem
 ```bash
 # Terminal 1: MedicamentosService (8081)
 cd MedicamentosService
-MEDICAMENTOS_API_KEY=clave-servicio-ejemplo ./mvnw spring-boot:run
+MEDICAMENTOS_API_KEY=clave-servicio-ejemplo MEDICAMENTOS_DB_PASSWORD=<contraseña> ./mvnw spring-boot:run
 
 # Terminal 2: PachocloSystem (8080)
 cd PachocloSystem
@@ -80,6 +85,7 @@ npm start
 # Terminal 1: MedicamentosService (8081)
 cd MedicamentosService
 $env:MEDICAMENTOS_API_KEY = "clave-servicio-ejemplo"
+$env:MEDICAMENTOS_DB_PASSWORD = "<contraseña>"
 .\mvnw.cmd spring-boot:run
 
 # Terminal 2: PachocloSystem (8080)
@@ -152,9 +158,9 @@ de cada punto están allí.
 
 **Datos y sesión**
 
-- **Todo en memoria.** Pacientes, trabajadores, usuarios, historial, medicamentos y claves de
-  idempotencia se pierden al reiniciar cada servicio. Al arrancar solo se recrea el administrador
-  inicial. Sin `ADMIN_PASSWORD` la contraseña es aleatoria, queda en el log y hay que cambiarla en
+- **PachocloSystem guarda todo en memoria.** Pacientes, trabajadores, usuarios, historial y sus
+  claves de idempotencia se pierden al reiniciarlo; al arrancar solo se recrea el administrador
+  inicial. Los medicamentos, su stock y sus claves de idempotencia sí persisten (PostgreSQL). Sin `ADMIN_PASSWORD` la contraseña es aleatoria, queda en el log y hay que cambiarla en
   el primer acceso; sin `JWT_SECRET` los
   tokens no sobreviven a un reinicio.
 - **Sesión de 30 minutos sin renovación.** No hay refresh token: el frontend avisa 5 minutos antes
@@ -181,10 +187,10 @@ de cada punto están allí.
   cliente recibe 503, el stock queda descontado sin registro y reintentar descontaría otra vez.
   Si el timeout salta con las cabeceras ya recibidas pero sin cuerpo, recibe **502** y no hay
   reintento. El frontend siempre envía la clave.
-- **Las claves de idempotencia viven en memoria y caducan a las 24 h** (máx. 10 000 por servicio;
-  al pasarse se descartan las caducadas y luego las más antiguas). "Reintentar sin riesgo de
-  descontar dos veces" solo se cumple mientras MedicamentosService recuerde la clave: sin
-  reiniciarse y dentro de ese plazo.
+- **Las claves de idempotencia caducan a las 24 h.** "Reintentar sin riesgo de descontar dos
+  veces" solo se cumple dentro de ese plazo. MedicamentosService las guarda en PostgreSQL y
+  sobreviven a sus reinicios; las del historial de PachocloSystem viven en memoria (máx. 10 000; al
+  pasarse se descartan las caducadas y luego las más antiguas) y se pierden si se reinicia.
 - **Las claves del frontend viven en el diálogo.** Si se recarga la página tras un resultado
   incierto, el siguiente intento usa otra clave: hay que revisar el historial y el stock antes de
   repetirlo.
@@ -198,8 +204,8 @@ de cada punto están allí.
 
 ### Para una versión futura
 
-- **Base de datos** en lugar de repositorios en memoria (los repositorios ya están detrás de
-  interfaces) y, con ella, claves de idempotencia persistentes y datos que sobrevivan al reinicio.
+- **Base de datos para PachocloSystem**, como ya tiene MedicamentosService (sus repositorios ya
+  están detrás de interfaces), para que pacientes, usuarios e historial sobrevivan al reinicio.
 - **Refresh token** para renovar la sesión sin volver a iniciar sesión.
 - **Rol de farmacia** para gestionar el inventario sin ser ADMIN.
 - **Tests E2E** con Playwright (previstos en el plan del frontend, fase F7).
