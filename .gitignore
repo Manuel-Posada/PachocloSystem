@@ -1,0 +1,9 @@
+# Secretos y configuración local: nunca en el repositorio.
+.env
+.env.*
+*.env
+*.pem
+*.key
+
+# Logs
+*.log

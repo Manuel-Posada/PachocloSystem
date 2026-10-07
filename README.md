@@ -60,9 +60,19 @@ desarrollo**: use los suyos y no los guarde en el repositorio.
 | `JWT_SECRET` | PachocloSystem | `secreto-jwt-ejemplo-solo-desarrollo` | Mínimo 32 bytes. Si se omite, los tokens no sobreviven a un reinicio. |
 
 Opcionales de PachocloSystem: `CORS_ORIGENES` (orígenes permitidos si el frontend se sirve desde
-otro origen; vacío por defecto, sin CORS), `APP_LOGIN_PROXIES_CONFIABLES` (IPs de los proxies
-inversos propios, cuya `X-Forwarded-For` se acepta para el límite de intentos de login) y los
+otro origen; vacío por defecto, sin CORS), `APP_LOGIN_PROXIES_CONFIABLES` (IPs o rangos CIDR de los
+proxies inversos propios, cuya `X-Forwarded-For` se acepta para el límite de intentos de login) y los
 umbrales de ese límite. Detalle en el [README de PachocloSystem](PachocloSystem/README.md).
+Los dos servicios aceptan además `PORT` y `APP_ZONA_HORARIA` (por defecto `America/Bogota`).
+
+### Producción
+
+En producción los dos servicios arrancan con `SPRING_PROFILES_ACTIVE=prod`, que **impide arrancar**
+si falta un secreto o una configuración obligatoria (las claves, las URLs que no sean localhost,
+`CORS_ORIGENES` en https, `ADMIN_PASSWORD` al crear el administrador) y escribe los logs en JSON.
+Exponen health checks en `/actuator/health` (`/liveness` y `/readiness`). El frontend se compila
+para Vercel con `npm run build:vercel` y `API_BASE_URL`. Detalle en la sección "Producción" de cada
+README y en [Despliegue en Vercel](frontend/README.md#despliegue-en-vercel).
 
 ### Git Bash
 
@@ -205,14 +215,15 @@ de cada punto están allí.
 
 **Despliegue**
 
-- Frontend y API se asumen en el **mismo origen** (proxy en desarrollo). CORS está desactivado por
-  defecto; si se sirven desde orígenes distintos hay que definir `CORS_ORIGENES`.
-- Sin `MEDICAMENTOS_API_KEY`, MedicamentosService no exige autenticación (solo desarrollo).
+- En desarrollo el frontend y la API están en el **mismo origen** (proxy de `ng serve`). Si se
+  sirven desde orígenes distintos (Vercel y Railway) hay que definir `CORS_ORIGENES` en
+  PachocloSystem y `API_BASE_URL` en el build del frontend.
+- Sin `MEDICAMENTOS_API_KEY`, MedicamentosService no exige autenticación (solo desarrollo; con el
+  perfil `prod` no arranca sin ella).
+- **Una réplica** de PachocloSystem (ver "Una sola instancia" arriba).
 
 ### Para una versión futura
 
-- **Base de datos para PachocloSystem**, como ya tiene MedicamentosService (sus repositorios ya
-  están detrás de interfaces), para que pacientes, usuarios e historial sobrevivan al reinicio.
 - **Refresh token** para renovar la sesión sin volver a iniciar sesión.
 - **Rol de farmacia** para gestionar el inventario sin ser ADMIN.
 - **Tests E2E** con Playwright (previstos en el plan del frontend, fase F7).

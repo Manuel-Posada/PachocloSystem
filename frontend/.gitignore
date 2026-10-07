@@ -42,3 +42,6 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Generado por scripts/configurar-api.mjs en el build de Vercel
+/src/environments/environment.vercel.ts

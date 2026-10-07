@@ -47,8 +47,9 @@ PostgreSQL, con las tablas creadas por **Flyway** al arrancar (`src/main/resourc
 
 Los tests usan **otra base**, `pachoclosystem_test` (`PACHOCLOSYSTEM_TEST_DB_URL`,
 `PACHOCLOSYSTEM_TEST_DB_USER` y `PACHOCLOSYSTEM_TEST_DB_PASSWORD`, en
-`src/test/resources/application.properties`). Cada contexto de Spring de los tests arranca con el
-esquema recreado y los tests MockMvc la vacían antes de cada prueba. Por seguridad se niegan a
+`src/test/resources/config/application.properties`, que se suma a la configuración principal).
+Cada contexto de Spring de los tests arranca con el esquema recreado y los tests MockMvc la vacían
+antes de cada prueba. Por seguridad se niegan a
 tocar una base cuyo nombre no termine en `_test`.
 
 Para crear las dos bases en un PostgreSQL local, como superusuario (cambie la contraseña):
@@ -76,6 +77,42 @@ ahora la base:
 **Base de datos no disponible.** Con la aplicación en marcha, cualquier petición responde `503`
 "El servicio no puede acceder a sus datos en este momento. Vuelva a intentarlo más tarde.", también
 las que llevan un token válido (nunca `401`, que cerraría la sesión en el frontend).
+
+## Producción
+
+Los valores por defecto son de **desarrollo**. En producción se arranca con el perfil `prod`
+(`SPRING_PROFILES_ACTIVE=prod`, archivo `application-prod.properties`), que:
+
+- **No arranca sin su configuración** (`ValidacionProduccion`, antes de conectar con la base). El
+  error enumera todo lo que falta, con el nombre de cada variable y nunca su valor:
+  - `JWT_SECRET` (mínimo 32 bytes);
+  - `MEDICAMENTOS_API_KEY` (mínimo 32 caracteres, la misma en MedicamentosService);
+  - `MEDICAMENTOS_URL` y `PACHOCLOSYSTEM_DB_URL` que no apunten a localhost;
+  - `PACHOCLOSYSTEM_DB_PASSWORD`;
+  - `CORS_ORIGENES` con el origen https del frontend;
+  - `ADMIN_PASSWORD` mientras el administrador no exista (no se genera una aleatoria que quedaría
+    en el log).
+- Escribe los **logs en JSON** (formato ECS) por la salida estándar.
+
+Sin el perfil, todo funciona como siempre (desarrollo y tests).
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `PORT` | `8080` | Puerto HTTP (lo asigna la plataforma) |
+| `APP_ZONA_HORARIA` | `America/Bogota` | Zona horaria oficial: la fecha de los registros clínicos sale de ella, no de la del servidor. Una zona inválida impide arrancar |
+| `SPRING_PROFILES_ACTIVE` | *(ninguno)* | `prod` en producción |
+
+**Health checks** (públicos, sin token y sin detalles; ningún otro endpoint de Actuator está
+expuesto):
+
+| Ruta | Responde |
+|---|---|
+| `GET /actuator/health` | `200 {"status":"UP"}`, o `503 {"status":"DOWN"}` si la base no está disponible |
+| `GET /actuator/health/liveness` | `200` mientras el proceso responda (no depende de la base) |
+| `GET /actuator/health/readiness` | `200` si puede atender peticiones; `503` sin base de datos |
+
+**Una sola instancia.** El límite de intentos de login y el orden de las peticiones con la misma
+`Idempotency-Key` viven en la memoria del proceso: hay que desplegar **una réplica**.
 
 ## Estructura
 
@@ -570,7 +607,7 @@ con la misma ventana:
 | `APP_LOGIN_MAX_INTENTOS_USUARIO` | `app.login.max-intentos-usuario` | `100` | Fallos de una cuenta, desde cualquier IP, que la bloquean. No puede ser menor que el primero. |
 | `APP_LOGIN_BLOQUEO_MINUTOS` | `app.login.bloqueo-minutos` | `15` | Ventana de conteo y duración del bloqueo. |
 | `APP_LOGIN_MAX_ENTRADAS` | `app.login.max-entradas` | `10000` | Tope de entradas en memoria (purga defensiva). |
-| `APP_LOGIN_PROXIES_CONFIABLES` | `app.login.proxies-confiables` | *(vacío)* | IPs de los proxies inversos propios, separadas por comas (ver abajo). |
+| `APP_LOGIN_PROXIES_CONFIABLES` | `app.login.proxies-confiables` | *(vacío)* | IPs o rangos CIDR de los proxies inversos propios, separados por comas (ver abajo). |
 
 **Por qué tres contadores.** Antes se bloqueaba por usuario y por IP con el mismo
 umbral de 5. Eso permitía a cualquiera bloquear al `admin` durante 15 minutos
@@ -606,11 +643,14 @@ Comportamiento:
 (`getRemoteAddr()`) y `X-Forwarded-For` **se ignora**, porque cualquiera puede
 escribir esa cabecera. Si la aplicación está detrás de un proxy inverso propio,
 hay que poner su IP en `APP_LOGIN_PROXIES_CONFIABLES` (tal como la ve el
-servidor, p. ej. `10.0.0.5`; IPv6 en la forma de `getRemoteAddr()`, como
-`0:0:0:0:0:0:0:1`). Entonces, solo para peticiones que llegan desde esa IP, se
-lee `X-Forwarded-For` de derecha a izquierda saltando los proxies de confianza y
-se usa la primera IP que no lo es: la que añadió el proxy, no la que pudiera
-haber escrito el cliente. Un valor que no sea una IP literal impide arrancar.
+servidor, p. ej. `10.0.0.5` o `::1`), o un rango CIDR si la plataforma no da a sus
+proxies una IP fija (p. ej. `100.64.0.0/10`). Entonces, solo para peticiones que
+llegan desde esas IPs, se lee `X-Forwarded-For` de derecha a izquierda saltando
+los proxies de confianza y se usa la primera IP que no lo es: la que añadió el
+proxy, no la que pudiera haber escrito el cliente. Las IPs se comparan por su
+valor y nunca se consulta DNS; un valor que no sea una IP o un rango válido
+impide arrancar. Un rango demasiado amplio dejaría que clientes de ese rango
+falsificaran su IP: hay que poner solo el de los proxies de la plataforma.
 
 Sin esa configuración detrás de un proxy (como el de desarrollo del frontend,
 que no envía `X-Forwarded-For`), todos llegan con la IP del proxy: cada usuario

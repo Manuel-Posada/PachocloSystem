@@ -11,7 +11,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -265,5 +267,23 @@ class MedicamentoServiceTest {
 
         assertThat(servicio.listarVencidos()).extracting(m -> m.getDatos().lote())
                 .containsExactly("L-2", "L-1");
+    }
+
+    /**
+     * "Hoy" es el día de la zona horaria del reloj, no el de UTC: a las 22:00 de
+     * Bogotá ya es el día siguiente en UTC, pero lo que vence hoy no está vencido.
+     */
+    @Test
+    void hoyEsElDiaDeLaZonaHorariaDelRelojNoElDeUtc() {
+        Instant nocheEnBogota = Instant.parse("2026-06-16T03:00:00Z");
+        MedicamentoService enBogota = new MedicamentoService(repositorio,
+                Clock.fixed(nocheEnBogota, ZoneId.of("America/Bogota")));
+        Medicamento venceHoy = enBogota.registrarMedicamento(datos("Dolex", "L-1", 0, HOY), 1);
+
+        assertThat(enBogota.listarVencidos()).isEmpty();
+        assertThat(enBogota.listarPorVencer(1)).containsExactly(venceHoy);
+
+        MedicamentoService enUtc = new MedicamentoService(repositorio, Clock.fixed(nocheEnBogota, ZoneOffset.UTC));
+        assertThat(enUtc.listarVencidos()).containsExactly(venceHoy);
     }
 }

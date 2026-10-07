@@ -5,6 +5,7 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
+    "build:vercel": "node scripts/configurar-api.mjs && ng build --configuration production,vercel",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "ng lint",

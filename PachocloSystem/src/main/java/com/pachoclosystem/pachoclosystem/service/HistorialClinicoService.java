@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -48,6 +49,8 @@ public class HistorialClinicoService {
     private final IRegistroClinicoRepository repositorioRegistros;
     /** Transacción corta en la que se guarda el registro (sin transacción en los tests unitarios). */
     private final TransactionOperations transacciones;
+    /** Fecha de los registros: el reloj de la aplicación, en su zona horaria oficial. */
+    private final Clock reloj;
     /** Para descontar stock en registros de MEDICACION; null en tests unitarios sin Spring. */
     private final MedicamentosClient clienteMedicamentos;
 
@@ -57,12 +60,13 @@ public class HistorialClinicoService {
         this(repositorioPacientes, repositorioTrabajadores, repositorioRegistros, null);
     }
 
+    /** Sin Spring (tests unitarios): sin transacción y con el reloj del sistema. */
     public HistorialClinicoService(IPacienteRepository repositorioPacientes,
                                    ITrabajadoresRepository repositorioTrabajadores,
                                    IRegistroClinicoRepository repositorioRegistros,
                                    MedicamentosClient clienteMedicamentos) {
         this(repositorioPacientes, repositorioTrabajadores, repositorioRegistros, clienteMedicamentos,
-                TransactionOperations.withoutTransaction());
+                TransactionOperations.withoutTransaction(), Clock.systemDefaultZone());
     }
 
     @Autowired
@@ -70,12 +74,14 @@ public class HistorialClinicoService {
                                    ITrabajadoresRepository repositorioTrabajadores,
                                    IRegistroClinicoRepository repositorioRegistros,
                                    MedicamentosClient clienteMedicamentos,
-                                   TransactionOperations transacciones) {
+                                   TransactionOperations transacciones,
+                                   Clock reloj) {
         this.repositorioPacientes = repositorioPacientes;
         this.repositorioTrabajadores = repositorioTrabajadores;
         this.repositorioRegistros = repositorioRegistros;
         this.clienteMedicamentos = clienteMedicamentos;
         this.transacciones = transacciones;
+        this.reloj = reloj;
     }
 
     /**
@@ -199,7 +205,7 @@ public class HistorialClinicoService {
             }
         }
 
-        RegistroClinico registro = new RegistroClinico(tipo, contenidoFinal, autor, medicamento, cantidad);
+        RegistroClinico registro = new RegistroClinico(tipo, contenidoFinal, autor, medicamento, cantidad, reloj);
         return transacciones.execute(estado -> {
             repositorioRegistros.insertar(paciente.getIdPaciente(), registro);
             RegistroResponse creado = RegistroResponse.from(paciente, registro);

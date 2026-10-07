@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -188,7 +189,8 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
     void registroGuardaLaCopiaDelAutorYLaFechaExacta() {
         repositorioPacientes.guardarPaciente(new Paciente("PAC-0001", "Ana Torres", 30, 101));
         Doctor autor = new Doctor("DOC-0001", "Carlos Mena", "Cardiologia");
-        RegistroClinico registro = new RegistroClinico(TipoRegistro.MEDICACION, "Paracetamol", autor, "MED-0001", 2);
+        RegistroClinico registro = new RegistroClinico(TipoRegistro.MEDICACION, "Paracetamol", autor, "MED-0001", 2,
+                Clock.systemDefaultZone());
 
         repositorioRegistros.insertar("PAC-0001", registro);
 
@@ -207,7 +209,7 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
     void registroDeEnfermeroSinMedicacion() {
         repositorioPacientes.guardarPaciente(new Paciente("PAC-0001", "Ana Torres", 30, 101));
         RegistroClinico registro = new RegistroClinico(TipoRegistro.EVOLUCION, "Estable",
-                new Enfermero("ENF-0001", "Maria Lopez", NivelExperiencia.NOVATO));
+                new Enfermero("ENF-0001", "Maria Lopez", NivelExperiencia.NOVATO), Clock.systemDefaultZone());
 
         repositorioRegistros.insertar("PAC-0001", registro);
 
@@ -245,7 +247,7 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
     @Test
     void unRegistroNecesitaUnPacienteExistente() {
         RegistroClinico registro = new RegistroClinico(TipoRegistro.EVOLUCION, "Estable",
-                new Doctor("DOC-0001", "Carlos Mena", "Cardiologia"));
+                new Doctor("DOC-0001", "Carlos Mena", "Cardiologia"), Clock.systemDefaultZone());
 
         assertThatExceptionOfType(DataIntegrityViolationException.class)
                 .isThrownBy(() -> repositorioRegistros.insertar("PAC-9999", registro));

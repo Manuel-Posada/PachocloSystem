@@ -52,6 +52,14 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "vercel": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.vercel.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"

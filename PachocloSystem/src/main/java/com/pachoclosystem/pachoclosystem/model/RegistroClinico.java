@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.model;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -8,8 +9,10 @@ import java.util.UUID;
  * Registro del historial clínico. Inmutable una vez creado: guarda una copia del
  * autor ({@link AutorRegistro}) tal como era al firmarlo.
  *
- * <p>La fecha se trunca a microsegundos, la precisión de PostgreSQL: así el alta
- * y cualquier lectura posterior devuelven exactamente la misma fecha.</p>
+ * <p>La fecha es la hora local del {@link Clock} recibido (el de la aplicación, en
+ * su zona horaria oficial) y se trunca a microsegundos, la precisión de
+ * PostgreSQL: así el alta y cualquier lectura posterior devuelven exactamente la
+ * misma fecha.</p>
  */
 public class RegistroClinico {
 
@@ -22,13 +25,13 @@ public class RegistroClinico {
     private final String idMedicamento;
     private final Integer cantidad;
 
-    public RegistroClinico(TipoRegistro tipo, String contenido, TrabajadorHospital autor) {
-        this(tipo, contenido, autor, null, null);
+    public RegistroClinico(TipoRegistro tipo, String contenido, TrabajadorHospital autor, Clock reloj) {
+        this(tipo, contenido, autor, null, null, reloj);
     }
 
     public RegistroClinico(TipoRegistro tipo, String contenido, TrabajadorHospital autor,
-                           String idMedicamento, Integer cantidad) {
-        this(UUID.randomUUID().toString(), LocalDateTime.now().truncatedTo(ChronoUnit.MICROS),
+                           String idMedicamento, Integer cantidad, Clock reloj) {
+        this(UUID.randomUUID().toString(), LocalDateTime.now(reloj).truncatedTo(ChronoUnit.MICROS),
                 AutorRegistro.de(autor), tipo, contenido, idMedicamento, cantidad);
     }
 

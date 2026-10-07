@@ -63,6 +63,18 @@ class BaseDatosNoDisponibleTest {
     }
 
     @Test
+    void elHealthCheckRespondeDownPeroElProcesoSigueVivo() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value("DOWN"));
+        mockMvc.perform(get("/actuator/health/readiness"))
+                .andExpect(status().isServiceUnavailable());
+        mockMvc.perform(get("/actuator/health/liveness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
     void sinBaseDeDatosElServicioNoArranca() {
         // Como argumentos de línea de comandos: tienen prioridad sobre la
         // configuración de los tests, que apunta a la base real.

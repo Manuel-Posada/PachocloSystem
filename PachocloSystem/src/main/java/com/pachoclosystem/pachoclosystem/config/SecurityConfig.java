@@ -28,7 +28,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
  * Cadena de filtros de seguridad stateless con tokens JWT (HS256) y resource
  * server de OAuth2 (Nimbus).
  *
- * <p>Solo {@code POST /api/auth/login} es público; el resto exige un token y
+ * <p>Solo {@code POST /api/auth/login} y los health checks
+ * ({@code GET /actuator/health/**}) son públicos; el resto exige un token y
  * cada ruta, un rol (tabla de permisos en el README y en
  * {@code AutorizacionPorRolTest}). Las rutas concretas van antes que las
  * generales: Spring aplica la primera regla que coincide. Cada recurso termina
@@ -95,6 +96,8 @@ public class SecurityConfig {
                 .logout(cierre -> cierre.disable())
                 .authorizeHttpRequests(peticiones -> peticiones
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        // Health checks de la plataforma de despliegue (sin detalles internos).
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                         // Identidad y cambio de contraseña propia: cualquier usuario
                         // autenticado, también con la contraseña pendiente de cambio.
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()

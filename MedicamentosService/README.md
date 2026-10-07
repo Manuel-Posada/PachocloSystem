@@ -36,6 +36,32 @@ MEDICAMENTOS_TEST_DB_PASSWORD=<contraseña> ./mvnw test      # pruebas (contra m
 Los datos se guardan en **PostgreSQL** y sobreviven a los reinicios. Si la base no está disponible,
 el servicio no arranca.
 
+## Producción
+
+Los valores por defecto son de **desarrollo**. En producción se arranca con el perfil `prod`
+(`SPRING_PROFILES_ACTIVE=prod`, archivo `application-prod.properties`), que:
+
+- **No arranca sin su configuración** (`ValidacionProduccion`, antes de conectar con la base). El
+  error enumera lo que falta, con el nombre de cada variable y nunca su valor:
+  - `MEDICAMENTOS_API_KEY` de al menos 32 caracteres (la misma en PachocloSystem): en producción la
+    API nunca queda sin clave de servicio;
+  - `MEDICAMENTOS_DB_URL` que no apunte a localhost;
+  - `MEDICAMENTOS_DB_PASSWORD`.
+- Escribe los **logs en JSON** (formato ECS) por la salida estándar.
+
+Sin el perfil, todo funciona como siempre (desarrollo y tests). El servicio no debe tener dirección
+pública: solo PachocloSystem lo llama, por la red privada de la plataforma.
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `PORT` | `8081` | Puerto HTTP (lo asigna la plataforma) |
+| `APP_ZONA_HORARIA` | `America/Bogota` | Zona horaria oficial: "hoy" para vencidos y por vencer sale de ella, no de la del servidor. Una zona inválida impide arrancar |
+| `SPRING_PROFILES_ACTIVE` | *(ninguno)* | `prod` en producción |
+
+**Health checks** (sin clave de servicio y sin detalles; ningún otro endpoint de Actuator está
+expuesto): `GET /actuator/health` (`503` si la base no está disponible),
+`/actuator/health/liveness` (no depende de la base) y `/actuator/health/readiness` (`503` sin base).
+
 ## Estructura
 
 ```
