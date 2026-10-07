@@ -59,6 +59,17 @@ const NOTA_SIN_CONFIRMAR =
   'stock pudo registrarse igualmente: compruebe el stock en Medicamentos antes de volver a ' +
   'intentarlo, o guarde la medicación sin descontar stock.';
 
+/** 409 al crear: la clave ya se usó con otra petición. Con la clave nueva se puede reenviar. */
+const NOTA_CLAVE_USADA = 'Revise los datos y vuelva a guardar el registro.';
+
+/**
+ * Clave `Idempotency-Key` de un intento de registro: la misma en sus reintentos
+ * (dobles clics, errores de red, 503), nueva para cada registro distinto.
+ */
+function nuevaClave(): string {
+  return crypto.randomUUID();
+}
+
 /** Estado del inventario para elegir el medicamento a descontar; se carga al pedirlo. */
 type Inventario =
   | { estado: 'sin-cargar' | 'cargando' }
@@ -173,6 +184,8 @@ export class RegistroDialogoComponent {
   });
   protected readonly enviando = signal(false);
   protected readonly errores = signal<readonly string[]>([]);
+  /** Clave del intento actual: nueva al abrir el diálogo, tras un alta correcta y tras un 409. */
+  private clave = nuevaClave();
 
   /** El enfermero no crea diagnósticos (403 en el backend): ni siquiera se ofrece. */
   protected readonly tipos = TIPOS_REGISTRO.filter(
@@ -206,16 +219,30 @@ export class RegistroDialogoComponent {
   }
 
   protected guardar(): void {
+    if (this.enviando()) {
+      return;
+    }
     if (this.formulario.invalid) {
       this.formulario.markAllAsTouched();
       return;
     }
     this.enviando.set(true);
     this.errores.set([]);
-    this.servicio.crear(this.datos.paciente.idPaciente, this.solicitud()).subscribe({
-      next: (creado) => this.dialogo.close(creado),
+    this.servicio.crear(this.datos.paciente.idPaciente, this.solicitud(), this.clave).subscribe({
+      // Un 201 repetido (Idempotency-Replayed: true) es el mismo registro: un alta normal.
+      next: (creado) => {
+        this.clave = nuevaClave();
+        this.dialogo.close(creado);
+      },
       error: (error: unknown) => {
-        this.errores.set(this.mensajesDeFallo(error));
+        const claveUsada = error instanceof ApiError && error.status === 409;
+        if (claveUsada) {
+          this.clave = nuevaClave();
+        }
+        this.errores.set([
+          ...this.mensajesDeFallo(error),
+          ...(claveUsada ? [NOTA_CLAVE_USADA] : []),
+        ]);
         this.enviando.set(false);
       },
     });

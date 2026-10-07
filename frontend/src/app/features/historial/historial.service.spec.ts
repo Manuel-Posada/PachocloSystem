@@ -57,20 +57,47 @@ describe('HistorialService', () => {
     expect(dePaciente).toEqual(['d', 'c', 'b', 'a']);
   });
 
-  it('crea un registro con POST', () => {
-    const registro: RegistroRequest = {
-      tipo: 'MEDICACION',
-      contenido: 'Paracetamol 500 mg vía oral',
-      signosVitales: null,
-      idMedicamento: 'MED-0001',
-      cantidad: 2,
-    };
+  const registro: RegistroRequest = {
+    tipo: 'MEDICACION',
+    contenido: 'Paracetamol 500 mg vía oral',
+    signosVitales: null,
+    idMedicamento: 'MED-0001',
+    cantidad: 2,
+  };
+  const clave = '8f14e45f-ceea-4672-a5b1-7a0c3c9e2f01';
 
-    servicio.crear('PAC-0001', registro).subscribe();
+  it('crea un registro con POST y la clave en Idempotency-Key', () => {
+    servicio.crear('PAC-0001', registro, clave).subscribe();
 
     const peticion = http.expectOne('/api/pacientes/PAC-0001/historial');
     expect(peticion.request.method).toBe('POST');
     expect(peticion.request.body).toEqual(registro);
+    expect(peticion.request.headers.get('Idempotency-Key')).toBe(clave);
     peticion.flush({});
+  });
+
+  it('una repetición (201 con Idempotency-Replayed) se entrega como un alta normal', () => {
+    let recibido: unknown;
+    servicio.crear('PAC-0001', registro, clave).subscribe((r) => (recibido = r));
+
+    http
+      .expectOne('/api/pacientes/PAC-0001/historial')
+      .flush(
+        { idRegistro: 'r1' },
+        { status: 201, statusText: 'Created', headers: { 'Idempotency-Replayed': 'true' } },
+      );
+
+    expect(recibido).toEqual({ idRegistro: 'r1' });
+  });
+
+  it('las consultas del historial no llevan Idempotency-Key', () => {
+    servicio.listar('todos').subscribe();
+    servicio.listarDePaciente('PAC-0001').subscribe();
+
+    for (const url of ['/api/historial?filtro=todos', '/api/pacientes/PAC-0001/historial']) {
+      const peticion = http.expectOne(url);
+      expect(peticion.request.headers.has('Idempotency-Key')).toBe(false);
+      peticion.flush([]);
+    }
   });
 });

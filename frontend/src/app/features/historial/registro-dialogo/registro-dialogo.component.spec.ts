@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
 import { PermisosService } from '../../../core/permisos';
 import { Medicamento } from '../../medicamentos/medicamento.models';
@@ -12,13 +12,23 @@ import { DatosRegistroDialogo, RegistroDialogoComponent } from './registro-dialo
 /** Si el rol simulado puede crear diagnósticos (el enfermero no). */
 let diagnostica = true;
 
+type Uuid = ReturnType<Crypto['randomUUID']>;
+
+/** `crypto.randomUUID` predecible: clave-1, clave-2... en el orden en que se generan. */
+function simularClaves(): void {
+  let n = 0;
+  vi.spyOn(crypto, 'randomUUID').mockImplementation(() => `clave-${++n}` as Uuid);
+}
+
 describe('RegistroDialogoComponent', () => {
   const datos: DatosRegistroDialogo = {
     paciente: { idPaciente: 'PAC-0001', nombre: 'Ana Ruiz', edad: 40, habitacion: 12 },
     autor: 'DOC-0001',
   };
   const creado = { idRegistro: 'r1' } as Registro;
-  const servicio = { crear: vi.fn<(id: string, r: RegistroRequest) => Observable<Registro>>() };
+  const servicio = {
+    crear: vi.fn<(id: string, r: RegistroRequest, clave: string) => Observable<Registro>>(),
+  };
   const dialogo = { close: vi.fn() };
 
   async function renderizar() {
@@ -76,6 +86,7 @@ describe('RegistroDialogoComponent', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    simularClaves();
     diagnostica = true;
   });
 
@@ -121,13 +132,17 @@ describe('RegistroDialogoComponent', () => {
     await rellenar({ contenido: '  Hipertensión leve  ' });
     await enviar();
 
-    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', {
-      tipo: 'DIAGNOSTICO',
-      contenido: 'Hipertensión leve',
-      signosVitales: null,
-      idMedicamento: null,
-      cantidad: null,
-    });
+    expect(servicio.crear).toHaveBeenCalledWith(
+      'PAC-0001',
+      {
+        tipo: 'DIAGNOSTICO',
+        contenido: 'Hipertensión leve',
+        signosVitales: null,
+        idMedicamento: null,
+        cantidad: null,
+      },
+      'clave-1',
+    );
     expect(dialogo.close).toHaveBeenCalledWith(creado);
   });
 
@@ -180,21 +195,25 @@ describe('RegistroDialogoComponent', () => {
     await rellenar({ ...signosValidos, observaciones: '   ' });
     await enviar();
 
-    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', {
-      tipo: 'SIGNOS_VITALES',
-      contenido: null,
-      signosVitales: {
-        temperatura: 36.5,
-        frecCardiaca: 80,
-        presionSistolica: 120,
-        presionDiastolica: 80,
-        frecRespiratoria: 16,
-        saturacion: 98,
-        observaciones: null,
+    expect(servicio.crear).toHaveBeenCalledWith(
+      'PAC-0001',
+      {
+        tipo: 'SIGNOS_VITALES',
+        contenido: null,
+        signosVitales: {
+          temperatura: 36.5,
+          frecCardiaca: 80,
+          presionSistolica: 120,
+          presionDiastolica: 80,
+          frecRespiratoria: 16,
+          saturacion: 98,
+          observaciones: null,
+        },
+        idMedicamento: null,
+        cantidad: null,
       },
-      idMedicamento: null,
-      cantidad: null,
-    });
+      'clave-1',
+    );
   });
 
   it('muestra en el formulario todos los mensajes de un 400 y sigue abierto', async () => {
@@ -213,6 +232,120 @@ describe('RegistroDialogoComponent', () => {
     expect(mensajes).toEqual(['Mensaje uno.', 'Mensaje dos.']);
     expect(dialogo.close).not.toHaveBeenCalled();
   });
+
+  describe('clave de idempotencia', () => {
+    const evolucion = {
+      tipo: 'EVOLUCION',
+      contenido: 'Mejora progresiva',
+      signosVitales: null,
+      idMedicamento: null,
+      cantidad: null,
+    };
+
+    async function evolucionLista() {
+      const vista = await renderizar();
+      await vista.elegirTipo('Evolución');
+      await vista.rellenar({ contenido: 'Mejora progresiva' });
+      return vista;
+    }
+
+    it('cada registro nuevo (cada diálogo) tiene su propia clave', async () => {
+      // Un 400 no renueva la clave: así se ve solo la clave con la que nace cada diálogo.
+      servicio.crear.mockReturnValue(throwError(() => new ApiError(400, ['Mensaje.'])));
+
+      await (await evolucionLista()).enviar();
+      TestBed.resetTestingModule();
+      await (await evolucionLista()).enviar();
+
+      expect(servicio.crear.mock.calls.map(([, , clave]) => clave)).toEqual(['clave-1', 'clave-2']);
+    });
+
+    it('un doble clic mientras se envía no manda una segunda petición', async () => {
+      const respuesta = new Subject<Registro>();
+      servicio.crear.mockReturnValue(respuesta);
+      const { enviar } = await evolucionLista();
+
+      await enviar();
+      await enviar();
+      respuesta.next(creado);
+      respuesta.complete();
+
+      expect(servicio.crear).toHaveBeenCalledTimes(1);
+      expect(dialogo.close).toHaveBeenCalledWith(creado);
+    });
+
+    it('tras un alta correcta la clave se renueva y no sale otra petición mientras se cierra', async () => {
+      servicio.crear.mockReturnValue(of(creado));
+      const { enviar } = await evolucionLista();
+
+      await enviar();
+      expect(crypto.randomUUID).toHaveBeenCalledTimes(2);
+
+      // Un clic más antes de que se cierre el diálogo no crea un segundo registro con la clave nueva.
+      await enviar();
+      expect(servicio.crear).toHaveBeenCalledTimes(1);
+      expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', evolucion, 'clave-1');
+    });
+
+    it('una repetición del backend (201 replay) se trata como un alta normal', async () => {
+      // El servicio entrega el mismo Registro con o sin Idempotency-Replayed.
+      servicio.crear.mockReturnValue(of(creado));
+      const { enviar, elemento } = await evolucionLista();
+
+      await enviar();
+
+      expect(dialogo.close).toHaveBeenCalledWith(creado);
+      expect(elemento.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('un error que no cambió nada (400) deja corregir y conserva la clave', async () => {
+      servicio.crear
+        .mockReturnValueOnce(throwError(() => new ApiError(400, ['Mensaje.'])))
+        .mockReturnValueOnce(of(creado));
+      const { enviar, rellenar } = await evolucionLista();
+
+      await enviar();
+      await rellenar({ contenido: 'Mejora progresiva, sin fiebre' });
+      await enviar();
+
+      expect(servicio.crear).toHaveBeenNthCalledWith(1, 'PAC-0001', evolucion, 'clave-1');
+      expect(servicio.crear).toHaveBeenNthCalledWith(
+        2,
+        'PAC-0001',
+        { ...evolucion, contenido: 'Mejora progresiva, sin fiebre' },
+        'clave-1',
+      );
+    });
+
+    it('un 409 de clave ya usada genera una clave nueva y deja revisar y reenviar', async () => {
+      servicio.crear
+        .mockReturnValueOnce(
+          throwError(
+            () => new ApiError(409, ['La clave de idempotencia ya se usó para otra petición.']),
+          ),
+        )
+        .mockReturnValueOnce(of(creado));
+      const { enviar, rellenar, elemento } = await evolucionLista();
+
+      await enviar();
+      const mensajes = Array.from(elemento.querySelectorAll('[role="alert"] p')).map(
+        (p) => p.textContent,
+      );
+      expect(mensajes).toEqual([
+        'La clave de idempotencia ya se usó para otra petición.',
+        'Revise los datos y vuelva a guardar el registro.',
+      ]);
+      expect(
+        elemento.querySelector<HTMLTextAreaElement>('[formControlName="contenido"]')!.disabled,
+      ).toBe(false);
+
+      await rellenar({ contenido: 'Mejora progresiva revisada' });
+      await enviar();
+
+      expect(servicio.crear.mock.calls.map(([, , clave]) => clave)).toEqual(['clave-1', 'clave-2']);
+      expect(dialogo.close).toHaveBeenCalledWith(creado);
+    });
+  });
 });
 
 describe('RegistroDialogoComponent · medicación', () => {
@@ -221,7 +354,9 @@ describe('RegistroDialogoComponent · medicación', () => {
     autor: 'DOC-0001',
   };
   const creado = { idRegistro: 'r1' } as Registro;
-  const servicio = { crear: vi.fn<(id: string, r: RegistroRequest) => Observable<Registro>>() };
+  const servicio = {
+    crear: vi.fn<(id: string, r: RegistroRequest, clave: string) => Observable<Registro>>(),
+  };
   const dialogo = { close: vi.fn() };
   const inventario = { listar: vi.fn<() => Observable<Medicamento[]>>() };
   const dolex = {
@@ -303,6 +438,7 @@ describe('RegistroDialogoComponent · medicación', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    simularClaves();
     inventario.listar.mockReturnValue(of([dolex, caducado]));
   });
 
@@ -313,7 +449,7 @@ describe('RegistroDialogoComponent · medicación', () => {
     await enviar();
 
     expect(inventario.listar).not.toHaveBeenCalled();
-    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', sinDescuento);
+    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', sinDescuento, 'clave-1');
   });
 
   it('con descuento exige medicamento y cantidad, y envía los dos', async () => {
@@ -336,11 +472,15 @@ describe('RegistroDialogoComponent · medicación', () => {
     expect(elemento.querySelector('mat-hint')?.textContent).toContain('Disponible: 15');
     await enviar();
 
-    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', {
-      ...sinDescuento,
-      idMedicamento: 'MED-0001',
-      cantidad: 2,
-    });
+    expect(servicio.crear).toHaveBeenCalledWith(
+      'PAC-0001',
+      {
+        ...sinDescuento,
+        idMedicamento: 'MED-0001',
+        cantidad: 2,
+      },
+      'clave-1',
+    );
   });
 
   it('si el inventario no carga, avisa y deja guardar la medicación sin descuento', async () => {
@@ -356,7 +496,7 @@ describe('RegistroDialogoComponent · medicación', () => {
     expect(casilla().checked).toBe(false);
 
     await enviar();
-    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', sinDescuento);
+    expect(servicio.crear).toHaveBeenCalledWith('PAC-0001', sinDescuento, 'clave-1');
   });
 
   it('desde el aviso se puede reintentar la carga del inventario', async () => {

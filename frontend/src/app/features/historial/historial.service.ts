@@ -3,6 +3,9 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { FiltroHistorial, Registro, RegistroRequest } from './historial.models';
 
+/** Cabecera con la que el backend reconoce la repetición de un mismo alta. */
+export const CABECERA_IDEMPOTENCIA = 'Idempotency-Key';
+
 /** Acceso al historial clínico. Los errores llegan como `ApiError` (errorInterceptor). */
 /**
  * El backend devuelve el historial del más antiguo al más reciente; se muestra
@@ -39,9 +42,21 @@ export class HistorialService {
   /**
    * Crea un registro. Si descuenta stock, el backend hace antes la salida en
    * MedicamentosService y, si falla, no guarda el registro.
+   *
+   * `claveIdempotencia` va en la cabecera `Idempotency-Key` (solo en esta
+   * petición): repetirla con la misma clave y el mismo cuerpo devuelve el mismo
+   * registro (201 con `Idempotency-Replayed: true`, que es un alta normal) sin
+   * crear otro ni descontar dos veces. Ver el README del backend, "Registros
+   * idempotentes".
    */
-  crear(idPaciente: string, registro: RegistroRequest): Observable<Registro> {
-    return this.http.post<Registro>(this.url(idPaciente), registro);
+  crear(
+    idPaciente: string,
+    registro: RegistroRequest,
+    claveIdempotencia: string,
+  ): Observable<Registro> {
+    return this.http.post<Registro>(this.url(idPaciente), registro, {
+      headers: { [CABECERA_IDEMPOTENCIA]: claveIdempotencia },
+    });
   }
 
   private url(idPaciente: string): string {
