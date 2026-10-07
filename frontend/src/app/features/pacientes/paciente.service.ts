@@ -16,6 +16,10 @@ export class PacienteService {
     return this.http.get<Paciente[]>(URL, { params: q ? new HttpParams().set('q', q) : {} });
   }
 
+  obtener(id: string): Observable<Paciente> {
+    return this.http.get<Paciente>(`${URL}/${encodeURIComponent(id)}`);
+  }
+
   registrar(datos: PacienteRequest): Observable<Paciente> {
     return this.http.post<Paciente>(URL, datos);
   }

@@ -39,6 +39,15 @@ describe('PacienteService', () => {
     http.expectOne('/api/pacientes').flush([]);
   });
 
+  it('obtiene un paciente', () => {
+    let recibido: Paciente | undefined;
+    servicio.obtener('PAC-0001').subscribe((p) => (recibido = p));
+
+    http.expectOne('/api/pacientes/PAC-0001').flush(ana);
+
+    expect(recibido).toEqual(ana);
+  });
+
   it('registra con POST', () => {
     servicio.registrar(datos).subscribe();
 
