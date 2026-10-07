@@ -6,35 +6,32 @@ import com.pachoclosystem.medicamentos.exception.SolicitudInvalidaException;
 import com.pachoclosystem.medicamentos.model.DatosMedicamento;
 import com.pachoclosystem.medicamentos.model.Medicamento;
 import com.pachoclosystem.medicamentos.model.Presentacion;
-import com.pachoclosystem.medicamentos.repository.MedicamentoRepositoryImpl;
+import com.pachoclosystem.medicamentos.repository.MedicamentoRepositoryEnMemoria;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-/** Reglas de negocio de los medicamentos, sin contexto Spring y con la fecha fijada. */
+/**
+ * Reglas de negocio de los medicamentos, sin base de datos (doble en memoria) y
+ * con la fecha fijada. La concurrencia se prueba contra PostgreSQL en
+ * {@code ConcurrenciaStockIntegrationTest}.
+ */
 class MedicamentoServiceTest {
 
     private static final LocalDate HOY = LocalDate.of(2026, 6, 15);
 
-    private MedicamentoRepositoryImpl repositorio;
+    private MedicamentoRepositoryEnMemoria repositorio;
     private MedicamentoService servicio;
 
     @BeforeEach
     void preparar() {
-        repositorio = new MedicamentoRepositoryImpl();
+        repositorio = new MedicamentoRepositoryEnMemoria();
         Clock reloj = Clock.fixed(HOY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         servicio = new MedicamentoService(repositorio, reloj);
     }
@@ -217,42 +214,6 @@ class MedicamentoServiceTest {
         assertThatExceptionOfType(SolicitudInvalidaException.class)
                 .isThrownBy(() -> servicio.registrarSalida(medicamento.getIdMedicamento(), 1))
                 .withMessage("No se puede dar salida a un medicamento vencido.");
-    }
-
-    @Test
-    void salidasConcurrentesNuncaDejanElStockNegativo() throws Exception {
-        Medicamento medicamento = registrar("Dolex", "L-1", 100, 5, HOY.plusYears(1));
-        String id = medicamento.getIdMedicamento();
-        int hilos = 16;
-        int intentosPorHilo = 20;
-        ExecutorService ejecutor = Executors.newFixedThreadPool(hilos);
-        CountDownLatch salida = new CountDownLatch(1);
-        List<Future<Integer>> resultados = new ArrayList<>();
-
-        for (int i = 0; i < hilos; i++) {
-            resultados.add(ejecutor.submit(() -> {
-                salida.await();
-                int exitosas = 0;
-                for (int j = 0; j < intentosPorHilo; j++) {
-                    try {
-                        servicio.registrarSalida(id, 1);
-                        exitosas++;
-                    } catch (SolicitudInvalidaException sinStock) {
-                        // esperado cuando se agota
-                    }
-                }
-                return exitosas;
-            }));
-        }
-        salida.countDown();
-        int totalExitosas = 0;
-        for (Future<Integer> resultado : resultados) {
-            totalExitosas += resultado.get(10, TimeUnit.SECONDS);
-        }
-        ejecutor.shutdown();
-
-        assertThat(totalExitosas).isEqualTo(100);
-        assertThat(medicamento.getCantidadStock()).isZero();
     }
 
     @Test

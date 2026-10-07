@@ -7,6 +7,7 @@ import com.pachoclosystem.medicamentos.model.DatosMedicamento;
 import com.pachoclosystem.medicamentos.model.Medicamento;
 import com.pachoclosystem.medicamentos.repository.IMedicamentoRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -14,6 +15,15 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * Reglas de negocio de los medicamentos.
+ *
+ * <p>Las operaciones que cambian un medicamento existente (entradas, salidas y
+ * edición) se ejecutan en una transacción y leen el medicamento con
+ * {@link IMedicamentoRepository#buscarPorIdParaActualizar}: comprobar y escribir
+ * ocurre bajo el mismo bloqueo de fila, así que dos salidas simultáneas nunca
+ * dejan el stock en negativo ni se pierde una actualización.</p>
+ */
 @Service
 public class MedicamentoService {
 
@@ -32,6 +42,7 @@ public class MedicamentoService {
         this.reloj = reloj;
     }
 
+    @Transactional
     public Medicamento registrarMedicamento(DatosMedicamento datos, int cantidadStock) {
         Medicamento medicamento = new Medicamento(repositorio.generarNuevoId(), recortar(datos), cantidadStock);
         if (!repositorio.guardar(medicamento)) {
@@ -40,15 +51,23 @@ public class MedicamentoService {
         return medicamento;
     }
 
-    /** Edita los datos descriptivos; el stock no cambia. */
+    /**
+     * Edita los datos descriptivos; el stock no cambia. Si el medicamento se
+     * elimina a la vez, la edición responde 404.
+     */
+    @Transactional
     public Medicamento editarMedicamento(String id, DatosMedicamento datos) {
-        Medicamento medicamento = obtenerMedicamento(id);
-        if (!repositorio.actualizarDatos(medicamento, recortar(datos))) {
-            throw duplicado();
+        Medicamento medicamento = obtenerParaActualizar(id);
+        switch (repositorio.actualizarDatos(medicamento, recortar(datos))) {
+            case DUPLICADO -> throw duplicado();
+            case NO_EXISTE -> throw noEncontrado(id);
+            case ACTUALIZADO -> {
+            }
         }
         return medicamento;
     }
 
+    @Transactional
     public void eliminarMedicamento(String id) {
         if (!repositorio.eliminar(id)) {
             throw noEncontrado(id);
@@ -74,21 +93,26 @@ public class MedicamentoService {
                 .toList();
     }
 
+    @Transactional
     public Medicamento registrarEntrada(String id, int cantidad) {
-        Medicamento medicamento = obtenerMedicamento(id);
+        Medicamento medicamento = obtenerParaActualizar(id);
         medicamento.ingresarStock(cantidad);
-        repositorio.guardar(medicamento);
+        repositorio.actualizarStock(id, medicamento.getCantidadStock());
         return medicamento;
     }
 
-    /** Resta stock; falla si no alcanza o si el medicamento está vencido. */
+    /**
+     * Resta stock; falla si no alcanza o si el medicamento está vencido. Si ya
+     * hay una transacción (salida con clave de idempotencia), se une a ella.
+     */
+    @Transactional
     public Medicamento registrarSalida(String id, int cantidad) {
-        Medicamento medicamento = obtenerMedicamento(id);
+        Medicamento medicamento = obtenerParaActualizar(id);
         if (medicamento.estaVencido(hoy())) {
             throw new SolicitudInvalidaException("No se puede dar salida a un medicamento vencido.");
         }
         medicamento.retirarStock(cantidad);
-        repositorio.guardar(medicamento);
+        repositorio.actualizarStock(id, medicamento.getCantidadStock());
         return medicamento;
     }
 
@@ -124,6 +148,15 @@ public class MedicamentoService {
 
     public LocalDate hoy() {
         return LocalDate.now(reloj);
+    }
+
+    /** Lee y bloquea el medicamento hasta el final de la transacción; 404 si no existe. */
+    private Medicamento obtenerParaActualizar(String id) {
+        Medicamento medicamento = repositorio.buscarPorIdParaActualizar(id);
+        if (medicamento == null) {
+            throw noEncontrado(id);
+        }
+        return medicamento;
     }
 
     private static DatosMedicamento recortar(DatosMedicamento d) {

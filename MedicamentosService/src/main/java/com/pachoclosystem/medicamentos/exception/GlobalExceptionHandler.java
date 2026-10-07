@@ -3,10 +3,13 @@ package com.pachoclosystem.medicamentos.exception;
 import com.pachoclosystem.medicamentos.dto.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -45,6 +48,8 @@ public class GlobalExceptionHandler {
             "El tipo de contenido solicitado en la respuesta no está disponible.";
     private static final String MENSAJE_ERROR_INTERNO =
             "Se produjo un error interno. Vuelva a intentarlo más tarde.";
+    private static final String MENSAJE_BASE_DE_DATOS_NO_DISPONIBLE =
+            "El servicio no puede acceder a sus datos en este momento. Vuelva a intentarlo más tarde.";
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> noEncontrado(NotFoundException ex) {
@@ -116,6 +121,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
     public ResponseEntity<ErrorResponse> tipoAceptadoNoDisponible(HttpMediaTypeNotAcceptableException ex) {
         return respuesta(HttpStatus.NOT_ACCEPTABLE, List.of(MENSAJE_TIPO_ACEPTADO_NO_DISPONIBLE));
+    }
+
+    /**
+     * 503: la base de datos no responde (sin conexión, pool agotado) o la
+     * operación no pudo completarse a tiempo (fila bloqueada más de
+     * {@code lock_timeout}, consulta cancelada). La transacción se ha deshecho
+     * entera, así que reintentar es seguro. El detalle solo va al log.
+     */
+    @ExceptionHandler({DataAccessResourceFailureException.class, CannotCreateTransactionException.class,
+            TransientDataAccessException.class})
+    public ResponseEntity<ErrorResponse> baseDeDatosNoDisponible(Exception ex) {
+        LOG.error("Base de datos no disponible o sin respuesta a tiempo", ex);
+        return respuesta(HttpStatus.SERVICE_UNAVAILABLE, List.of(MENSAJE_BASE_DE_DATOS_NO_DISPONIBLE));
     }
 
     /**

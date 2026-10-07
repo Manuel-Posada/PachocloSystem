@@ -166,7 +166,8 @@ Las claves se guardan **en memoria** (como el resto de datos):
 | `historial.idempotencia.max-entradas` | `10000` | Cuántas claves como máximo; al pasarse se descartan las caducadas y luego las más antiguas |
 
 Una clave caducada o descartada se trata como nueva. "Sin riesgo de descontar dos veces" se cumple
-mientras MedicamentosService recuerde la clave (24 h por defecto y sin reiniciarse).
+mientras MedicamentosService recuerde la clave: 24 h por defecto. MedicamentosService las guarda en
+PostgreSQL, así que sobreviven a sus reinicios.
 
 **Para el frontend (cliente de la API), lo que cambia:**
 
