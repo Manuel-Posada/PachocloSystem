@@ -104,9 +104,11 @@ se le avisa antes y, al guardar, vuelve al login con un mensaje que lo explica.
 - **Descuento de stock (MEDICACION):** el backend hace primero la salida en MedicamentosService y
   solo guarda el registro si sale bien. Si falla con un 4xx (stock insuficiente, vencido...), no
   se guarda nada y el formulario lo indica.
-- **Altas idempotentes (`Idempotency-Key`):** cada alta lleva una clave `crypto.randomUUID()` en
-  la cabecera `Idempotency-Key`, solo en `POST /api/pacientes/{id}/historial` (contrato en el
-  README del backend, "Registros idempotentes"). Repetir con la misma clave y el mismo cuerpo
+- **Altas idempotentes (`Idempotency-Key`):** cada alta lleva una clave UUID v4 en la cabecera
+  `Idempotency-Key`, solo en `POST /api/pacientes/{id}/historial`. La genera `generarUuid()` de
+  `shared/uuid.ts`: usa `crypto.randomUUID()` y, en un contexto no seguro (HTTP fuera de
+  `localhost`, donde no existe), `crypto.getRandomValues`. Contrato en el
+  README del backend, "Registros idempotentes". Repetir con la misma clave y el mismo cuerpo
   devuelve el mismo registro sin crear otro ni descontar dos veces.
   - **Una clave por intento de registro:** nueva al abrir el diálogo, tras un alta correcta y tras
     un 409. Se reutiliza en los reintentos, y un doble clic mientras se envía no manda otra
@@ -124,8 +126,7 @@ se le avisa antes y, al guardar, vuelve al login con un mensaje que lo explica.
     reenviar.
   - **Otros 4xx (400, 403, 404):** el backend no hizo nada ni consumió la clave. Se puede corregir
     y reenviar con la misma clave.
-  - **Límites:** `crypto.randomUUID()` solo existe en contextos seguros (HTTPS o `localhost`;
-    `ng serve` lo es). Las claves viven en el diálogo: si se recarga la página tras un resultado
+  - **Límite:** las claves viven en el diálogo. Si se recarga la página tras un resultado
     incierto, el siguiente intento lleva otra clave, así que conviene revisar el historial y el
     stock antes de repetirlo.
 - **Signos vitales:** se envían estructurados, pero el backend los guarda como texto en `contenido`

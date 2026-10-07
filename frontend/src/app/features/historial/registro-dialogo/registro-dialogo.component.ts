@@ -26,6 +26,7 @@ import {
   obligatorio,
   primerError,
 } from '../../../shared/validadores';
+import { generarUuid } from '../../../shared/uuid';
 import { Medicamento } from '../../medicamentos/medicamento.models';
 import { MedicamentoService } from '../../medicamentos/medicamento.service';
 import { Paciente } from '../../pacientes/paciente.models';
@@ -75,7 +76,7 @@ const AVISO_CANCELADO_CON_STOCK =
  * (dobles clics, errores de red, 503), nueva para cada registro distinto.
  */
 function nuevaClave(): string {
-  return crypto.randomUUID();
+  return generarUuid();
 }
 
 /**
