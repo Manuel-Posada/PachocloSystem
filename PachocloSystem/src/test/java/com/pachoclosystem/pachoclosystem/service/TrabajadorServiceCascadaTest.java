@@ -31,8 +31,7 @@ class TrabajadorServiceCascadaTest {
     void preparar() {
         repositorioTrabajadores = new TrabajadorRepositoryImpl();
         repositorioUsuarios = new UsuarioRepositoryImpl();
-        servicioTrabajadores = new TrabajadorService(repositorioTrabajadores);
-        servicioTrabajadores.setUsuarioRepository(repositorioUsuarios);
+        servicioTrabajadores = new TrabajadorService(repositorioTrabajadores, repositorioUsuarios);
         servicioUsuarios = new UsuarioService(repositorioUsuarios, servicioTrabajadores,
                 new BCryptPasswordEncoder());
     }

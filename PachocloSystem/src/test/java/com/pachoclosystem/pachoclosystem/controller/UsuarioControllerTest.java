@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.controller;
 
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -146,7 +147,7 @@ class UsuarioControllerTest extends MockMvcBaseTest {
     // --------------------------------------------------- desactivar y activar
 
     @Test
-    void desactivarCortaElLoginYElTokenYActivarLosDevuelve() throws Exception {
+    void desactivarCortaElLoginYElTokenYActivarDevuelveSoloElLogin() throws Exception {
         String username = crearAdmin();
         String id = idDe(username);
         String token = tokenDe(username);
@@ -166,8 +167,10 @@ class UsuarioControllerTest extends MockMvcBaseTest {
                 .andExpect(jsonPath("$.activo").value(true));
         perform(patch("/api/usuarios/{id}/activar", id))
                 .andExpect(status().isOk());
-        login(username, PASSWORD).andExpect(status().isOk());
-        mockMvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+        // El token de antes de desactivarlo no vuelve a valer: hay que iniciar sesión.
+        comprobar401Uniforme(conToken(get("/api/auth/me"), token));
+        String tokenNuevo = leer(login(username, PASSWORD).andExpect(status().isOk()).andReturn(), "$.token");
+        mockMvc.perform(conToken(get("/api/auth/me"), tokenNuevo))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activo").value(true));
     }
@@ -236,7 +239,9 @@ class UsuarioControllerTest extends MockMvcBaseTest {
 
     @Test
     void unAdminQueRestableceSuPropiaPasswordDebeVolverAIniciarSesion() throws Exception {
-        String username = crearAdmin();
+        // Alta directa: un admin dado de alta por la API no opera hasta cambiar su contraseña.
+        String username = unico("adm");
+        usuarioService.crearUsuario(username, PASSWORD, Rol.ADMIN, null);
         String suToken = leer(login(username, PASSWORD).andReturn(), "$.token");
 
         // Restablece su propia contraseña con su propio token: la operación se completa...
@@ -248,8 +253,17 @@ class UsuarioControllerTest extends MockMvcBaseTest {
         // ...pero ese token deja de valer, también para seguir administrando.
         comprobar401Uniforme(conToken(get("/api/usuarios"), suToken));
         login(username, PASSWORD).andExpect(status().isUnauthorized());
+        // Con la contraseña restablecida entra, pero debe cambiarla antes de operar.
         String tokenNuevo = leer(login(username, "otra-clave-nueva-1").andReturn(), "$.token");
         mockMvc.perform(conToken(get("/api/usuarios"), tokenNuevo))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensajes[0]").value("Debe cambiar su contraseña antes de continuar."));
+        mockMvc.perform(conToken(post("/api/auth/password"), tokenNuevo)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"passwordActual\":\"otra-clave-nueva-1\",\"passwordNueva\":\"definitiva-12345\"}"))
+                .andExpect(status().isNoContent());
+        String tokenDefinitivo = leer(login(username, "definitiva-12345").andReturn(), "$.token");
+        mockMvc.perform(conToken(get("/api/usuarios"), tokenDefinitivo))
                 .andExpect(status().isOk());
     }
 
@@ -289,8 +303,9 @@ class UsuarioControllerTest extends MockMvcBaseTest {
     @MethodSource("todasLasOperaciones")
     void unDoctorRecibe403UniformeEnTodasLasOperaciones(MockHttpServletRequestBuilder peticion)
             throws Exception {
+        // Alta directa (sin cambio de contraseña pendiente): se prueba el rol, no el bloqueo.
         String username = unico("doc");
-        crearUsuario(username, "DOCTOR", registrarDoctor());
+        usuarioService.crearUsuario(username, PASSWORD, Rol.DOCTOR, registrarDoctor());
 
         MvcResult resultado = mockMvc.perform(peticion
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenDe(username)))

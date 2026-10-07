@@ -1,5 +1,6 @@
 package com.pachoclosystem.pachoclosystem.controller;
 
+import com.pachoclosystem.pachoclosystem.dto.CambiarRolRequest;
 import com.pachoclosystem.pachoclosystem.dto.PasswordRequest;
 import com.pachoclosystem.pachoclosystem.dto.UsuarioRequest;
 import com.pachoclosystem.pachoclosystem.dto.UsuarioResponse;
@@ -23,7 +24,8 @@ import java.util.Locale;
 
 /**
  * Gestión de usuarios, solo para ADMIN (regla en {@code SecurityConfig}).
- * Las respuestas nunca incluyen el hash de la contraseña.
+ * Las respuestas nunca incluyen el hash de la contraseña. El alta y el
+ * restablecimiento de contraseña dejan al usuario con el cambio obligatorio.
  */
 @RestController
 @RequestMapping("/api/usuarios")
@@ -38,7 +40,7 @@ public class UsuarioController {
     @PostMapping
     public ResponseEntity<UsuarioResponse> crear(@RequestBody UsuarioRequest request) {
         Usuario usuario = servicio.crearUsuario(request.username(), request.password(),
-                rolDe(request.rol()), request.idTrabajador());
+                rolDe(request.rol()), request.idTrabajador(), true);
         return ResponseEntity.created(URI.create("/api/usuarios/" + usuario.getIdUsuario()))
                 .body(UsuarioResponse.from(usuario));
     }
@@ -47,6 +49,16 @@ public class UsuarioController {
     @GetMapping
     public List<UsuarioResponse> listar(@RequestParam(required = false) String q) {
         return servicio.listar(q).stream().map(UsuarioResponse::from).toList();
+    }
+
+    @GetMapping("/{id}")
+    public UsuarioResponse obtener(@PathVariable String id) {
+        return UsuarioResponse.from(servicio.obtener(id));
+    }
+
+    @PatchMapping("/{id}/rol")
+    public UsuarioResponse cambiarRol(@PathVariable String id, @RequestBody CambiarRolRequest request) {
+        return UsuarioResponse.from(servicio.cambiarRol(id, rolDe(request.rol()), request.idTrabajador()));
     }
 
     @PatchMapping("/{id}/desactivar")

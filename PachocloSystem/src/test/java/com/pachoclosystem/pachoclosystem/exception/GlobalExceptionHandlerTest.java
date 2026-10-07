@@ -6,6 +6,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -129,6 +131,36 @@ class GlobalExceptionHandlerTest {
         assertThat(respuesta.getBody().mensajes().get(0))
                 .doesNotContain("clave secreta interna")
                 .doesNotContain("Exception");
+    }
+
+    @Test
+    void accesoDenegadoResponde403UniformeSinDetallesInternos() {
+        var excepcion = new AccessDeniedException("detalle interno secreto");
+
+        ResponseEntity<ErrorResponse> respuesta = manejador.accesoDenegadoSeguridad(excepcion);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(respuesta.getBody()).isNotNull();
+        assertThat(respuesta.getBody().status()).isEqualTo(403);
+        assertThat(respuesta.getBody().error()).isEqualTo("Forbidden");
+        assertThat(respuesta.getBody().mensajes())
+                .containsExactly("No tiene permisos para realizar esta operación.");
+        assertThat(respuesta.getBody().mensajes().get(0))
+                .doesNotContain("detalle interno secreto")
+                .doesNotContain("Exception");
+    }
+
+    @Test
+    void autorizacionDenegadaResponde403Uniforme() {
+        var excepcion = new AuthorizationDeniedException("denegado por autorización");
+
+        ResponseEntity<ErrorResponse> respuesta = manejador.accesoDenegadoSeguridad(excepcion);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(respuesta.getBody()).isNotNull();
+        assertThat(respuesta.getBody().status()).isEqualTo(403);
+        assertThat(respuesta.getBody().mensajes())
+                .containsExactly("No tiene permisos para realizar esta operación.");
     }
 
     @Test

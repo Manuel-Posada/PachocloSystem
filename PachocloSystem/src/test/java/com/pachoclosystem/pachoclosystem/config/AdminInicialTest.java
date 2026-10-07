@@ -40,7 +40,8 @@ class AdminInicialTest {
     void preparar() {
         repositorio = new UsuarioRepositoryImpl();
         servicio = new UsuarioService(repositorio,
-                new TrabajadorService(new TrabajadorRepositoryImpl()), new BCryptPasswordEncoder());
+                new TrabajadorService(new TrabajadorRepositoryImpl(), new UsuarioRepositoryImpl()),
+                new BCryptPasswordEncoder());
         entorno = new MockEnvironment();
         adminInicial = new AdminInicial(servicio, repositorio, entorno);
 
@@ -67,6 +68,8 @@ class AdminInicialTest {
         assertThat(admin.getIdTrabajador()).isNull();
         assertThat(admin.getPasswordHash()).isNotEqualTo(passwordDeEntorno);
         assertThat(new BCryptPasswordEncoder().matches(passwordDeEntorno, admin.getPasswordHash())).isTrue();
+        // Con contraseña definida en el entorno, el primer acceso no exige cambio.
+        assertThat(admin.isDebeCambiarPassword()).isFalse();
 
         // Ni la contraseña del entorno ni el hash aparecen en ningún log de arranque.
         assertThat(mensajesDeLog()).noneMatch(m -> m.contains(passwordDeEntorno));
@@ -97,6 +100,9 @@ class AdminInicialTest {
         Usuario admin = servicio.buscarPorUsername("admin.temporal");
         assertThat(new BCryptPasswordEncoder().matches(passwordGenerada, admin.getPasswordHash())).isTrue();
         assertThat(admin.getPasswordHash()).isNotEqualTo(passwordGenerada);
+        // Contraseña aleatoria vista en el log: la cuenta nace bloqueada y exige
+        // cambiarla en el primer acceso.
+        assertThat(admin.isDebeCambiarPassword()).isTrue();
 
         // El hash nunca aparece en los logs.
         assertThat(mensajesDeLog()).noneMatch(m -> m.contains(admin.getPasswordHash()));

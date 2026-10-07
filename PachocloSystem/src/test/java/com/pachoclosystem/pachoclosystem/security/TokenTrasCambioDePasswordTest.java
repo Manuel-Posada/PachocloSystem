@@ -14,13 +14,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /**
- * El conversor del JWT rechaza los tokens emitidos con una contraseña que ya
- * se restableció, comparando la marca de credenciales del token con la actual.
+ * El conversor del JWT rechaza los tokens cuya versión ya no es la del
+ * usuario: tras cambiar la contraseña y tras desactivarlo (aunque se reactive).
  */
 class TokenTrasCambioDePasswordTest {
 
-    /** Un instante con milisegundos, para probar el borde del mismo segundo. */
-    private static final Instant CAMBIO = Instant.parse("2026-10-07T10:00:00.700Z");
+    private static final Instant EMITIDO = Instant.parse("2026-10-07T10:00:00Z");
 
     private UsuarioRepositoryImpl repositorio;
     private JwtUsuarioAuthenticationConverter conversor;
@@ -35,33 +34,25 @@ class TokenTrasCambioDePasswordTest {
     }
 
     @Test
-    void unTokenConLaMarcaActualSeAcepta() {
-        Jwt token = token(usuario.getCredenciales().marca(), Instant.parse("2026-10-07T09:00:00Z"));
-
-        assertThat(conversor.convert(token).getName()).isEqualTo("ana.torres");
+    void unTokenConLaVersionActualSeAcepta() {
+        assertThat(conversor.convert(token(usuario.getVersionToken())).getName()).isEqualTo("ana.torres");
     }
 
     @Test
-    void unTokenSinClaimDeCredencialesValeMientrasNoSeRestablezcaLaPassword() {
+    void unTokenSinClaimDeVersionSeRechaza() {
         Jwt sinClaim = Jwt.withTokenValue("t").header("alg", "HS256")
-                .subject("USR-0001").issuedAt(Instant.parse("2026-10-07T09:00:00Z")).build();
+                .subject("USR-0001").issuedAt(EMITIDO).build();
 
-        assertThat(conversor.convert(sinClaim).getName()).isEqualTo("ana.torres");
-
-        usuario.cambiarPasswordHash("$2a$10$hash-nuevo", CAMBIO);
         assertThatExceptionOfType(BadCredentialsException.class)
                 .isThrownBy(() -> conversor.convert(sinClaim));
     }
 
     @Test
-    void enElMismoSegundoDelCambioSeRechazaElTokenAnteriorYSeAceptaElNuevo() {
-        // Emitido a las 10:00:00.200 con la contraseña anterior: su iat (solo segundos)
-        // es el mismo que el de un token emitido a las 10:00:00.900 con la nueva.
-        Instant mismoSegundo = Instant.parse("2026-10-07T10:00:00Z");
-        Jwt anterior = token(usuario.getCredenciales().marca(), mismoSegundo);
+    void trasCambiarLaPasswordSeRechazaElTokenAnteriorYSeAceptaElNuevo() {
+        Jwt anterior = token(usuario.getVersionToken());
 
-        usuario.cambiarPasswordHash("$2a$10$hash-nuevo", CAMBIO);
-        Jwt nuevo = token(usuario.getCredenciales().marca(), mismoSegundo);
+        usuario.cambiarPassword("$2a$10$hash-nuevo", false);
+        Jwt nuevo = token(usuario.getVersionToken());
 
         assertThatExceptionOfType(BadCredentialsException.class)
                 .isThrownBy(() -> conversor.convert(anterior));
@@ -69,32 +60,40 @@ class TokenTrasCambioDePasswordTest {
     }
 
     @Test
-    void dosCambiosEnElMismoMilisegundoDejanMarcasDistintasYSoloValeLaUltima() {
-        usuario.cambiarPasswordHash("$2a$10$hash-dos", CAMBIO);
-        long primera = usuario.getCredenciales().marca();
-        usuario.cambiarPasswordHash("$2a$10$hash-tres", CAMBIO);
-        long segunda = usuario.getCredenciales().marca();
+    void desactivarYReactivarNoResucitaElTokenAnterior() {
+        Jwt anterior = token(usuario.getVersionToken());
 
-        assertThat(segunda).isGreaterThan(primera);
+        usuario.desactivar();
+        usuario.reactivar();
+
         assertThatExceptionOfType(BadCredentialsException.class)
-                .isThrownBy(() -> conversor.convert(token(primera, CAMBIO)));
-        assertThat(conversor.convert(token(segunda, CAMBIO)).getName()).isEqualTo("ana.torres");
+                .isThrownBy(() -> conversor.convert(anterior));
+        assertThat(conversor.convert(token(usuario.getVersionToken())).getName()).isEqualTo("ana.torres");
     }
 
     @Test
-    void unaMarcaQueNoEsUnNumeroSeRechaza() {
+    void conLaPasswordPendienteSoloTieneLaAutoridadDeCambiarla() {
+        usuario.cambiarPassword("$2a$10$hash-temporal", true);
+
+        assertThat(conversor.convert(token(usuario.getVersionToken())).getAuthorities())
+                .extracting(a -> a.getAuthority())
+                .containsExactly(JwtUsuarioAuthenticationConverter.AUTORIDAD_CAMBIO_PASSWORD_PENDIENTE);
+    }
+
+    @Test
+    void unaVersionQueNoEsUnNumeroSeRechaza() {
         Jwt manipulado = Jwt.withTokenValue("t").header("alg", "HS256").subject("USR-0001")
-                .issuedAt(CAMBIO).claim(JwtTokenService.CLAIM_CREDENCIALES, "0").build();
+                .issuedAt(EMITIDO).claim(JwtTokenService.CLAIM_VERSION, "0").build();
 
         assertThatExceptionOfType(BadCredentialsException.class)
                 .isThrownBy(() -> conversor.convert(manipulado));
     }
 
-    private static Jwt token(long marca, Instant emitido) {
+    private static Jwt token(long version) {
         return Jwt.withTokenValue("t").header("alg", "HS256")
                 .subject("USR-0001")
-                .issuedAt(emitido)
-                .claim(JwtTokenService.CLAIM_CREDENCIALES, marca)
+                .issuedAt(EMITIDO)
+                .claim(JwtTokenService.CLAIM_VERSION, version)
                 .build();
     }
 }

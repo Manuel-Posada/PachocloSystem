@@ -43,34 +43,43 @@ src/main/java/com/pachoclosystem/pachoclosystem/
 
 ### Pacientes — `/api/pacientes`
 
-| Método | Ruta | Descripción | Respuestas |
-|---|---|---|---|
-| GET | `/api/pacientes?q=` | Lista pacientes; `q` filtra por id o nombre | 200 |
-| GET | `/api/pacientes/{id}` | Obtiene un paciente | 200 / 404 |
-| POST | `/api/pacientes` | Registra un paciente `{nombre, edad, habitacion}` | 201 / 400 |
-| PUT | `/api/pacientes/{id}` | Edita nombre, edad y habitación | 200 / 400 / 404 |
-| PATCH | `/api/pacientes/{id}/habitacion` | Cambia solo la habitación `{habitacion}` | 200 / 400 / 404 |
-| DELETE | `/api/pacientes/{id}` | Elimina un paciente | 204 / 404 |
+| Método | Ruta | Descripción | Rol | Respuestas |
+|---|---|---|---|---|
+| GET | `/api/pacientes?q=` | Lista pacientes; `q` filtra por id o nombre | Cualquiera | 200 |
+| GET | `/api/pacientes/{id}` | Obtiene un paciente | Cualquiera | 200 / 404 |
+| POST | `/api/pacientes` | Registra un paciente `{nombre, edad, habitacion}` | ADMIN / DOCTOR | 201 / 400 / 403 |
+| PUT | `/api/pacientes/{id}` | Edita nombre, edad y habitación | ADMIN / DOCTOR | 200 / 400 / 403 / 404 |
+| PATCH | `/api/pacientes/{id}/habitacion` | Cambia solo la habitación `{habitacion}` | Cualquiera | 200 / 400 / 404 |
+| DELETE | `/api/pacientes/{id}` | Baja lógica de un paciente (ver abajo) | ADMIN | 204 / 403 / 404 |
+
+**Baja lógica de pacientes.** `DELETE /api/pacientes/{id}` marca al paciente
+como inactivo en lugar de borrarlo: el objeto y su historial clínico se
+conservan en memoria. A partir de ahí el paciente se comporta como
+inexistente (404 en `GET`/`PUT`/`PATCH`/historial y en un segundo `DELETE`) y
+no se reactiva. Las bajas dobles devuelven 404. Sus registros dejan de
+aparecer en el historial general. Si se da de baja mientras se espera la salida
+de stock de un registro de `MEDICACION`, el registro se añade al paciente, que
+sigue de baja.
 
 ### Trabajadores — `/api/trabajadores`
 
-| Método | Ruta | Descripción | Respuestas |
-|---|---|---|---|
-| GET | `/api/trabajadores?q=` | Lista trabajadores; `q` filtra por id o nombre | 200 |
-| GET | `/api/trabajadores/{id}` | Obtiene un trabajador | 200 / 404 |
-| POST | `/api/trabajadores` | Registra `{nombre, rol: "Doctor"\|"Enfermero", especialidad?, nivelExperiencia?}` | 201 / 400 |
-| PUT | `/api/trabajadores/{id}` | Edita un trabajador (el rol no puede cambiar) | 200 / 400 / 404 |
-| DELETE | `/api/trabajadores/{id}` | Elimina un trabajador | 204 / 404 |
+| Método | Ruta | Descripción | Rol | Respuestas |
+|---|---|---|---|---|
+| GET | `/api/trabajadores?q=` | Lista trabajadores; `q` filtra por id o nombre | ADMIN / DOCTOR | 200 / 403 |
+| GET | `/api/trabajadores/{id}` | Obtiene un trabajador | ADMIN / DOCTOR | 200 / 403 / 404 |
+| POST | `/api/trabajadores` | Registra `{nombre, rol: "Doctor"\|"Enfermero", especialidad?, nivelExperiencia?}` | ADMIN | 201 / 400 / 403 |
+| PUT | `/api/trabajadores/{id}` | Edita un trabajador (el rol no puede cambiar) | ADMIN | 200 / 400 / 403 / 404 |
+| DELETE | `/api/trabajadores/{id}` | Elimina un trabajador y desactiva su usuario | ADMIN | 204 / 403 / 404 |
 
 Un Doctor requiere `especialidad`; un Enfermero requiere `nivelExperiencia` (`NOVATO`, `PRINCIPIANTE`, `AVANZADO`).
 
 ### Historial clínico
 
-| Método | Ruta | Descripción | Respuestas |
-|---|---|---|---|
-| GET | `/api/historial?filtro=&q=` | Todos los registros ordenados por fecha. `filtro`: `todos` (defecto), `paciente` o `autor` | 200 / 400 |
-| GET | `/api/pacientes/{id}/historial?q=` | Registros de un paciente; `q` filtra por autor | 200 / 404 |
-| POST | `/api/pacientes/{id}/historial` | Agrega un registro firmado por el usuario autenticado. Cabecera opcional `Idempotency-Key` (ver [Registros idempotentes](#registros-idempotentes-idempotency-key)) | 201 / 400 / 403 / 404 / 409 / 502 / 503 |
+| Método | Ruta | Descripción | Rol | Respuestas |
+|---|---|---|---|---|
+| GET | `/api/historial?filtro=&q=` | Todos los registros ordenados por fecha. `filtro`: `todos` (defecto), `paciente` o `autor` | Cualquiera | 200 / 400 |
+| GET | `/api/pacientes/{id}/historial?q=` | Registros de un paciente; `q` filtra por autor | Cualquiera | 200 / 404 |
+| POST | `/api/pacientes/{id}/historial` | Agrega un registro firmado por el usuario autenticado. Cabecera opcional `Idempotency-Key` (ver [Registros idempotentes](#registros-idempotentes-idempotency-key)) | DOCTOR / ENFERMERO (ver abajo) | 201 / 400 / 403 / 404 / 409 / 502 / 503 |
 
 Cuerpo de `POST /api/pacientes/{id}/historial`:
 
@@ -177,7 +186,7 @@ mientras MedicamentosService recuerde la clave (24 h por defecto y sin reiniciar
 6. Sin enviar la cabecera no cambia nada: mismos códigos, cuerpos y mensajes que antes.
 7. El frontend usa el proxy de desarrollo (mismo origen), así que no hace falta configurar CORS
    para enviar `Idempotency-Key` ni para leer `Idempotency-Replayed`. Si algún día se sirve desde
-   otro origen, habrá que permitir la primera y exponer la segunda.
+   otro origen, [CORS](#cors) ya permite la primera y expone la segunda.
 
 ### Medicamentos — `/api/medicamentos`
 
@@ -255,10 +264,10 @@ descontado sin registro:
 > medicamentos respondió de forma inesperada." en lugar de `503`, sin reintento. Es el
 > comportamiento de siempre y no se ha cambiado; con clave ese caso se trata como un timeout.
 
-> **Límite conocido:** el paciente se lee antes de la salida de stock y se vuelve a guardar después.
-> Si un ADMIN borra al paciente mientras se espera la salida (con clave puede tardar el doble por el
-> reintento: hasta 2 × (`timeout-conexion` + `timeout-lectura`)), al guardar el registro **el
-> paciente se vuelve a crear** con su historial. Pasa con y sin `Idempotency-Key`.
+> **Baja durante la salida:** el paciente se lee antes de la salida de stock y se vuelve a guardar
+> después. Si un ADMIN lo da de baja mientras se espera la salida (con clave puede tardar el doble
+> por el reintento: hasta 2 × (`timeout-conexion` + `timeout-lectura`)), el registro se añade a su
+> historial pero el paciente **sigue de baja**: la baja es lógica y no se deshace al guardarlo.
 
 **Prueba manual con los dos servicios** (Git Bash, dos terminales):
 
@@ -292,15 +301,15 @@ válido, y cada operación exige un rol (ver [Permisos por rol](#permisos-por-ro
 
 Sin token, cualquier operación responde `401`; con un rol sin permiso, `403`. Los
 dos con el cuerpo de error uniforme. La tabla se comprueba en
-`AutorizacionPorRolTest`.
+`AutorizacionPorRolTest`, que además falla si un endpoint mapeado no tiene fila.
 
 | Operación | ADMIN | DOCTOR | ENFERMERO |
 |---|:-:|:-:|:-:|
-| `GET /api/auth/me` | ✓ | ✓ | ✓ |
+| `GET /api/auth/me` y `POST /api/auth/password` (cambio propio) | ✓ | ✓ | ✓ |
 | Leer pacientes (`GET /api/pacientes/**`) | ✓ | ✓ | ✓ |
 | Registrar y editar pacientes (`POST /api/pacientes`, `PUT /api/pacientes/{id}`) | ✓ | ✓ | ✗ |
 | Cambiar habitación (`PATCH /api/pacientes/{id}/habitacion`) | ✓ | ✓ | ✓ |
-| Eliminar pacientes (borra también su historial) | ✓ | ✗ | ✗ |
+| Dar de baja pacientes (baja lógica: se conserva el historial) | ✓ | ✗ | ✗ |
 | Leer el historial (general y de un paciente) | ✓ | ✓ | ✓ |
 | Crear registros de historial | ✗ ¹ | ✓ los 4 tipos | ✓ todos menos `DIAGNOSTICO` |
 | Leer trabajadores | ✓ | ✓ | ✗ |
@@ -308,11 +317,16 @@ dos con el cuerpo de error uniforme. La tabla se comprueba en
 | Leer medicamentos (incl. stock bajo, por vencer y vencidos) | ✓ | ✓ | ✓ |
 | Salidas de stock (`POST /api/medicamentos/{id}/salidas`) | ✓ | ✗ ² | ✓ |
 | Alta, edición, borrado y entradas de medicamentos | ✓ | ✗ | ✗ |
-| Gestión de usuarios (`/api/usuarios/**`) | ✓ | ✗ | ✗ |
+| Gestión de usuarios (`/api/usuarios/**`, incluido el cambio de rol) | ✓ | ✗ | ✗ |
 
 1. El ADMIN no tiene trabajador vinculado y los registros se firman con el
    trabajador del usuario autenticado.
 2. El doctor sí descuenta stock desde un registro de `MEDICACION`.
+
+Quien **aún debe cambiar su contraseña** (alta por la API, restablecimiento
+por un ADMIN o admin inicial con contraseña aleatoria) solo puede llamar a
+`GET /api/auth/me` y a `POST /api/auth/password`: el resto responde `403`
+"Debe cambiar su contraseña antes de continuar." hasta que la cambie.
 
 Las reglas por ruta están en `SecurityConfig`. Cada recurso termina en una
 regla solo-ADMIN, así que un endpoint nuevo sin regla propia queda cerrado
@@ -324,7 +338,8 @@ registro) están en `HistorialClinicoService`.
 | Método | Ruta | Descripción |
 |---|---|---|
 | POST | `/api/auth/login` | Público. `{ "username", "password" }` → JWT bearer |
-| GET | `/api/auth/me` | Autenticado. Devuelve `{ idUsuario, username, rol, idTrabajador, activo }` |
+| GET | `/api/auth/me` | Autenticado. Devuelve `{ idUsuario, username, rol, idTrabajador, activo, debeCambiarPassword }` |
+| POST | `/api/auth/password` | Autenticado. Cambia la contraseña del propio usuario: `{ "passwordActual", "passwordNueva" }` → `204`. El token usado queda revocado de inmediato y hay que volver a iniciar sesión. |
 
 Login correcto:
 
@@ -339,7 +354,8 @@ curl -X POST http://localhost:8080/api/auth/login \
   "token": "eyJhbGciOiJIUzI1NiJ9.…",
   "tipo": "Bearer",
   "expiraEnSegundos": 1800,
-  "rol": "ADMIN"
+  "rol": "ADMIN",
+  "debeCambiarPassword": false
 }
 ```
 
@@ -353,32 +369,37 @@ curl http://localhost:8080/api/pacientes -H "Authorization: Bearer eyJhbGciOiJIU
   cuando el usuario no existe, la contraseña es incorrecta o el usuario está
   desactivado (las tres causas se evalúan con el mismo coste de BCrypt).
 - El 401 de una petición sin token válido (ausente, malformado, expirado, con
-  firma inválida o de un usuario desactivado) responde el cuerpo de error
-  uniforme junto con `WWW-Authenticate: Bearer`; nunca se exponen detalles
-  internos del token. El 403 responde `"No tiene permisos para realizar esta
-  operación."`.
-- El token (HS256) contiene `sub`, `username`, `rol`, `idTrabajador` (si
-  aplica) y `credenciales` (marca de la contraseña con la que se emitió), pero
-  la autorización **se relee del repositorio en cada petición**: si el usuario
-  se desactiva (por ejemplo, al eliminar su trabajador) o se restablece su
-  contraseña, su token deja de valer de inmediato. La marca registra el momento
-  del cambio al milisegundo y se compara por igualdad, no con `iat` (que solo
-  tiene segundos), así que tampoco vale un token emitido en el mismo segundo
-  justo antes del cambio.
+  firma inválida, de un usuario desactivado o con una versión de token
+  obsoleta) responde el cuerpo de error uniforme junto con
+  `WWW-Authenticate: Bearer`; nunca se exponen detalles internos del token. El
+  403 responde `"No tiene permisos para realizar esta operación."`.
+- El token (HS256) contiene `sub`, `username`, `rol`, `ver` e `idTrabajador`
+  (si aplica), pero la autorización **se relee del repositorio en cada
+  petición**: los permisos son los del rol actual del usuario.
+- `ver` es la **versión del token**. Sube con cada cambio de contraseña (propio
+  o restablecido por un ADMIN) y al desactivar al usuario (también al eliminar
+  su trabajador); reactivarlo no la restaura. Un token con otra versión, o sin
+  ella, responde `401`: los tokens emitidos antes del cambio quedan revocados de
+  inmediato y no vuelven a valer. El login comprueba la contraseña y pone la
+  versión leyendo ambas a la vez, así que un cambio simultáneo no produce un
+  token nuevo validado con la contraseña anterior.
 
 ### Gestión de usuarios — `/api/usuarios` (solo ADMIN)
 
 | Método | Ruta | Descripción | Respuestas |
 |---|---|---|---|
-| POST | `/api/usuarios` | Crea `{username, password, rol, idTrabajador?}` | 201 / 400 / 404 / 409 |
+| POST | `/api/usuarios` | Crea `{username, password, rol, idTrabajador?}`; nace con el cambio de contraseña obligatorio | 201 / 400 / 404 / 409 |
 | GET | `/api/usuarios?q=` | Lista activos e inactivos; `q` filtra por ID, username o trabajador | 200 |
+| GET | `/api/usuarios/{id}` | Obtiene un usuario | 200 / 404 |
+| PATCH | `/api/usuarios/{id}/rol` | Cambia rol y trabajador vinculado `{rol, idTrabajador?}` | 200 / 400 / 404 / 409 |
 | PATCH | `/api/usuarios/{id}/desactivar` | Desactiva (idempotente) | 200 / 404 / 409 |
 | PATCH | `/api/usuarios/{id}/activar` | Reactiva (idempotente) | 200 / 404 / 409 |
-| PATCH | `/api/usuarios/{id}/password` | Restablece la contraseña `{password}` | 204 / 400 / 404 |
+| PATCH | `/api/usuarios/{id}/password` | Restablece la contraseña `{password}`; deja el cambio obligatorio | 204 / 400 / 404 |
 
-Las respuestas son `{ idUsuario, username, rol, idTrabajador, activo }` y **nunca
-incluyen el hash** de la contraseña. Un usuario que no es ADMIN recibe `403` y
-una petición sin token, `401`, ambos con el cuerpo de error uniforme.
+Las respuestas son `{ idUsuario, username, rol, idTrabajador, activo, debeCambiarPassword }`
+y **nunca incluyen el hash** de la contraseña ni la versión del token. Un
+usuario que no es ADMIN recibe `403` y una petición sin token, `401`, ambos
+con el cuerpo de error uniforme.
 
 ```bash
 curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <token-de-admin>" -H "Content-Type: application/json"   -d '{"username":"eva.mora","password":"<contraseña>","rol":"DOCTOR","idTrabajador":"DOC-0001"}'
@@ -390,18 +411,30 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
   aunque esté desactivado.
 - **Conflictos (`409`):** username ya usado (sin distinguir mayúsculas) o
   trabajador que ya tiene usuario.
-- **Desactivar:** el usuario pierde el acceso en su siguiente petición (los
-  tokens emitidos dejan de valer). `409` si un admin intenta desactivarse a sí
-  mismo o desactivar al último administrador activo. Eliminar un trabajador
-  sigue desactivando su usuario.
+- **Contraseña temporal:** el alta y el restablecimiento dejan
+  `debeCambiarPassword=true`. El usuario inicia sesión con esa contraseña, se ve
+  a sí mismo (`/api/auth/me`) y la cambia (`POST /api/auth/password`); hasta
+  entonces, el resto de la API le responde `403` (ver
+  [Permisos por rol](#permisos-por-rol)).
+- **Cambio de rol:** mismas reglas de vínculo que el alta; libera el trabajador
+  anterior. `409` si el trabajador nuevo ya tiene usuario o si se quitaría el
+  rol ADMIN al último administrador activo. Se aplica en la siguiente petición
+  (los permisos se releen siempre).
+- **Desactivar:** el usuario pierde el acceso de inmediato y sus tokens quedan
+  revocados. `409` si un admin intenta desactivarse a sí mismo o desactivar al
+  último administrador activo. Eliminar un trabajador sigue desactivando su
+  usuario.
 - **Activar:** un doctor o enfermero solo se reactiva si su trabajador sigue
-  existiendo, es de su tipo y sigue vinculado a él; si no, `409`.
+  existiendo, es de su tipo y sigue vinculado a él; si no, `409`. Los tokens de
+  antes de la desactivación no vuelven a valer: hay que iniciar sesión.
 - **Restablecer contraseña:** el ADMIN fija una nueva para cualquier usuario
   (activo o no), con la misma política. **Todos los tokens emitidos antes del
-  cambio dejan de valer** (`401`): el usuario debe volver a iniciar sesión. Esto
-  incluye al propio ADMIN si restablece su contraseña: la petición se completa,
-  pero su token deja de valer en la siguiente y debe iniciar sesión con la nueva.
-  Cambiar la propia contraseña (con la actual) aún no existe.
+  cambio dejan de valer** (`401`), incluido el del propio ADMIN si restablece la
+  suya.
+- **Cambio propio (`POST /api/auth/password`):** exige la contraseña actual, que
+  la nueva sea distinta y cumpla la política (`400` si no); responde `204`,
+  quita el cambio pendiente y revoca el token usado: hay que volver a iniciar
+  sesión.
 - Los usuarios viven **en memoria**: al reiniciar solo se recrea el
   administrador inicial.
 
@@ -415,11 +448,13 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
 - Si `ADMIN_PASSWORD` **está definida**, se usa tal cual y **nunca se escribe en
   el log**. Si no cumple la política de contraseña (menos de 10 caracteres, más
   de 72 bytes o igual al username), la aplicación **no arranca** y muestra un
-  mensaje claro con la regla incumplida.
+  mensaje claro con la regla incumplida. La cuenta nace
+  operativa (sin cambio de contraseña obligatorio).
 - Si `ADMIN_PASSWORD` **no está definida**, se genera una contraseña aleatoria
   de 20 caracteres (alfanumérico sin caracteres ambiguos) con `SecureRandom` y se
-  escribe **una sola vez** en el log a nivel `WARN`, indicando que es temporal y
-  que debe cambiarse.
+  escribe **una sola vez** en el log a nivel `WARN`. Como esa contraseña ha
+  quedado escrita en el log, la cuenta nace **bloqueada**: el cambio de
+  contraseña es obligatorio en el primer acceso antes de poder operar.
 
 ### Política de contraseña
 
@@ -429,8 +464,8 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
   nunca incluye la contraseña.
 - Solo se almacena el **hash BCrypt**: la contraseña en claro no se guarda ni
   aparece en `toString()`, en la serialización JSON ni en los logs.
-- Se aplica igual al crear usuarios, al restablecer contraseñas y a
-  `ADMIN_PASSWORD`.
+- Se aplica igual al crear usuarios, al restablecer contraseñas, al cambiar la
+  propia (que además debe ser distinta de la actual) y a `ADMIN_PASSWORD`.
 
 ### Clave de firma JWT
 
@@ -450,6 +485,65 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
 > El secreto y las contraseñas nunca se escriben en el log, en los errores ni en
 > los `toString()`. Los tokens se validan contra el repositorio en cada petición:
 > no hay sesiones en servidor ni tokens de refresco.
+
+## Límite de intentos de login
+
+Protección contra fuerza bruta en `POST /api/auth/login`: un
+`LimitadorIntentosLogin` en memoria mantiene contadores **independientes por
+usuario y por IP**, ambos con la misma ventana de bloqueo temporal.
+
+| Variable | Propiedad | Por defecto | Descripción |
+|---|---|---|---|
+| `APP_LOGIN_MAX_INTENTOS` | `app.login.max-intentos` | `5` | Fallos consecutivos que bloquean la cuenta y la IP. |
+| `APP_LOGIN_BLOQUEO_MINUTOS` | `app.login.bloqueo-minutos` | `15` | Duración de la ventana de bloqueo. |
+| `APP_LOGIN_MAX_ENTRADAS` | `app.login.max-entradas` | `10000` | Tope de entradas del mapa (purga defensiva del límite de memoria). |
+
+Comportamiento:
+
+- Tras **5 fallos**, el 6º intento (contra ese usuario o desde esa IP) responde
+  **`429 Too Many Requests`** con el cuerpo de error uniforme y la cabecera
+  `Retry-After` en segundos. El bloqueo se comprueba **antes** de evaluar las
+  credenciales, de modo que durante el bloqueo una contraseña correcta también
+  responde 429.
+- Un **acierto reinicia solo el contador del usuario**; el contador de la IP
+  nunca se reinicia. La IP se bloquea con 5 fallos de usuarios distintos, y la
+  **IP de origen es exclusivamente `getRemoteAddr()`**: la cabecera
+  `X-Forwarded-For` se ignora (no se confía en ella para el bloqueo). Detrás
+  de un proxy, como el de desarrollo del frontend, todas las peticiones llegan
+  con la IP del proxy: 5 fallos de cualquier usuario bloquean el login de todos
+  durante la ventana.
+- Un **429 no registra un fallo**: los intentos durante el bloqueo no extienden
+  la cuenta atrás, y la IP/usuario se desbloquean en solitario al agotarse la
+  ventana. Un **400 por body inválido no cuenta ni comprueba el bloqueo**.
+- El fallo se registra en las tres causas de 401 (usuario inexistente,
+  contraseña incorrecta, usuario inactivo) y el 429 es **idéntico** exista o no
+  el usuario (sin revelar su existencia). El username del log se normaliza a
+  minúsculas, se truncan los caracteres de control y se limita a 30 caracteres;
+  ninguna contraseña, hash ni token se escribe en el log.
+
+## CORS
+
+| Variable | Propiedad | Por defecto | Descripción |
+|---|---|---|---|
+| `CORS_ORIGENES` | `app.cors.origenes` | *(vacío)* | Lista de orígenes permitidos separada por comas. |
+
+Comportamiento:
+
+- Con el valor por defecto (vacío) el CORS está **desactivado**: ninguna
+  respuesta lleva cabeceras `Access-Control-Allow-*`.
+- Cada origen debe ser una **URL absoluta `http(s)`, sin barra final y sin
+  comodines**: un `*`, una URL con barra final o una URL no http(s) abortan el
+  arranque con un mensaje claro.
+- La configuración se aplica en la cadena de seguridad mediante
+  `http.cors(...)`: los métodos permitidos son `GET`, `POST`, `PUT`, `PATCH`,
+  `DELETE` y `OPTIONS`; las cabeceras permitidas `Authorization`,
+  `Content-Type` e `Idempotency-Key`; las expuestas `Retry-After`, `Location` e
+  `Idempotency-Replayed`. Nunca se usan
+  credenciales (`allowCredentials=false`) y `maxAge` es de 1 hora.
+- La **preflight OPTIONS de un origen permitido** se responde con 200 y sus
+  cabeceras **sin exigir token**; la de un origen no permitido no recibe
+  cabeceras CORS. Las respuestas (incluidos los 401/403/429) de un origen
+  permitido llevan `Access-Control-Allow-Origin`.
 
 ### Advertencia
 

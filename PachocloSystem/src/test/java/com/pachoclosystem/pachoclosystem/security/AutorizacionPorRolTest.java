@@ -2,17 +2,26 @@ package com.pachoclosystem.pachoclosystem.security;
 
 import com.pachoclosystem.pachoclosystem.controller.MockMvcBaseTest;
 import com.pachoclosystem.pachoclosystem.model.NivelExperiencia;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.http.server.PathContainer;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.util.pattern.PathPattern;
+import org.springframework.web.util.pattern.PathPatternParser;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 
 import static com.pachoclosystem.pachoclosystem.security.AutorizacionPorRolTest.Acceso.DENEGADO;
@@ -29,6 +38,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * nunca en 401 ni 403. DENEGADO es un 403 con el cuerpo de error uniforme.
  * Las operaciones usan IDs inexistentes y cuerpos vacíos para no cambiar
  * datos.</p>
+ *
+ * <p>{@link #todaRutaDeLaApiTieneFilaEnLaTabla()} falla si un endpoint mapeado
+ * no tiene fila: un controlador nuevo no puede quedar sin regla probada.</p>
  */
 class AutorizacionPorRolTest extends MockMvcBaseTest {
 
@@ -47,6 +59,7 @@ class AutorizacionPorRolTest extends MockMvcBaseTest {
     private static final List<Fila> TABLA = List.of(
             // Sesión
             new Fila(HttpMethod.GET, "/api/auth/me", null, PERMITIDO, PERMITIDO, PERMITIDO),
+            new Fila(HttpMethod.POST, "/api/auth/password", "{}", PERMITIDO, PERMITIDO, PERMITIDO),
             // Pacientes
             new Fila(HttpMethod.GET, "/api/pacientes", null, PERMITIDO, PERMITIDO, PERMITIDO),
             new Fila(HttpMethod.GET, "/api/pacientes/PAC-9999", null, PERMITIDO, PERMITIDO, PERMITIDO),
@@ -78,7 +91,9 @@ class AutorizacionPorRolTest extends MockMvcBaseTest {
             new Fila(HttpMethod.POST, "/api/medicamentos/MED-9999/salidas", "{}", PERMITIDO, DENEGADO, PERMITIDO),
             // Usuarios
             new Fila(HttpMethod.GET, "/api/usuarios", null, PERMITIDO, DENEGADO, DENEGADO),
+            new Fila(HttpMethod.GET, "/api/usuarios/USR-9999", null, PERMITIDO, DENEGADO, DENEGADO),
             new Fila(HttpMethod.POST, "/api/usuarios", "{}", PERMITIDO, DENEGADO, DENEGADO),
+            new Fila(HttpMethod.PATCH, "/api/usuarios/USR-9999/rol", "{}", PERMITIDO, DENEGADO, DENEGADO),
             new Fila(HttpMethod.PATCH, "/api/usuarios/USR-9999/desactivar", null, PERMITIDO, DENEGADO, DENEGADO),
             new Fila(HttpMethod.PATCH, "/api/usuarios/USR-9999/activar", null, PERMITIDO, DENEGADO, DENEGADO),
             new Fila(HttpMethod.PATCH, "/api/usuarios/USR-9999/password", "{}", PERMITIDO, DENEGADO, DENEGADO));
@@ -137,6 +152,39 @@ class AutorizacionPorRolTest extends MockMvcBaseTest {
                 .contains("\"status\":401")
                 .contains("\"error\":\"Unauthorized\"")
                 .contains("Debe autenticarse para acceder a este recurso.");
+    }
+
+    /** Endpoints sin fila porque no exigen rol: el login es público. */
+    private static final Set<String> PUBLICOS = Set.of("POST /api/auth/login");
+
+    @Autowired
+    private RequestMappingHandlerMapping mapeoDeRutas;
+
+    @Test
+    void todaRutaDeLaApiTieneFilaEnLaTabla() {
+        Set<String> sinFila = new TreeSet<>();
+        mapeoDeRutas.getHandlerMethods().keySet().forEach(info -> {
+            Set<RequestMethod> metodos = info.getMethodsCondition().getMethods();
+            for (String patron : info.getPatternValues()) {
+                if (patron.equals("/error")) {
+                    continue; // BasicErrorController de Spring Boot, no es API propia
+                }
+                if (metodos.isEmpty()) {
+                    sinFila.add("* " + patron);
+                }
+                PathPattern ruta = PathPatternParser.defaultInstance.parse(patron);
+                for (RequestMethod metodo : metodos) {
+                    String clave = metodo.name() + " " + patron;
+                    boolean conFila = TABLA.stream().anyMatch(f -> f.metodo().name().equals(metodo.name())
+                            && ruta.matches(PathContainer.parsePath(f.ruta())));
+                    if (!conFila && !PUBLICOS.contains(clave)) {
+                        sinFila.add(clave);
+                    }
+                }
+            }
+        });
+
+        assertThat(sinFila).as("endpoints sin fila en la tabla de permisos").isEmpty();
     }
 
     /** Token del admin inicial, o de un doctor/enfermero nuevo con su usuario. */

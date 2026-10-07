@@ -97,7 +97,7 @@ class HistorialAutoriaTest extends MockMvcBaseTest {
                 .claim("username", usuario.getUsername())
                 .claim("rol", "DOCTOR")
                 .claim("idTrabajador", otroDoctor)
-                .claim(JwtTokenService.CLAIM_CREDENCIALES, usuario.getCredenciales().marca())
+                .claim(JwtTokenService.CLAIM_VERSION, usuario.getVersionToken())
                 .issuer(firma.emisor())
                 .issuedAt(ahora)
                 .expiresAt(ahora.plusSeconds(600))

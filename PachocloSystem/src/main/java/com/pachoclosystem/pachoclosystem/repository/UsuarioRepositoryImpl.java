@@ -1,12 +1,15 @@
 package com.pachoclosystem.pachoclosystem.repository;
 
+import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -65,10 +68,57 @@ public class UsuarioRepositoryImpl implements IUsuarioRepository {
             }
         }
 
-        // username e idTrabajador son inmutables en Usuario: si el ID ya existía,
-        // los apuntadores apuntan al mismo ID, por lo que no queda ningún índice obsoleto.
-        usuarios.put(id, usuario);
+        // Si se reemplaza a un usuario ya existente cuyo trabajador era otro, se
+        // libera el índice del trabajador antiguo para no dejar apuntadores
+        // obsoletos. (El cambio de rol programático usa cambiarRol, que además
+        // está serializado por usuario; esto cubre el reemplazo directo.)
+        Usuario anterior = usuarios.put(id, usuario);
+        if (anterior != null && anterior.getIdTrabajador() != null
+                && !anterior.getIdTrabajador().equals(usuario.getIdTrabajador())) {
+            indicePorIdTrabajador.remove(anterior.getIdTrabajador(), id);
+        }
         return true;
+    }
+
+    /**
+     * Cambio de rol atómico. El {@code compute} sobre el mapa de usuarios
+     * serializa los cambios de un mismo usuario (no hay lectura-comprobar-
+     * escritura sobre sus campos mutables), y el {@code putIfAbsent} sobre el
+     * índice de trabajadores arbitra quién reserva cada trabajador. La reserva
+     * del trabajador nuevo se hace antes de liberar el antiguo, de modo que
+     * nunca quedan dos usuarios apuntando al mismo trabajador ni el índice
+     * apunta a un trabajador que el usuario ya no tiene.
+     */
+    @Override
+    public boolean cambiarRol(String idUsuario, Rol nuevoRol, String idTrabajador) {
+        if (idUsuario == null) {
+            return false;
+        }
+        AtomicBoolean aplicado = new AtomicBoolean(false);
+        usuarios.compute(idUsuario, (id, usuario) -> {
+            if (usuario == null) {
+                return null;
+            }
+            String trabajadorAnterior = usuario.getIdTrabajador();
+            if (Objects.equals(trabajadorAnterior, idTrabajador)) {
+                usuario.cambiarRol(nuevoRol, idTrabajador);
+                aplicado.set(true);
+                return usuario;
+            }
+            if (idTrabajador != null) {
+                String idQueYaVincula = indicePorIdTrabajador.putIfAbsent(idTrabajador, idUsuario);
+                if (idQueYaVincula != null && !idQueYaVincula.equals(idUsuario)) {
+                    return usuario;
+                }
+            }
+            usuario.cambiarRol(nuevoRol, idTrabajador);
+            if (trabajadorAnterior != null) {
+                indicePorIdTrabajador.remove(trabajadorAnterior, idUsuario);
+            }
+            aplicado.set(true);
+            return usuario;
+        });
+        return aplicado.get();
     }
 
     @Override

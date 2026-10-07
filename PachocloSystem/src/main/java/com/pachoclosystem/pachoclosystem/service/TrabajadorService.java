@@ -9,12 +9,12 @@ import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
 import com.pachoclosystem.pachoclosystem.repository.IUsuarioRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 @Service
@@ -26,20 +26,16 @@ public class TrabajadorService {
 
     /**
      * Repositorio de usuarios para la cascada de desactivación. Se inyecta por
-     * setter (no por constructor) para no acoplar {@link TrabajadorService} con
-     * {@link UsuarioService} (el servicio de usuarios ya depende de este
-     * servicio) y para conservar el constructor de un solo argumento que usan
-     * los tests unitarios; Spring inyecta el repositorio en la aplicación.
+     * constructor y es obligatorio: sin él no hay cascada posible y el servicio
+     * no debe poder construirse.
      */
-    private IUsuarioRepository usuarioRepository;
+    private final IUsuarioRepository usuarioRepository;
 
-    public TrabajadorService(ITrabajadoresRepository repositorio) {
-        this.repositorio = repositorio;
-    }
-
-    @Autowired
-    public void setUsuarioRepository(IUsuarioRepository usuarioRepository) {
-        this.usuarioRepository = usuarioRepository;
+    public TrabajadorService(ITrabajadoresRepository repositorio, IUsuarioRepository usuarioRepository) {
+        this.repositorio = Objects.requireNonNull(repositorio,
+                "El repositorio de trabajadores es obligatorio.");
+        this.usuarioRepository = Objects.requireNonNull(usuarioRepository,
+                "El repositorio de usuarios es obligatorio para la cascada de desactivación.");
     }
 
     // El servicio genera el ID (con prefijo según el rol) y construye el objeto correcto.
@@ -80,23 +76,25 @@ public class TrabajadorService {
     }
 
     public void eliminarTrabajador(String id) {
+        // La cascada se ejecuta ANTES del borrado: si desactivar falla, el
+        // trabajador no se elimina y la excepción se propaga (no hay borrado
+        // parcial). Si el trabajador no existe, la cascada no encuentra usuario
+        // y el borrado devuelve false, que se traduce en el 404 de siempre.
+        desactivarUsuarioVinculado(id);
         if (!repositorio.eliminarTrabajador(id)) {
             throw noEncontrado(id);
         }
-        desactivarUsuarioVinculado(id);
     }
 
     /**
      * Cascada de desactivación: al eliminar un trabajador, su usuario
-     * vinculado (si lo tiene) queda {@code activo=false} para que sus tokens
-     * dejen de ser válidos. Si el trabajador no tiene usuario, no se toca nada.
+     * vinculado (si lo tiene) queda {@code activo=false} y su versión de
+     * token se incrementa, de modo que sus tokens dejan de ser válidos de
+     * inmediato y no vuelven a valer aunque alguien intente reactivar la
+     * cuenta (el trabajador ya no existe, así que la reactivación se
+     * rechaza). Si el trabajador no tiene usuario, no se toca nada.
      */
     private void desactivarUsuarioVinculado(String idTrabajador) {
-        if (usuarioRepository == null) {
-            // Construcción unitaria sin Spring (tests): sin repositorio de
-            // usuarios no hay cascada que aplicar.
-            return;
-        }
         Usuario usuario = usuarioRepository.buscarPorIdTrabajador(idTrabajador);
         if (usuario != null) {
             // desactivar() es idempotente; el objeto vive en el mapa del

@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -52,6 +53,10 @@ public class GlobalExceptionHandler {
             "El servicio de medicamentos respondió de forma inesperada.";
     private static final String MENSAJE_SALIDA_NO_CONFIRMADA =
             "No se pudo confirmar; puede reintentar sin riesgo de descontar dos veces.";
+    private static final String MENSAJE_DEMASIADOS_INTENTOS =
+            "Demasiados intentos fallidos. Inténtelo de nuevo más tarde.";
+    private static final String MENSAJE_ACCESO_DENEGADO =
+            "No tiene permisos para realizar esta operación.";
 
     /** 401: credenciales incorrectas en el login (usuario inexistente, contraseña mala o desactivado). */
     @ExceptionHandler(CredencialesInvalidasException.class)
@@ -66,6 +71,33 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccesoDenegadoException.class)
     public ResponseEntity<ErrorResponse> accesoDenegado(AccesoDenegadoException ex) {
         return respuesta(HttpStatus.FORBIDDEN, List.of(ex.getMessage()));
+    }
+
+    /**
+     * 403 si una {@link AccessDeniedException} de Spring Security (o su subclase
+     * {@code AuthorizationDeniedException}) llega a un controlador: sin esto
+     * caería en el 500 genérico. Mensaje fijo, sin el detalle interno. Las
+     * reglas de negocio usan {@link AccesoDenegadoException}.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> accesoDenegadoSeguridad(AccessDeniedException ex) {
+        return respuesta(HttpStatus.FORBIDDEN, List.of(MENSAJE_ACCESO_DENEGADO));
+    }
+
+    /**
+     * 429: bloqueo temporal del login por demasiados intentos fallidos (por
+     * usuario o por IP). La cabecera {@code Retry-After} lleva los segundos
+     * restantes del bloqueo y el cuerpo es el {@code ErrorResponse} uniforme,
+     * sin revelar si el usuario existe.
+     */
+    @ExceptionHandler(DemasiadosIntentosException.class)
+    public ResponseEntity<ErrorResponse> demasiadosIntentos(DemasiadosIntentosException ex) {
+        HttpHeaders cabeceras = new HttpHeaders();
+        cabeceras.set(HttpHeaders.RETRY_AFTER, Long.toString(ex.getSegundosRestantes()));
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .headers(cabeceras)
+                .body(new ErrorResponse(429, HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase(),
+                        List.of(MENSAJE_DEMASIADOS_INTENTOS)));
     }
 
     @ExceptionHandler(NotFoundException.class)
