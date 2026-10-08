@@ -74,6 +74,9 @@ Exponen health checks en `/actuator/health` (`/liveness` y `/readiness`). El fro
 para Vercel con `npm run build:vercel` y `API_BASE_URL`. Detalle en la sección "Producción" de cada
 README y en [Despliegue en Vercel](frontend/README.md#despliegue-en-vercel).
 
+El despliegue actual (backends y PostgreSQL en Railway, frontend en Vercel), con sus variables y
+verificaciones, está en [`docs/despliegue.md`](docs/despliegue.md).
+
 ### Git Bash
 
 ```bash
@@ -166,6 +169,7 @@ para ejecutar los tests.
 - [`MedicamentosService/README.md`](MedicamentosService/README.md): modelo, endpoints, stock, vencimientos e idempotencia de las salidas.
 - [`frontend/README.md`](frontend/README.md): estructura, patrón de los módulos, roles, sesión y errores.
 - [`docs/plan-frontend.md`](docs/plan-frontend.md): plan y decisiones del frontend.
+- [`docs/despliegue.md`](docs/despliegue.md): despliegue en Railway y Vercel.
 
 ## Limitaciones conocidas
 
@@ -218,6 +222,9 @@ de cada punto están allí.
 - En desarrollo el frontend y la API están en el **mismo origen** (proxy de `ng serve`). Si se
   sirven desde orígenes distintos (Vercel y Railway) hay que definir `CORS_ORIGENES` en
   PachocloSystem y `API_BASE_URL` en el build del frontend.
+- En Railway los proxies no tienen IP fija: `APP_LOGIN_PROXIES_CONFIABLES` lleva rangos deducidos
+  de los logs, y habría que ampliarlos si aparecen proxies nuevos (ver
+  [`docs/despliegue.md`](docs/despliegue.md#proxies-confiables-límite-de-intentos-de-login)).
 - Sin `MEDICAMENTOS_API_KEY`, MedicamentosService no exige autenticación (solo desarrollo; con el
   perfil `prod` no arranca sin ella).
 - **Una réplica** de PachocloSystem (ver "Una sola instancia" arriba).
